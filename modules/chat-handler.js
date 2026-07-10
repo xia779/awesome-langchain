@@ -397,9 +397,12 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       reply = await Core.api.callAPIStream(finalPrompt, injectedSystemPrompt, temperature, model, provider, (function() {
         var _streamRafId = 0;
         var _pendingFullText = '';
-        // 创建持久的打字光标
+        // 创建持久的文本节点和光标（避免每帧 DOM 重建）
+        var _textNode = document.createTextNode('');
         var _cursor = document.createElement('span');
         _cursor.className = 'typing-cursor';
+        aiDiv.appendChild(_textNode);
+        aiDiv.appendChild(_cursor);
         return function(chunk, fullText) {
           reply = fullText;
           _pendingFullText = fullText;
@@ -409,10 +412,8 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
           if (_streamRafId) return;
           _streamRafId = requestAnimationFrame(function() {
             _streamRafId = 0;
-            // 流式期间用 textContent 避免 DOM 重建导致闪烁
-            aiDiv.textContent = _pendingFullText;
-            // 保留光标元素（textContent 会移除它）
-            aiDiv.appendChild(_cursor);
+            // 直接修改文本节点值，不触发 DOM 增删（避免 MutationObserver 风暴）
+            _textNode.nodeValue = _pendingFullText;
             var container = Core.dom.chatContainer;
             var isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
             if (isNearBottom) {

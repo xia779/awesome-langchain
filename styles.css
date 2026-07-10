@@ -1578,8 +1578,8 @@
       margin-left: 2px;
     }
     @keyframes blink {
-      0%, 50% { opacity: 1; }
-      51%, 100% { opacity: 0; }
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
     }
     
     /* 🔧 P5: 打字机效果优化 */
@@ -2181,7 +2181,6 @@
     body.dark-theme {
       --bg: var(--bg);
       --bg-secondary: #263548;
-      --panel: var(--text-dark);
       --text-secondary: var(--text-alt);
       --border: var(--border-alt);
       --shadow: 0 4px 24px rgba(0,0,0,0.3);
@@ -2200,7 +2199,7 @@
     }
     body.dark-theme #input { background: rgba(255,255,255,0.03); color: var(--text); border-color: var(--border-alt); }
     body.dark-theme #input:focus { background: var(--text-dark); }
-    body.dark-theme .settings-modal { background: var(--text-dark); }
+    body.dark-theme .settings-modal { background: var(--panel); }
     body.dark-theme .settings-modal input,
     body.dark-theme .settings-modal select,
     body.dark-theme .settings-modal textarea { background: var(--bg); color: var(--text); border-color: var(--border-alt); }
@@ -2823,14 +2822,12 @@
     body.light-theme {
       --bg: #f8fafc;
       --bg-secondary: #f1f5f9;
-      --panel: #ffffff;
-      --text: #1e293b;
       --text-secondary: #64748b;
       --border: #e2e8f0;
       --shadow: 0 4px 24px rgba(0,0,0,0.08);
     }
     body.light-theme #sidebar {
-      background: #f1f5f9;
+      background: var(--sidebar-bg, #f1f5f9);
       border-right-color: #e2e8f0;
     }
     body.light-theme #chatContainer {
@@ -3436,7 +3433,7 @@
 
     /* 设置面板 */
     body.light-theme .settings-modal {
-      background: #ffffff;
+      background: var(--panel, #ffffff);
       box-shadow: 0 8px 40px rgba(0,0,0,0.15);
       color: #1e293b;
     }
