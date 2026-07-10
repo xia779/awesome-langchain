@@ -553,6 +553,33 @@ Core.showAlert = function(message) {
 window.showToast = Core.showToast;
 window.showAlert = Core.showAlert;
 
+// ===== 统一 Loading Spinner =====
+Core.showSpinner = function(container, text, options) {
+  if (typeof container === 'string') container = document.getElementById(container);
+  if (!container) return null;
+  Core.hideSpinner(container);
+  var opts = options || {};
+  var el = document.createElement('div');
+  el.className = 'app-spinner' + (opts.size ? ' spinner-' + opts.size : '') + (opts.white ? ' spinner-white' : '');
+  el.setAttribute('data-spinner', 'true');
+  var ring = document.createElement('div');
+  ring.className = 'spinner-ring';
+  el.appendChild(ring);
+  if (text) {
+    var span = document.createElement('span');
+    span.textContent = text;
+    el.appendChild(span);
+  }
+  container.appendChild(el);
+  return el;
+};
+Core.hideSpinner = function(container) {
+  if (typeof container === 'string') container = document.getElementById(container);
+  if (!container) return;
+  var spinners = container.querySelectorAll('[data-spinner="true"]');
+  spinners.forEach(function(s) { s.remove(); });
+};
+
 // ===== 启动入口 =====
 (function main() {
 

@@ -536,13 +536,6 @@ function renderTreeNode(id, container, level) {
       runningIndicator.style.cssText = 'margin-left:4px;font-size:12px;flex-shrink:0;animation:spin 1s linear infinite;display:inline-block;';
       runningIndicator.textContent = '⚙';
       header.appendChild(runningIndicator);
-      // 注入 @keyframes spin（只注入一次）
-      if (!document.getElementById('bg-task-spin-style')) {
-        var spinStyle = document.createElement('style');
-        spinStyle.id = 'bg-task-spin-style';
-        spinStyle.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
-        document.head.appendChild(spinStyle);
-      }
     }
   }
   

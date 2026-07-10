@@ -952,13 +952,7 @@ window.escapeHtml = function(str) {
       // 显示 loading
       ssCanvasWrap.style.display = 'none';
       ssWindowList.style.display = 'none';
-      var loading = document.createElement('div');
-      loading.className = 'screenshot-loading';
-      loading.innerHTML = '<div class="spinner"></div><span>正在截图...</span>';
-      loading.id = 'ssLoading';
-      var existing = document.getElementById('ssLoading');
-      if (existing) existing.remove();
-      ssOverlay.appendChild(loading);
+      Core.showSpinner(ssOverlay, '正在截图...', { white: true });
 
       try {
         var ipcRenderer = require('electron').ipcRenderer;
@@ -966,7 +960,7 @@ window.escapeHtml = function(str) {
         if (mode === 'window') {
           // 获取窗口列表
           var result = await ipcRenderer.invoke('take-screenshot', { type: 'window' });
-          loading.remove();
+          Core.hideSpinner(ssOverlay);
           if (result.success && result.windows) {
             _ssWindows = result.windows;
             renderWindowList(result.windows);
@@ -980,7 +974,7 @@ window.escapeHtml = function(str) {
 
         // 全屏截图
         var result = await ipcRenderer.invoke('take-screenshot', { type: 'full' });
-        loading.remove();
+        Core.hideSpinner(ssOverlay);
 
         if (!result.success) {
           showToast('截图失败: ' + (result.error || '未知错误'), 'error');
@@ -1020,7 +1014,7 @@ window.escapeHtml = function(str) {
         img.src = result.dataUrl;
 
       } catch (err) {
-        loading.remove();
+        Core.hideSpinner(ssOverlay);
         showToast('截图失败: ' + err.message, 'error');
         closeScreenshot();
       }
@@ -1043,16 +1037,12 @@ window.escapeHtml = function(str) {
 
     async function captureWindowById(sourceId, name) {
       ssWindowList.style.display = 'none';
-      var loading = document.createElement('div');
-      loading.className = 'screenshot-loading';
-      loading.innerHTML = '<div class="spinner"></div><span>正在捕获窗口...</span>';
-      loading.id = 'ssLoading';
-      ssOverlay.appendChild(loading);
+      Core.showSpinner(ssOverlay, '正在捕获窗口...', { white: true });
 
       try {
         var ipcRenderer = require('electron').ipcRenderer;
         var result = await ipcRenderer.invoke('take-screenshot', { type: 'capture-window', sourceId: sourceId });
-        loading.remove();
+        Core.hideSpinner(ssOverlay);
 
         if (result.success) {
           _ssDataUrl = result.dataUrl;
@@ -1076,7 +1066,7 @@ window.escapeHtml = function(str) {
           showToast('窗口截图失败: ' + (result.error || '未知错误'), 'error');
         }
       } catch (err) {
-        loading.remove();
+        Core.hideSpinner(ssOverlay);
         showToast('窗口截图失败: ' + err.message, 'error');
       }
     }

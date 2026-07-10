@@ -244,9 +244,10 @@ async function initKnowledgePanel() {
       const query = testQuery.value.trim();
       if (!query) { showAlert('请输入检索问题'); return; }
       const resultsDiv = document.getElementById('knowledgeTestResults');
-      if (resultsDiv) resultsDiv.innerHTML = '<div style="color:#3b82f6;">⏳ 检索中...</div>';
+      if (resultsDiv) { resultsDiv.innerHTML = ''; Core.showSpinner(resultsDiv, '检索中...'); }
       try {
         const results = await Core.knowledge.search(query, 5);
+        if (resultsDiv) Core.hideSpinner(resultsDiv);
         if (!results || results.length === 0) {
           if (resultsDiv) resultsDiv.innerHTML = '<div style="color:#94a3b8;">未找到相关内容</div>';
           return;
@@ -260,6 +261,7 @@ async function initKnowledgePanel() {
         });
         if (resultsDiv) resultsDiv.innerHTML = html;
       } catch (err) {
+        if (resultsDiv) Core.hideSpinner(resultsDiv);
         if (resultsDiv) resultsDiv.innerHTML = '<div style="color:#ef4444;">检索失败: ' + err.message + '</div>';
       }
     });

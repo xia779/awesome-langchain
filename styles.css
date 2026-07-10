@@ -1103,33 +1103,6 @@
       color: var(--text);
     }
 
-    /* 🔧 打字动画 */
-    .typing-indicator {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 12px 16px;
-      background: var(--bg-secondary);
-      border-radius: 18px;
-      border: 1px solid var(--border);
-      border-left: 2px solid var(--primary);
-      align-self: flex-start;
-      margin-bottom: 8px;
-    }
-    .typing-indicator .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--primary);
-      animation: typingBounce 1.4s ease-in-out infinite;
-    }
-    .typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
-    .typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typingBounce {
-      0%, 60%, 100% { transform: translateY(0); }
-      30% { transform: translateY(-10px); }
-    }
-
     /* 🔧 Markdown 表格样式 */
     .msg table {
       width: 100%;
@@ -3384,6 +3357,26 @@
       box-shadow: 0 2px 12px rgba(255, 255, 255, 0.15);
     }
 
+    /* ===== 统一 Loading Spinner ===== */
+    .app-spinner {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--text-secondary);
+    }
+    .app-spinner .spinner-ring {
+      width: 20px; height: 20px;
+      border: 2.5px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    .app-spinner.spinner-sm .spinner-ring { width: 14px; height: 14px; border-width: 2px; }
+    .app-spinner.spinner-lg .spinner-ring { width: 28px; height: 28px; border-width: 3px; }
+    .app-spinner.spinner-white { color: var(--white); }
+    .app-spinner.spinner-white .spinner-ring {
+      border-color: rgba(255,255,255,0.25);
+      border-top-color: var(--white);
+    }
+
     /* ===== 滚动到底部按钮（居中透明） ===== */
     .scroll-to-bottom-btn {
       display: none;
@@ -3764,14 +3757,6 @@
       position: absolute; bottom: -32px; left: 50%; transform: translateX(-50%);
       color: rgba(255,255,255,0.6); font-size: 13px; white-space: nowrap;
     }
-    .screenshot-loading {
-      color: var(--white); font-size: 16px; display: flex; align-items: center; gap: 8px;
-    }
-    .screenshot-loading .spinner {
-      width: 24px; height: 24px; border: 3px solid rgba(255,255,255,0.2);
-      border-top-color: var(--primary, var(--primary)); border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* 窗口选择列表 */
@@ -4031,11 +4016,6 @@
       color: #1e293b;
     }
     body.light-theme .hint-close { color: #64748b; }
-
-    /* 打字指示器 */
-    body.light-theme .typing-indicator span {
-      background: #94a3b8;
-    }
 
     /* Agent 思考面板 */
     body.light-theme .agent-think-block {
