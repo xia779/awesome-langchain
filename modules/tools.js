@@ -20,8 +20,10 @@ function getAllowedDirs() {
     if (Core.DATA_ROOT) dirs.push(Core.DATA_ROOT);
     if (Core.USERS_ROOT) dirs.push(Core.USERS_ROOT);
   }
-  dirs.push((Core && (Core._globalDataRoot || Core.DATA_ROOT)) || 'E:\\my-ai-data');
-  dirs.push('E:\\my-ai-desktop');
+  dirs.push((Core && (Core._globalDataRoot || Core.DATA_ROOT)) || path.join(__dirname, '..'));
+  // 添加应用根目录（基于模块位置，非硬编码路径）
+  var appRoot = path.resolve(__dirname, '..');
+  if (dirs.indexOf(appRoot) === -1) dirs.push(appRoot);
   try {
     const os = require('os');
     dirs.push(path.join(os.homedir(), 'Desktop'));

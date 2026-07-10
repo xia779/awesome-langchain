@@ -28,6 +28,16 @@ const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主�
   参数: {"path": "文件路径"}
 - write_file: 写入本地文件
   参数: {"path": "文件路径", "content": "文件内容"}
+- edit_file: 精确替换文件中的文本片段（查找old_text替换为new_text）
+  参数: {"file_path": "文件路径", "old_text": "要替换的文本", "new_text": "替换后的文本", "replace_all": false}
+- list_dir: 列出目录下的文件和子目录
+  参数: {"dir_path": "目录路径"}
+- search_files: 在目录中按文件名模式搜索文件
+  参数: {"dir_path": "目录路径", "pattern": "glob模式如**/*.js"}
+- file_info: 获取文件/目录的详细信息（大小、修改时间、类型）
+  参数: {"file_path": "文件路径"}
+- run_command: 执行系统命令（ls, cat, grep等）
+  参数: {"command": "命令字符串", "cwd": "可选工作目录"}
 - run_python: 执行Python代码
   参数: {"code": "Python代码"}
 - browser_navigate: 打开浏览器并导航到网页（可渲染JS页面）
@@ -40,16 +50,22 @@ const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主�
   参数: {"type": "text|html|links|forms|info", "selector": "可选CSS选择器"}
 - browser_screenshot: 截取当前页面的屏幕截图
   参数: {"full_page": true/false}
+- browser_wait: 等待页面加载或指定时间
+  参数: {"selector": "可选等待元素", "timeout": 5000}
 - github_pr: GitHub Pull Request 操作（list/view/create/diff/merge/checks）
   参数: {"action": "list|view|create|diff|merge|checks", "number": PR编号, "title": "标题"}
 - github_issue: GitHub Issue 操作（list/view/create/close/comment）
   参数: {"action": "list|view|create|close|comment", "number": Issue编号, "title": "标题"}
 - github_repo: 查看当前 GitHub 仓库信息
   参数: {}
+- github_release: 管理 GitHub Release（list/view/create）
+  参数: {"action": "list|view|create", "tag": "标签名", "title": "标题"}
 - image_search: 搜索网络图片（DuckDuckGo/Bing/Unsplash）
   参数: {"query": "搜索关键词", "provider": "duckduckgo|bing|unsplash", "count": 5}
+- image_download: 下载图片到本地
+  参数: {"url": "图片URL", "dest": "保存路径"}
 - ask_user: 向用户提问，收集偏好或确认信息（暂停执行等待回答）
-  参数: {"question": "问题文本", "options": [{"label":"选项A","description":"说明"},{"label":"选项B","description":"说明"}], "multiSelect": false, "header": "分类标签"}
+  参数: {"question": "问题文本", "options": [{"label":"选项A","description":"说明"}], "multiSelect": false}
 - parallel_execute: 并行执行多个工具（适用于互不依赖的子任务）
   参数: {"tasks": [{"action": "工具名", "params": {...}}, ...]}
 - complete: 任务完成，给出最终回答
@@ -122,6 +138,49 @@ function extractJSONFromText(text) {
   }
   
   return null;
+}
+
+
+// ===== 最终回答清理（合并 5 个冗余清理块）=====
+function cleanFinalAnswer(text) {
+  if (!text) return text;
+
+  // 1. 如果是JSON，尝试提取 complete.action 字段
+  if (text.trim().startsWith('{')) {
+    var parsed = extractJSONFromText(text);
+    if (parsed) {
+      var extracted = '';
+      if (parsed.action === 'complete' && parsed.params) {
+        extracted = parsed.params.answer || parsed.params.result || parsed.params.content || '';
+      }
+      if (!extracted && parsed.answer) extracted = parsed.answer;
+      if (!extracted && parsed.params && parsed.params.answer) extracted = parsed.params.answer;
+      if (extracted) text = extracted;
+    }
+  }
+
+  // 2. 如果仍包含 "answer" 字段，用正则提取
+  if (text.includes('"answer"')) {
+    var answerMatch = text.match(/"answer"\s*:\s*"((?:[^"]|\\.){5,})"/);
+    if (answerMatch) {
+      text = answerMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+    }
+  }
+
+  // 3. 如果还残留JSON关键字（action/params），提取中文内容
+  if (text.includes('"action"') || text.includes('"params"')) {
+    var cleaned = text.replace(/\{[^{}]*\}/g, '').replace(/"[^"]*":\s*/g, '');
+    var cnMatch = cleaned.match(/[\u4e00-\u9fa5].*[\u4e00-\u9fa5]/s);
+    if (cnMatch && cnMatch[0].length > 5) {
+      text = cnMatch[0];
+    }
+  }
+
+  // 4. 去除末尾残留的JSON符号和空白
+  text = text.replace(/["\}\{\]\[]+[a-zA-Z\s]*$/g, '');
+  text = text.replace(/\s+$/, '');
+
+  return text;
 }
 
 
@@ -352,12 +411,15 @@ async function sendToAgent(task, isDeepThink) {
 
     const toolResult = await executeAgentAction(action.action, action.params || {});
 
+    // 🔧 类型安全：确保 toolResult 是字符串
+    var toolResultStr = (toolResult == null) ? '' : (typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult));
+
     // 🔧 自动纠错：检测工具失败并注入重试引导
-    var resultForContext = toolResult;
+    var resultForContext = toolResultStr;
     var isToolError = false;
-    if (toolResult && typeof toolResult === 'string') {
+    if (toolResultStr) {
       var errorPatterns = ['❌', '错误', 'error', 'failed', '失败', '未找到', 'not found', 'ENOENT', 'EACCES', 'permission denied', 'timeout', '超时', '无法', 'cannot'];
-      var lowerResult = toolResult.toLowerCase();
+      var lowerResult = toolResultStr.toLowerCase();
       isToolError = errorPatterns.some(function(p) { return lowerResult.indexOf(p.toLowerCase()) !== -1; });
     }
     if (isToolError) {
@@ -367,7 +429,7 @@ async function sendToAgent(task, isDeepThink) {
         '3. 使用 run_python 编写脚本来解决\n' +
         '4. 使用 web_search 搜索解决方案\n' +
         '请勿用完全相同的参数重复调用 ' + action.action + '。';
-      resultForContext = toolResult + correctionHint;
+      resultForContext = toolResultStr + correctionHint;
       // 更新步骤行为红色错误状态
       stepRow.style.borderLeftColor = '#ef4444';
       stepRow.innerHTML = '<div><span style="color:#ef4444;font-weight:600;">步骤 ' + step + '</span> <span style="font-weight:500;color:var(--text);">' + action.action + '</span> ❌ <span style="font-size:10px;color:#ef4444;">自动纠错中</span></div><span style="font-size:10px;color:#ef4444;opacity:0.8;">' + ((Date.now() - _stepStartTimes[step]) / 1000).toFixed(1) + 's</span>';
@@ -375,7 +437,7 @@ async function sendToAgent(task, isDeepThink) {
 
     const stepRecord = `[步骤${step}] 执行 ${action.action}: ${JSON.stringify(action.params || {})}\n结果: ${resultForContext.substring(0, 300)}${resultForContext.length > 300 ? '...' : ''}`;
     context += '\n' + stepRecord;
-    stepsLog.push({ step: step, action: action.action, params: action.params, result: (toolResult || '').substring(0, 500) });
+    stepsLog.push({ step: step, action: action.action, params: action.params, result: toolResultStr.substring(0, 500) });
 
     // 更新步骤行：完成状态（含耗时）— 仅非错误时更新为绿色
     clearInterval(_timerInterval);
@@ -393,64 +455,8 @@ async function sendToAgent(task, isDeepThink) {
     finalAnswer = 'Agent 已达到最大步数限制，任务未能完成。';
   }
 
-  // 保险1：如果 finalAnswer 还是JSON字符串，尝试最后提取一次
-  if (finalAnswer && finalAnswer.trim().startsWith('{')) {
-    const lastTry = extractJSONFromText(finalAnswer);
-    if (lastTry && lastTry.action === 'complete') {
-      let extracted = '';
-      if (lastTry.params) extracted = lastTry.params.answer || lastTry.params.result || lastTry.params.content || '';
-      if (!extracted && lastTry.answer) extracted = lastTry.answer;
-      if (extracted) finalAnswer = extracted;
-    } else if (lastTry && lastTry.action) {
-      // 不是complete但解析成功，提取有用信息
-      let extracted = lastTry.action === 'complete' ? '' : JSON.stringify(lastTry);
-      if (lastTry.params && lastTry.params.answer) extracted = lastTry.params.answer;
-    }
-  }
-  
-  // 保险2：如果仍包含JSON结构，用正则强制提取answer
-  if (!finalAnswer || finalAnswer.trim().startsWith('{') || finalAnswer.includes('"answer"')) {
-    const forcedMatch = (finalAnswer || '').match(/"answer"\s*:\s*"([^"]{5,})"/);
-    if (forcedMatch) {
-      finalAnswer = forcedMatch[1];
-    }
-  }
-  
-  // 保险3：清理可能残留的JSON符号
-  if (finalAnswer && (finalAnswer.includes('"action"') || finalAnswer.includes('"params"') || finalAnswer.includes('"}'))) {
-    const cleanMatch = finalAnswer.match(/[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]+(?:[，。！？、；：""''（）【】\s]*[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]+)*/);
-    if (cleanMatch && cleanMatch[0].length > 5) {
-      finalAnswer = cleanMatch[0];
-    }
-  }
-  
-  // 最终清理：去除末尾可能残留的JSON符号和乱码
-  if (finalAnswer) {
-    finalAnswer = finalAnswer.replace(/["\}\{\]\[]+[a-zA-Z]*$/, '');
-    finalAnswer = finalAnswer.replace(/\s+$/, '');
-  }
-
-  // 渲染最终回答（思考过程折叠面板已在上方用 live steps 构建）
-
-  // 🔧 最终强力清理：只保留中文字符+中文标点+数字+常见符号
-  if (finalAnswer) {
-    // 如果内容看起来像JSON（包含 "action" 或 "params"），强制提取中文
-    if (finalAnswer.includes('"action"') || finalAnswer.includes('"params"') || finalAnswer.includes('"answer"')) {
-      // 方法A：提取 answer 字段的值
-      const answerValMatch = finalAnswer.match(/"answer"\s*:\s*"((?:[^"]|\\.){5,})"/);
-      if (answerValMatch) {
-        finalAnswer = answerValMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
-      } else {
-        // 方法B：删除所有JSON结构，只保留中文
-        const chineseOnly = finalAnswer.replace(/\{[^{}]*\}/g, '').replace(/"[^"]*":\s*/g, '');
-        const cnMatch = chineseOnly.match(/[\u4e00-\u9fa5].*[\u4e00-\u9fa5]/);
-        if (cnMatch) finalAnswer = cnMatch[0];
-      }
-    }
-    // 去除末尾JSON符号和乱码
-    finalAnswer = finalAnswer.replace(/[\}\{\]\["]+[a-zA-Z\s]*$/g, '');
-    finalAnswer = finalAnswer.replace(/\s+$/, '');
-  }
+  // 最终回答清理：从可能的JSON残留中提取纯文本回答
+  finalAnswer = cleanFinalAnswer(finalAnswer);
 
 
   // 🔧 渲染：保留实时步骤面板，折叠为思考过程，追加最终回答
@@ -557,6 +563,7 @@ module.exports = {
       sendToAgent: sendToAgent,
       executeAgentAction: executeAgentAction,
       extractJSONFromText: extractJSONFromText,
+      cleanFinalAnswer: cleanFinalAnswer,
       AGENT_SYSTEM_PROMPT: AGENT_SYSTEM_PROMPT
     };
     console.log('✅ Agent 循环模块已加载');
