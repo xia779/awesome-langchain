@@ -223,7 +223,7 @@ function clear() { _notifications = []; _unreadCount = 0; updateBellBadge(); ren
 
 // ===== 事件钩子 =====
 function hookIntoEvents() {
-  setInterval(function() {
+  var _bgTaskPollTimer = setInterval(function() {
     if (Core.api && Core.api.getBackgroundTasks) {
       var tasks = Core.api.getBackgroundTasks();
       tasks.forEach(function(t) {

@@ -444,7 +444,7 @@ module.exports = {
     }
 
     // 定期保存统计
-    setInterval(saveStats, 60000);
+    var _statsTimer = setInterval(saveStats, 60000);
 
     console.log('✅ Skill-Suggest 模块已加载（使用模式分析 + 技能建议）');
   }

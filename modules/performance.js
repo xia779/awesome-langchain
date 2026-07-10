@@ -88,6 +88,12 @@ function init(_Core) {
     getCrashRecovery: getCrashRecovery,
     clearCrashRecovery: clearCrashRecovery,
     getPerfHistory: getPerfHistory,
+    getCachedKnowledgeChunks: getCachedKnowledgeChunks,
+    invalidateKnowledgeCache: invalidateKnowledgeCache,
+    optimizeStreamingUpdate: optimizeStreamingUpdate,
+    endStreamingOptimization: endStreamingOptimization,
+    capSessionMessages: capSessionMessages,
+    queueAsyncSave: queueAsyncSave,
     CONFIG: PERF_CONFIG,
   };
 
@@ -781,7 +787,7 @@ function setupPerformanceOptimizations() {
   }, 500);
 
   // 定期内存清理
-  setInterval(function() {
+  var _gcTimer = setInterval(function() {
     monitorMemory();
   }, PERF_CONFIG.gcInterval);
 
@@ -1204,7 +1210,7 @@ function setupTTSDelegation() {
 
 // ----- 5f: 定期执行内存清理 -----
 function startMemoryCleanup() {
-  setInterval(function() {
+  var _memCleanupTimer = setInterval(function() {
     // 1. 消息内存上限
     capAllSessions();
     // 2. 知识库缓存过期
@@ -1226,15 +1232,5 @@ setupPerformanceOptimizations = function() {
   setupTTSDelegation();
   startMemoryCleanup();
 };
-
-// 导出 Phase 5-1 API
-if (Core && Core.performance) {
-  Core.performance.getCachedKnowledgeChunks = getCachedKnowledgeChunks;
-  Core.performance.invalidateKnowledgeCache = invalidateKnowledgeCache;
-  Core.performance.optimizeStreamingUpdate = optimizeStreamingUpdate;
-  Core.performance.endStreamingOptimization = endStreamingOptimization;
-  Core.performance.capSessionMessages = capSessionMessages;
-  Core.performance.queueAsyncSave = queueAsyncSave;
-}
 
 module.exports = { init: init };

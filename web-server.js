@@ -460,7 +460,7 @@ function setupMobileRoutes(expressApp, dataRoot) {
         const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
         const pdfDoc = await PDFDocument.create();
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        const page = pdfDoc.addPage([595.28, 841.89]);
+        let page = pdfDoc.addPage([595.28, 841.89]);
         page.drawText(safeTitle, { x: 50, y: 780, size: 18, font, color: rgb(0.1, 0.1, 0.3) });
         const lines = (content || '').split('\n');
         let y = 740;

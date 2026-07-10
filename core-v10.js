@@ -609,6 +609,8 @@ Core.renderMarkdown = function(text) {
 // ===== 启动入口 =====
 (function main() {
 
+  var _currentQuote = null;
+
   // 🔧 缓存清除由 loadModules() 统一处理，此处不再重复
   
   const ids = [
@@ -858,33 +860,12 @@ Core.renderMarkdown = function(text) {
     });
   })();
 
-  // 🔧 全局调试函数
-  window.debugWebSearch = function() {
-    var btn = document.getElementById('webSearchBtn');
-    if (!btn) { console.error('❌ webSearchBtn 不存在'); return; }
-    console.log('ID:', btn.id);
-    console.log('title:', btn.title);
-    console.log('config.searchEngine:', Core.config.searchEngine);
-    console.log('config.bochaApiKey:', Core.config.bochaApiKey ? '已设置' : '未设置');
-    console.log('config.tavilyApiKey:', Core.config.tavilyApiKey ? '已设置' : '未设置');
-    console.log('config.webSearch:', Core.config.webSearch);
-    console.log('dom.webSearchBtn === btn:', Core.dom.webSearchBtn === btn);
-  };
-
   // ============================================================
   // 选项1-5：聊天记录导出 + 文件拖拽 + 剪贴板粘贴 + 快捷键 + 主题切换
   // ============================================================
 
-  
-  // 🔧 已提取到 modules/ui-interactions.js（文件拖拽 + 剪贴板粘贴 + 快捷键 + 主题切换）
 
-  window.debugDeepThink = function() {
-    var btn = document.getElementById('deepThinkBtn');
-    if (!btn) { console.error('❌ deepThinkBtn 不存在'); return; }
-    console.log('ID:', btn.id);
-    console.log('config.deepThink:', Core.config.deepThink);
-    console.log('dom.deepThinkBtn:', Core.dom.deepThinkBtn === btn);
-  };
+  // 🔧 已提取到 modules/ui-interactions.js（文件拖拽 + 剪贴板粘贴 + 快捷键 + 主题切换）
 
   console.log('✅ Core 启动完成');
   console.log('✅ 当前配置:', { 
@@ -1170,53 +1151,6 @@ Core.renderMarkdown = function(text) {
     });
   }
 
-  function withdrawMessage(msgDiv) {
-    var sessionId = Core.session.getCurrentId();
-    var sessions = Core.session.sessions;
-    if (!sessionId || !sessions[sessionId] || !sessions[sessionId].messages) {
-      Core.dom.status.textContent = '❌ 无法撤回：会话不存在';
-      return;
-    }
-    var container = document.getElementById('chatContainer');
-    if (!container || !msgDiv) return;
-    var allMsgs = container.querySelectorAll('.msg');
-    var msgIndex = Array.prototype.indexOf.call(allMsgs, msgDiv);
-    if (msgIndex < 0) {
-      Core.dom.status.textContent = '❌ 无法撤回：消息未找到';
-      return;
-    }
-    var msgs = sessions[sessionId].messages;
-    if (msgIndex >= msgs.length) {
-      Core.dom.status.textContent = '❌ 无法撤回：消息索引越界';
-      return;
-    }
-    var msgData = msgs[msgIndex];
-    var msgTime = msgData.timestamp || 0;
-    var now = Date.now();
-    var fiveMinutes = 5 * 60 * 1000;
-    if (now - msgTime > fiveMinutes) {
-      Core.dom.status.textContent = '⏰ 消息发送已超过5分钟，无法撤回';
-      setTimeout(function() {
-        Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')';
-      }, 3000);
-      return;
-    }
-    if (!confirm('确定要撤回这条消息吗？\n（该消息将从会话中移除）')) return;
-    msgs.splice(msgIndex, 1);
-    Core.session.saveSession(sessionId);
-    // 重新渲染聊天内容
-    if (Core.session.renderMessages) {
-      Core.session.renderMessages(sessionId);
-    } else {
-      msgDiv.parentNode.removeChild(msgDiv);
-    }
-    Core.dom.status.textContent = '✅ 消息已撤回';
-    setTimeout(function() {
-      Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')';
-    }, 2000);
-    console.log('✅ 消息已撤回');
-  }
-
   function deleteSingleMessage(msgDiv) {
     var container = document.getElementById('chatContainer');
     if (!container || !msgDiv) return;
@@ -1266,28 +1200,6 @@ Core.renderMarkdown = function(text) {
       Core.dom.input.value = userText;
       Core.api.sendMessage();
     }
-  }
-
-  // 为消息div添加时间戳（外部可调用的辅助函数）
-  function addTimestampToDiv(msgDiv, timestamp) {
-    if (!msgDiv) return;
-    if (msgDiv.querySelector('.msg-timestamp')) return;
-    var ts = timestamp || Date.now();
-    var date = new Date(ts);
-    var hours = String(date.getHours()).padStart(2, '0');
-    var minutes = String(date.getMinutes()).padStart(2, '0');
-    var timeStr = hours + ':' + minutes;
-    var fullStr = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0') + ' ' + timeStr + ':' + String(date.getSeconds()).padStart(2, '0');
-    var tsSpan = document.createElement('span');
-    tsSpan.className = 'msg-timestamp';
-    tsSpan.textContent = timeStr;
-    tsSpan.title = fullStr;
-    tsSpan.style.cssText = 'display:block;text-align:right;margin-top:6px;font-size:11px;padding:2px 8px;border-radius:4px;width:fit-content;margin-left:auto;color:#94a3b8;background:rgba(30,30,30,0.6);';
-    if (msgDiv.classList.contains('user')) {
-      tsSpan.style.color = '#dbeafe';
-      tsSpan.style.background = 'rgba(255,255,255,0.15)';
-    }
-    msgDiv.appendChild(tsSpan);
   }
 
   // ===== 消息引用/回复功能 =====

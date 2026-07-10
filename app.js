@@ -770,8 +770,8 @@ window.escapeHtml = function(str) {
         if (hasCore()) {
           try {
             if (Core.session && typeof Core.session.loadSessions === 'function') Core.session.loadSessions();
-            if (Core.dom && Core.dom.currentUserDisplay) Core.dom.currentUserDisplay.textContent = '&#128100; ' + username;
-            if (Core.dom && Core.dom.status) Core.dom.status.textContent = '&#9989; 已就绪 (' + username + ')';
+            if (Core.dom && Core.dom.currentUserDisplay) Core.dom.currentUserDisplay.textContent = '\ud83d\udc64 ' + username;
+            if (Core.dom && Core.dom.status) Core.dom.status.textContent = '\u2705 已就绪 (' + username + ')';
             Core._currentUser = username;
             if (Core.saveConfig) Core.saveConfig({ lastUser: username });
           } catch(e) { console.warn('降级登录UI更新失败:', e); }
