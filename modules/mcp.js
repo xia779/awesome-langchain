@@ -129,7 +129,6 @@ async function connectServer(serverId) {
           }
           // 处理 server->client 通知（无 id）
           if (!response.id && response.method === 'notifications/initialized') {
-            console.log('🔧 MCP 服务器已初始化:', serverId);
           }
         } catch (e) {
           // 非 JSON 行，忽略
@@ -142,7 +141,6 @@ async function connectServer(serverId) {
     });
 
     child.on('close', function (code) {
-      console.log('🔧 MCP 服务器已断开:', serverId, 'code=' + code);
       if (externalServers[serverId]) {
         externalServers[serverId].status = 'disconnected';
         externalServers[serverId].process = null;
@@ -179,7 +177,6 @@ async function connectServer(serverId) {
       console.warn('⚠️ MCP 工具发现失败:', serverId, e.message);
     }
 
-    console.log('✅ MCP 服务器已连接: ' + serverId + ' (' + externalServers[serverId].tools.length + ' 个工具)');
     return externalServers[serverId];
   } catch (e) {
     console.error('❌ 连接 MCP 服务器失败:', serverId, e.message);
@@ -199,7 +196,6 @@ function disconnectServer(serverId) {
     server.process = null;
   }
   server.status = 'disconnected';
-  console.log('🔧 MCP 服务器已断开:', serverId);
 }
 
 function registerServerTools(serverId, tools) {
@@ -296,7 +292,6 @@ function initMcp(_Core) {
     removeServer: removeServer,
   };
 
-  console.log('✅ MCP 协议模块已加载（本地 ' + Object.keys(registeredTools).filter(function (n) { return !n.startsWith('mcp_'); }).length + ' + 外部 ' + Object.keys(externalServers).length + ' 个服务器）');
 }
 
 // ===== 服务器管理 =====
@@ -548,7 +543,6 @@ function registerTool(name, config) {
     handler: config.handler,
     source: config.source || 'local',
   };
-  console.log('🔧 工具已注册:', name, config.source === 'external' ? '(外部)' : '');
 }
 
 function unregisterTool(name) {
@@ -575,10 +569,8 @@ async function callTool(name, args) {
   if (!tool) {
     return { success: false, error: '工具不存在: ' + name };
   }
-  console.log('🔧 调用工具:', name, '参数:', JSON.stringify(args).substring(0, 200));
   try {
     const result = await tool.handler(args);
-    console.log('🔧 工具调用结果:', name, result && result.success ? '成功' : '失败');
     return result;
   } catch (e) {
     console.error('❌ 工具调用异常:', name, e.message);

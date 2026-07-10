@@ -105,7 +105,6 @@ function loginUser(username) {
   var base = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || 'E:\\my-ai-data';
   const correctDir = path.join(base, 'users', username);
   if (Core.DATA_ROOT !== correctDir) {
-    console.log('🔧 重置 DATA_ROOT:', Core.DATA_ROOT, '->', correctDir);
     Core.DATA_ROOT = correctDir;
   }
   
@@ -174,7 +173,6 @@ function migrateOldData(username) {
         } else {
           fs.copyFileSync(oldPath, newPath);
         }
-        console.log(`📦 迁移: ${item}`);
         migrated = true;
       } catch (err) {
         console.warn(`⚠️ 迁移 ${item} 失败:`, err);

@@ -127,7 +127,6 @@ try {
   }
 
   console.log('✅ 停止生成功能 v2（内联版）已激活');
-  console.log('📦 api.js 版本检测: callAPIStream参数长度=', origCallAPIStream ? origCallAPIStream.length : 'N/A');
 })();
 
 
@@ -838,7 +837,7 @@ window.escapeHtml = function(str) {
 
       // 如果有logoutUser则调用
       if (window.Core && Core.user && typeof Core.user.logoutUser === 'function') {
-        try { Core.user.logoutUser(); } catch(e) {}
+        try { Core.user.logoutUser(); } catch(e) { console.warn('[App] Logout failed:', e); }
       }
 
       // 清空界面
@@ -1202,7 +1201,6 @@ window.addEventListener('keydown', function(e) {
       const { ipcRenderer } = require('electron');
       ipcRenderer.send('toggle-devtools');
     } catch(err) {
-      console.log('🔧 快捷键触发');
     }
   }
 });
@@ -1579,11 +1577,9 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
 
 (function initPromptAndRoleExternal() {
   if (window._promptRoleInitialized) {
-    console.log('✅ 提示词与角色系统已初始化，跳过');
     return;
   }
   
-  console.log('🔍 外部初始化: 提示词与角色系统');
   
   if (!window.Core || !Core.config || !Core.config.roles) {
     console.log('⏳ 等待 Core 加载...');
@@ -1593,11 +1589,9 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
   
   // 标记已初始化，防止重复执行
   window._promptRoleInitialized = true;
-  console.log('✅ Core 已加载，开始初始化提示词与角色系统');
   
   // 🔧 保险：如果角色未加载，直接填充默认值
   if (!Core.config.roles || Core.config.roles.length === 0) {
-    console.log('📂 填充默认角色列表');
     Core.config.roles = [
       { name: '通用助手', systemMsg: '你是一个 helpful、honest、harmless 的 AI 助手。', icon: '🤖', description: '通用问答和日常对话' },
       { name: '程序员', systemMsg: '你是一位资深程序员，精通多种编程语言，擅长代码审查、算法优化和架构设计。', icon: '💻', description: '编程、代码审查、技术咨询' },
@@ -1614,7 +1608,6 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
   
   // 🔧 保险：如果提示词未加载，直接填充默认值
   if (!Core.config.prompts || Core.config.prompts.length === 0) {
-    console.log('📂 填充默认提示词列表');
     Core.config.prompts = [
       { name: '总结', content: '请总结以下内容的要点，用简洁的语言输出。', icon: '📝' },
       { name: '翻译', content: '请将以下内容翻译成中文/英文，保持原意不变。', icon: '🌐' },
@@ -1625,8 +1618,6 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
     Core.saveConfig({ prompts: Core.config.prompts });
   }
   
-  console.log('🔍 最终角色数量:', Core.config.roles.length);
-  console.log('🔍 最终提示词数量:', Core.config.prompts.length);
   
   // --- 提示词面板 ---
   // 🔧 使用 clone 替换按钮，清除所有旧的事件监听器
@@ -1639,13 +1630,11 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
   var promptPanelClose = document.getElementById('promptPanelClose');
   var input = document.getElementById('input');
   
-  console.log('🔍 外部提示词元素: promptBtn=' + !!promptBtn + ', promptPanel=' + !!promptPanel + ', promptList=' + !!promptList);
   
   function renderPrompts() {
     if (!promptList) return;
     promptList.innerHTML = '';
     var prompts = Core.config.prompts || [];
-    console.log('🔍 提示词数量: ' + prompts.length);
     prompts.forEach(function(p) {
       var item = document.createElement('div');
       item.className = 'prompt-item';
@@ -1659,7 +1648,6 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
   }
   
   if (promptBtn && promptPanel) {
-    console.log('🔍 外部绑定 promptBtn 点击事件');
     promptBtn.addEventListener('click', function() {
       renderPrompts();
       promptPanel.classList.toggle('active');
@@ -1684,15 +1672,11 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
   var rolePanelClose = document.getElementById('rolePanelClose');
   var systemPrompt = document.getElementById('systemPrompt');
   
-  console.log('🔍 外部角色面板元素: roleBtn=' + !!roleBtn + ', rolePanel2=' + !!rolePanel2 + ', roleList=' + !!roleList);
-  console.log('🔍 外部 Core.config.roles: ' + (Core.config.roles ? Core.config.roles.length : 'undefined'));
   
   function renderRoles() {
-    console.log('🔍 外部 renderRoles 被调用');
     if (!roleList) { console.warn('⚠️ roleList 不存在'); return; }
     roleList.innerHTML = '';
     var roles = Core.config.roles || [];
-    console.log('🔍 外部角色数量: ' + roles.length);
     if (roles.length === 0) { console.warn('⚠️ 角色列表为空'); return; }
     var currentRole = Core.config.currentRole || '通用助手';
     roles.forEach(function(r) {
@@ -1715,7 +1699,6 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
       });
       roleList.appendChild(item);
     });
-    console.log('✅ 外部角色列表已渲染: ' + roles.length + ' 个角色');
   }
   
   function updateCurrentRoleDisplay() {
@@ -1740,14 +1723,10 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
     toolbar.appendChild(display);
   }
   
-  console.log('🔍 外部检查 roleBtn 和 rolePanel2: roleBtn=' + !!roleBtn + ', rolePanel2=' + !!rolePanel2);
   if (roleBtn && rolePanel2) {
-    console.log('🔍 外部绑定 roleBtn 点击事件');
     roleBtn.addEventListener('click', function() {
-      console.log('🔍 外部 roleBtn 被点击');
       renderRoles();
       rolePanel2.classList.toggle('active');
-      console.log('🔍 外部角色面板 active=' + rolePanel2.classList.contains('active'));
       var pp = document.getElementById('promptPanel');
       if (pp) pp.classList.remove('active');
     });
@@ -1773,6 +1752,5 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
     }
   });
   
-  console.log('✅ 外部提示词与角色系统已初始化');
 })();
 

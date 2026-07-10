@@ -76,7 +76,6 @@ function init(_Core) {
     getPresets: function() { return Object.assign({}, DEFAULT_PRESETS); },
   };
 
-  console.log('🏷️ 会话标签系统已加载，标签数:', Object.keys(tagRegistry).length, '会话标记数:', Object.keys(sessionTags).length);
 }
 
 // ===== 数据加载/保存 =====

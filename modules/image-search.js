@@ -177,7 +177,6 @@ async function searchImages(query, options) {
   var provider = options.provider || Core.config.imageSearchProvider || 'duckduckgo';
   var count = options.count || 5;
 
-  console.log('🔍 图片搜索: provider=' + provider + ', query="' + query + '"');
 
   try {
     switch (provider) {
@@ -190,7 +189,7 @@ async function searchImages(query, options) {
     console.warn('⚠️ 图片搜索失败 (' + provider + '):', e.message);
     // 降级到 DuckDuckGo
     if (provider !== 'duckduckgo') {
-      try { return await searchDuckDuckGo(query, { count: count }); } catch (e2) {}
+      try { return await searchDuckDuckGo(query, { count: count }); } catch (e2) { console.warn('[ImageSearch] DuckDuckGo fallback also failed:', e2.message); }
     }
     return [];
   }

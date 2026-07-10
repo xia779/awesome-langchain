@@ -113,7 +113,6 @@ function _showDesktopNotification(title, body) {
 // ===== 后台执行子会话任务（非阻塞）=====
 async function runBackgroundTask(childSessionId, text, masterSessionId, roleName) {
   var taskId = _addBackgroundTask({ sessionId: childSessionId, role: roleName, masterSessionId: masterSessionId });
-  console.log('🚀 后台任务启动:', roleName, '→', childSessionId, 'taskId=' + taskId);
 
   try {
     // 保存用户消息到子会话
@@ -164,7 +163,6 @@ async function runBackgroundTask(childSessionId, text, masterSessionId, roleName
         try {
           var searchQuery = text.replace(/📕|📘|📗|📙|📄|附件文件|路径:|`[^`]*`/g, '').replace(/请读取|请阅读|请分析|请解读/g, '').trim();
           if (searchQuery.length > 5 && searchQuery.length < 200) {
-            console.log('🌐 分析师自动联网搜索:', searchQuery.substring(0, 50));
             var searchResult = await _wsFn(searchQuery);
             if (searchResult && searchResult.trim() && searchResult.length > 30 && !searchResult.includes('未找到有效的搜索结果')) {
               systemMsg = (systemMsg || '') + '\n\n【实时联网搜索结果】\n' + searchResult.substring(0, 5000) + '\n\n请优先基于以上实时搜索结果进行分析，并标注数据来源和时间。如果搜索结果与问题无关，请忽略并使用自身知识。';
@@ -308,10 +306,8 @@ function _buildHistoryMessages(currentSession, currentSessionId) {
 
 // ===== 核心 API 调用（非流式）=====
 async function callAPI(prompt, systemMsg, temperature, model, provider, messagesOverride = null) {
-  console.log('🔍 callAPI: provider=' + provider + ', model=' + model + ', hasCloudApi=' + (Core.cloudApi ? 'yes' : 'no'));
   
   if (provider !== 'ollama' && Core.cloudApi) {
-    console.log('☁️ 调用云端 API: provider=' + provider);
     // 🔧 修复：当 messagesOverride 存在时（后台任务/子会话），直接构建消息并禁用 function calling
     if (messagesOverride) {
       var cloudMessages = [];
@@ -361,7 +357,6 @@ async function callAPI(prompt, systemMsg, temperature, model, provider, messages
   }
 
   const fullModel = ensureModelTag(model || Core.config.ollamaModel);
-  console.log('🔍 调用 Ollama: model=' + fullModel + ', provider=' + provider);
   // 🔧 多模态：提取图片，构建 Ollama images 格式
   const chatMessages = messages.map(function(m) {
     var extracted = extractImagesFromContent(typeof m.content === 'string' ? m.content : '');
@@ -512,7 +507,6 @@ async function callAPIStream(prompt, systemMsg, temperature, model, provider, on
 
   // 🔧 P5: 云端 API 流式输出（OpenAI SDK 统一版）
   if (provider !== 'ollama' && Core.cloudApi && Core.cloudApi.callCloudAPIStream) {
-    console.log('☁️ 流式调用云端 API: provider=' + provider);
     return await Core.cloudApi.callCloudAPIStream(prompt, systemMsg, temperature, model, provider, onChunk, signal);
   }
 

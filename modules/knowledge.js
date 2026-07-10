@@ -438,7 +438,6 @@ async function search(query, topK = 5) {
 
   const allChunks = loadAllChunks();
   if (allChunks.length === 0) {
-    console.log('📂 知识库为空，跳过检索');
     return [];
   }
 
@@ -481,7 +480,6 @@ async function search(query, topK = 5) {
     }));
   }
 
-  console.log('📂 未找到相关内容');
   return [];
 }
 
@@ -574,7 +572,7 @@ async function rebuildEmbeddings() {
         doc.hasEmbeddings = true;
       }
       fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
-    } catch (e) {}
+    } catch (e) { console.warn('[Knowledge] Failed to update index:', e.message); }
   }
 
   console.log(`✅ 嵌入重建完成: ${embeddedChunks}/${totalChunks} 块已补充向量`);

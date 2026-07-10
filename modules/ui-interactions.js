@@ -144,7 +144,7 @@ function handleDroppedFile(file) {
 
     // 保存到临时目录
     var tmpDir = path.join(Core.DATA_ROOT || Core._globalDataRoot || '.', 'tmp');
-    if (!fs.existsSync(tmpDir)) { try { fs.mkdirSync(tmpDir, { recursive: true }); } catch(e) {} }
+    if (!fs.existsSync(tmpDir)) { try { fs.mkdirSync(tmpDir, { recursive: true }); } catch(e) { console.warn('[UI] Failed to create tmp dir:', e.message); } }
     var tmpPath = path.join(tmpDir, file.name);
 
     Core.dom.status.textContent = icon + ' 正在保存文档 ' + file.name + '...';
@@ -406,7 +406,6 @@ function applyTheme(theme) {
     _applyResolvedTheme(theme);
   }
   Core.saveConfig({ theme: theme });
-  console.log('🎨 主题已切换为:', theme);
 }
 
 function _systemThemeHandler(e) {

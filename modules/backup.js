@@ -14,41 +14,33 @@ let Core;
 function backupData() {
   if (ipcRenderer) {
     ipcRenderer.send('backup-data');
-    if (Core.errorHandler) Core.errorHandler.showSuccessToast('正在准备备份...');
-    else {
-      var status = document.getElementById('status');
-      if (status) status.textContent = '⏳ 正在准备备份...';
-    }
+    var status = document.getElementById('status');
+    if (status) status.textContent = '⏳ 正在准备备份...';
   } else {
-    showToast('❌ 无法访问 IPC 通道', 'error');
+    showToast('无法访问 IPC 通道', 'error');
   }
 }
 
 function restoreData() {
   if (ipcRenderer) {
     ipcRenderer.send('restore-data');
-    if (Core.errorHandler) Core.errorHandler.showSuccessToast('正在准备恢复...');
-    else {
-      var status = document.getElementById('status');
-      if (status) status.textContent = '⏳ 正在准备恢复...';
-    }
+    var status = document.getElementById('status');
+    if (status) status.textContent = '⏳ 正在准备恢复...';
   } else {
-    showToast('❌ 无法访问 IPC 通道', 'error');
+    showToast('无法访问 IPC 通道', 'error');
   }
 }
 
-// ===== 🔧 修复：监听主进程备份/恢复响应 =====
+// ===== 修复：监听主进程备份/恢复响应 =====
 if (ipcRenderer) {
   ipcRenderer.on('backup-response', function(event, data) {
     var status = document.getElementById('status');
     if (data.success) {
-      if (Core.errorHandler) Core.errorHandler.showSuccessToast('备份成功');
       if (status) status.textContent = '✅ 备份成功';
-      showToast('✅ 备份成功！\n保存位置:\n' + (data.filePath || '未知'), 'success');
+      showToast('备份成功！保存位置: ' + (data.filePath || '未知'), 'success');
     } else {
-      if (Core.errorHandler) Core.errorHandler.showErrorToast('备份失败');
       if (status) status.textContent = '❌ 备份失败';
-      showToast('❌ 备份失败: ' + (data.error || '未知错误'), 'error');
+      showToast('备份失败: ' + (data.error || '未知错误'), 'error');
     }
     setTimeout(function() { if (status) status.textContent = '✅ 已就绪'; }, 3000);
   });
@@ -56,15 +48,13 @@ if (ipcRenderer) {
   ipcRenderer.on('restore-response', function(event, data) {
     var status = document.getElementById('status');
     if (data.success) {
-      if (Core.errorHandler) Core.errorHandler.showSuccessToast('恢复成功，即将重启');
       if (status) status.textContent = '✅ 数据恢复成功';
-      showToast('✅ 数据恢复成功！\n应用将重新加载以应用恢复的数据。', 'success');
+      showToast('数据恢复成功！应用将重新加载以应用恢复的数据。', 'success');
       // 恢复后重新加载页面以应用数据
       try { window.location.reload(); } catch(e) {}
     } else {
-      if (Core.errorHandler) Core.errorHandler.showErrorToast('恢复失败');
       if (status) status.textContent = '❌ 恢复失败';
-      showToast('❌ 恢复失败: ' + (data.error || '未知错误'), 'error');
+      showToast('恢复失败: ' + (data.error || '未知错误'), 'error');
     }
     setTimeout(function() { if (status) status.textContent = '✅ 已就绪'; }, 3000);
   });
@@ -183,7 +173,6 @@ async function backupAllToZip() {
   }
   
   console.log('✅ 备份完成:', backupPath);
-  console.log('📦 会话数:', exported.length);
   return { backupPath, sessionCount: exported.length };
 }
 

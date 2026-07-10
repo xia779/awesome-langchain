@@ -816,6 +816,5 @@ module.exports = {
       }
     }, 100);
 
-    console.log('✅ 浏览器自动化模块已加载' + (BrowserWindow ? '（BrowserWindow 可用）' : '（⚠️ BrowserWindow 不可用）'));
   }
 };

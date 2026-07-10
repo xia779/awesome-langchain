@@ -155,7 +155,6 @@ function applyTheme(themeId) {
     Core.saveConfig({ activeTheme: themeId });
   }
 
-  console.log('🎨 Theme applied: ' + theme.name);
   return true;
 }
 

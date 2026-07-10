@@ -29,7 +29,6 @@ function debouncedAutoSave(sessionId) {
   autoSaveTimers[sessionId] = setTimeout(function() {
     if (sessions[sessionId]) {
       saveSession(sessionId);
-      console.log('💾 自动保存:', sessionId);
     }
     delete autoSaveTimers[sessionId];
   }, AUTO_SAVE_DELAY);
@@ -77,7 +76,6 @@ function loadSessions() {
         console.log('✅ 会话已从 SQLite 加载:', Object.keys(sessions).length, '个');
         return;
       }
-      console.log('📂 SQLite 无会话数据，尝试从 JSON 迁移...');
     }
   } catch (e) {
     console.warn('⚠️ SQLite 加载会话失败:', e.message);
@@ -103,7 +101,6 @@ function loadSessions() {
             sessions[id] = data;
             if (sessions[id].pinned === undefined) sessions[id].pinned = false;
             if (sessions[id].collapsed === undefined) sessions[id].collapsed = false;
-            console.log('📂 加载会话:', id, 'title=', sessions[id].title);
           } catch (e) {
             console.warn('⚠️ 加载会话失败:', file, e.message);
           }
@@ -115,7 +112,6 @@ function loadSessions() {
   }
   
   loadDir(dir);
-  console.log('📂 会话从 JSON 加载:', Object.keys(sessions).length, '个');
   
   // 自动迁移到 SQLite
   if (Core.db && Core.db.migrateFromJSON && Object.keys(sessions).length > 0) {
@@ -158,7 +154,6 @@ function loadSessions() {
         var remaining = fs.readdirSync(oldDir);
         if (remaining.length === 0) {
           fs.rmdirSync(oldDir);
-          console.log('🗑️ 已删除空目录:', oldDir);
         }
       } catch (e) {
         console.warn('⚠️ 迁移旧会话失败:', oldDir, e.message);
@@ -166,12 +161,9 @@ function loadSessions() {
     }
   }
   
-  console.log('📂 共加载了', Object.keys(sessions).length, '个会话');
-  console.log('📂 会话目录:', dir);
 
   // 如果没有会话，创建一个默认的
   if (Object.keys(sessions).length === 0) {
-    console.log('📂 没有会话文件，创建默认会话');
     var defaultTemp = (Core && Core.config && Core.config.temperature !== undefined) ? Core.config.temperature : 0.7;
     var id = Core.generateId();
     sessions[id] = { 
@@ -191,7 +183,6 @@ function loadSessions() {
       var rootIds = Object.keys(sessions).filter(function(id) { return !sessions[id].parentId; });
       if (rootIds.length > 0) {
         currentSessionId = rootIds[0];
-        console.log('📂 已设置当前会话为:', currentSessionId, sessions[currentSessionId].title);
       }
     }
   }
@@ -205,7 +196,6 @@ function loadSessions() {
     }
   });
   if (clearedCount > 0) {
-    console.log('🔧 已清除', clearedCount, '个会话的运行时状态');
   }
   
   // 检查并修复旧数据：没有 parentId 的会话默认挂到 master 下
@@ -261,11 +251,9 @@ function loadSessions() {
     if (!pid || !sessions[pid]) {
       sessions[id].parentId = masterId;
       saveSession(id);
-      console.log('🔧 已重置会话', id, '的 parentId 为 master');
     }
   });
   
-  console.log('📂 加载完成，会话数:', Object.keys(sessions).length, '当前会话:', currentSessionId);
 }
 
 // 🔧 确保默认角色存在（如果没有角色数据，自动创建）
@@ -304,7 +292,6 @@ function ensureDefaultRoles() {
   // 🔧 恢复 currentSessionId
   if (savedCurrentId && sessions[savedCurrentId]) {
     currentSessionId = savedCurrentId;
-    console.log('🔧 恢复 currentSessionId 为:', currentSessionId, sessions[currentSessionId].title);
   }
   
   // 重新渲染侧边栏
@@ -331,7 +318,6 @@ function saveSession(id) {
     if (Core.db && Core.db.saveSession) {
       const userId = Core._currentUser || 'admin';
       Core.db.saveSession(id, { ...saveData, userId: userId });
-      console.log('💾 会话已保存到 SQLite:', id);
     }
   } catch (e) {
     console.warn('⚠️ SQLite 保存会话失败:', e.message);
@@ -422,7 +408,6 @@ function renderChatList() {
       return matchesFilter(sessions[id]);
     });
     
-    console.log('🎨 筛选模式，匹配数:', matchedIds.length, '筛选:', chatListFilter || '(无文本)', '日期:', chatListDateFilter);
     
     if (matchedIds.length === 0) {
       chatList.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">没有找到匹配的会话</div>';
@@ -445,7 +430,6 @@ function renderChatList() {
       return bTime - aTime;
     });
     
-    console.log('🎨 渲染侧边栏，根节点数:', rootIds.length, '总会话数:', Object.keys(sessions).length);
     
     rootIds.forEach(function(id) {
       renderTreeNode(id, chatList, 0);
@@ -931,7 +915,6 @@ function loadMoreMessages(sessionId, currentStartIndex, pageSize) {
   // 更新渲染元数据
   session._renderMeta.startIndex = newStartIndex;
   
-  console.log('\u2705 \u5df2\u52a0\u8f7d\u66f4\u591a\u6d88\u606f:', countToLoad, '\u6761, \u5f53\u524d\u6e32\u67d3:', newStartIndex, '-', total);
 }
 
 // ===== 日期分割线 =====
@@ -1161,7 +1144,6 @@ function addCodeButtonsToDiv(contentDiv) {
             var resultStr = typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result);
             if (resultStr.length > 5000) resultStr = resultStr.substring(0, 5000) + '\n...(结果已截断)';
             Core.session.addMessage({ role: 'ai', content: '**JS 运行结果：**\n```\n' + resultStr + '\n```' });
-            console.log('🔒 JS沙箱执行成功, 结果长度:', resultStr.length);
           } catch (e) {
             Core.session.addMessage({ role: 'ai', content: '❌ JS 运行错误：' + _escapeHtml(e.message) });
             console.warn('🔒 JS沙箱执行失败:', e.message);
@@ -1243,7 +1225,6 @@ function autoTitle(sessionId) {
 
 // ===== 重命名会话 =====
 function renameSession(id, newTitle) {
-  console.log('🔧 重命名会话', id, '为', newTitle);
   if (!sessions[id]) {
     console.warn('⚠️ 会话不存在，尝试重新加载:', id);
     loadSessions();
@@ -1284,14 +1265,11 @@ function deleteSessionWithChildren(id) {
       var filePath = path.join(possibleDirs[j], id + '.json');
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
-        console.log('✅ 已删除文件:', filePath);
         deleted = true;
       }
     }
     if (!deleted) {
-      console.log('⚠️ 文件不存在:', id);
     }
-    console.log('🗑️ 已删除会话:', id);
   } catch (err) { console.error('❌ 删除会话失败:', err.message); }
   var ids = Object.keys(sessions).filter(function(k) { return !sessions[k].parentId; });
   if (ids.length > 0) { currentSessionId = ids[0]; renderMessages(currentSessionId); highlightChatItem(currentSessionId); }
@@ -1364,7 +1342,6 @@ function clearSessions() {
   renderChatList();
   var container = document.getElementById('chatContainer');
   if (container) container.innerHTML = '';
-  console.log('🗑️ 已清除所有会话');
 }
 
 // ===== 置顶/取消置顶 =====
@@ -1381,7 +1358,6 @@ function init(core) {
   
   // 使用固定路径
   sessionsDir = getSessionsDir();
-  console.log('📁 会话目录:', sessionsDir);
   
   loadSessions();
   

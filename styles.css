@@ -3378,19 +3378,7 @@
     .msg.ai table td {
       border-color: var(--border);
     }
-    
-    /* Toast 提示样式 */
-    .app-toast {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-    .toast-icon {
-      font-size: 16px;
-      flex-shrink: 0;
-    }
-    .toast-message {
-      line-height: 1.4;
-    }
-    
+
     /* 发送按钮光效 */
     #send:hover {
       box-shadow: 0 2px 12px rgba(255, 255, 255, 0.15);

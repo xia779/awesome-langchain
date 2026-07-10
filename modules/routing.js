@@ -106,7 +106,6 @@ function analyzeMessage(text, sessionContext) {
   if (isMasterRole) {
     const masterMatch = matchKeywords(cleanText, MASTER_ROLES);
     if (masterMatch) {
-      console.log('🎯 统一路由: 主管模式匹配 → ' + masterMatch.id + ' (关键词: "' + masterMatch.keyword + '")');
       return {
         routeType: 'master-dispatch',
         roleId: masterMatch.id,
@@ -115,7 +114,6 @@ function analyzeMessage(text, sessionContext) {
       };
     }
     // 主管模式下无匹配 → 主管自己处理（不路由）
-    console.log('ℹ️ 统一路由: 主管模式无匹配，由主管直接回答');
     return null;
   }
 
@@ -123,7 +121,6 @@ function analyzeMessage(text, sessionContext) {
   if (autoRoute) {
     const agentMatch = matchKeywords(cleanText, AGENTS);
     if (agentMatch && agentMatch.id !== 'general') {
-      console.log('🎯 统一路由: 智能路由匹配 → ' + agentMatch.id + ' (关键词: "' + agentMatch.keyword + '")');
       return {
         routeType: 'agent-route',
         agentId: agentMatch.id,
@@ -131,7 +128,6 @@ function analyzeMessage(text, sessionContext) {
       };
     }
     // general 代理不路由，走普通聊天（避免所有消息都被路由）
-    console.log('ℹ️ 统一路由: 智能路由无特定匹配，走普通聊天');
   }
 
   return null;
@@ -156,7 +152,6 @@ function matchAgent(query) {
       }
     }
   }
-  console.log('ℹ️ 未命中关键词，路由至通用代理');
   return 'general';
 }
 
@@ -211,7 +206,6 @@ async function callAgent(agentId, task, customSystemPrompt) {
           query = query.split('用户问题：')[1].split('\n')[0].trim();
         }
         const searchResults = await searchFn(query);
-        console.log('📡 代理内搜索结果:', searchResults.substring(0, 100) + '...');
         if (searchResults && searchResults.trim() !== '' && 
             !searchResults.includes('联网搜索失败') &&
             !searchResults.includes('未找到有效')) {
@@ -241,7 +235,6 @@ async function callAgent(agentId, task, customSystemPrompt) {
   const parts = selectedValue.split(':');
   const provider = parts[0] || 'ollama';
   const model = parts.slice(1).join(':') || Core.config.ollamaModel || 'qwen2.5:7b';
-  console.log('🔍 调用 API: provider=' + provider + ', model=' + model);
 
   const temperature = 0.7;
 
@@ -254,7 +247,6 @@ async function callAgent(agentId, task, customSystemPrompt) {
 
   try {
     var data = await Core.api.callAPI(finalTask, systemPrompt, temperature, model, provider);
-    console.log('📦 API 返回数据:', data);
 
     let reply = '';
     if (provider === 'ollama') {
@@ -297,7 +289,6 @@ async function callAgent(agentId, task, customSystemPrompt) {
 
 async function routeMessage(userInput, customSystemPrompt) {
   const agentId = matchAgent(userInput);
-  console.log('🎯 路由到代理: ' + agentId);
   try {
     const result = await callAgent(agentId, userInput, customSystemPrompt || null);
     return { success: true, agentId: agentId, agentName: result.agentName, reply: result.reply, sessionId: result.sessionId };

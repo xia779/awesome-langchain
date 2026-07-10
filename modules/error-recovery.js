@@ -305,7 +305,7 @@ function startHealthMonitor() {
   if (_healthTimer) clearInterval(_healthTimer);
   _healthTimer = setInterval(function() {
     // 只检查最近活跃过的 provider
-    checkOllamaHealth().catch(function() {});
+    checkOllamaHealth().catch(function(e) { console.warn('[Recovery] Health check error:', e.message); });
   }, CONFIG.HEALTH_CHECK_INTERVAL);
 }
 

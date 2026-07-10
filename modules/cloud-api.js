@@ -255,7 +255,6 @@ async function handleToolCalls(toolCalls, messages, apiKey, baseURL, model, temp
       console.warn('⚠️ 工具参数解析失败:', tc.function?.arguments);
     }
 
-    console.log('🔧 执行 Function Calling 工具:', fnName, JSON.stringify(fnArgs));
     let result = '工具执行失败: 未知工具';
     try {
       if (Core.toolsRegistry && Core.toolsRegistry.executeTool) {
@@ -301,7 +300,6 @@ async function handleToolCalls(toolCalls, messages, apiKey, baseURL, model, temp
 // ===== 非流式调用 =====
 async function callCloudAPI(prompt, systemMsg, temperature, model, provider, options) {
   options = options || {};
-  console.log('☁️ callCloudAPI: provider=' + provider + ', model=' + model + ', hasOverride=' + !!options.messages + ', disableTools=' + !!options.disableTools);
 
   // 使用 error-recovery 的重试 + 断路器机制
   var retryFn = Core.recovery ? Core.recovery.withRetry : async function(fn) { return await fn(0); };
@@ -331,7 +329,6 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
       if (toolsPayload) {
         requestBody.tools = toolsPayload;
         requestBody.tool_choice = 'auto';
-        if (attempt === 0) console.log('🔧 Function Calling: 已注入 ' + toolsPayload.length + ' 个工具定义');
       }
 
       const response = await fetch(baseURL + '/chat/completions', {
@@ -350,12 +347,10 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
       }
 
       let data = await response.json();
-      console.log('☁️ 返回: model=' + (data.model || 'unknown') + ', choices=' + (data.choices ? data.choices.length : 0));
 
       // 🔧 F12: 处理 tool_calls — 如果模型请求工具调用，执行后再次请求
       const toolCalls = data.choices?.[0]?.message?.tool_calls;
       if (toolCalls && toolCalls.length > 0) {
-        console.log('🔧 Function Calling: 模型请求了 ' + toolCalls.length + ' 个工具调用');
         const followUpData = await handleToolCalls(toolCalls, messages, apiKey, baseURL, actualModel || 'gpt-3.5-turbo', temperature);
         if (followUpData) {
           data = followUpData;
@@ -391,7 +386,6 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
 
 // ===== 流式调用（SSE 解析）=====
 async function callCloudAPIStream(prompt, systemMsg, temperature, model, provider, onChunk, signal) {
-  console.log('☁️ callCloudAPIStream: provider=' + provider + ', model=' + model);
   
   const apiKey = getApiKey(provider);
   const baseURL = getBaseURL(provider);
@@ -532,14 +526,12 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
   // 🔧 F12: 处理流式 tool_calls — 执行工具后发起后续请求
   const validToolCalls = accumulatedToolCalls.filter(tc => tc && tc.id);
   if (validToolCalls.length > 0) {
-    console.log('🔧 Function Calling (stream): 模型请求了 ' + validToolCalls.length + ' 个工具调用');
     // 构建包含 tool_calls 的消息历史
     messages.push({ role: 'assistant', content: fullText || null, tool_calls: validToolCalls });
     for (const tc of validToolCalls) {
       const fnName = tc.function?.name;
       let fnArgs = {};
       try { fnArgs = JSON.parse(tc.function?.arguments || '{}'); } catch(e) { console.warn('[cloud-api] 流式工具调用参数解析失败:', tc.function?.arguments, e.message); }
-      console.log('🔧 执行工具:', fnName, JSON.stringify(fnArgs));
       let result = '工具执行失败: 未知工具';
       try {
         if (Core.toolsRegistry && Core.toolsRegistry.executeTool) {

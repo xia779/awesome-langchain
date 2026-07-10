@@ -57,7 +57,7 @@ function getSkillsDir() {
 function ensureSkillsDir() {
   var dir = getSkillsDir();
   if (dir && !fs.existsSync(dir)) {
-    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { console.warn('[Skill] Failed to create skills dir:', e.message); }
   }
 }
 

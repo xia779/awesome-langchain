@@ -60,7 +60,9 @@ function cleanupOldLogs() {
         fs.unlinkSync(filePath);
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[Logger] Log rotation failed:', e.message);
+  }
 }
 
 // ===== 日志 API =====

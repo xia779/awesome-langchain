@@ -14,7 +14,6 @@ function getEffectiveEngine() {
 // ===== 主搜索函数：优先走后端代理，降级直接请求 =====
 async function webSearch(query) {
   const engine = getEffectiveEngine();
-  console.log(`🔍 搜索代理: engine=${engine}, query="${query}"`);
 
   try {
     const resp = await fetch('http://127.0.0.1:8080/api/search', {
@@ -40,13 +39,11 @@ async function webSearch(query) {
     const data = await resp.json();
     if (data.results && typeof data.results === 'string' && data.results.trim()) {
       if (data.results.includes('no valid results') || data.results.includes('Search failed') || data.results.includes('请配置')) {
-        console.log(`⚠️ 搜索返回提示信息: ${data.results.length} 字符`);
         return `关于"${query}"未找到有效的搜索结果。`;
       }
       console.log(`✅ 搜索成功 (${engine}): ${data.results.length} 字符`);
       return data.results;
     } else {
-      console.log('⚠️ 搜索结果为空');
       return `关于"${query}"未找到有效的搜索结果。`;
     }
     
@@ -64,7 +61,6 @@ async function webSearch(query) {
 // ===== 结构化搜索：返回 {text, items:[{title,snippet,url}]} =====
 async function webSearchWithMeta(query) {
   var engine = getEffectiveEngine();
-  console.log('🔍 结构化搜索: engine=' + engine + ', query="' + query + '"');
   try {
     var items = [];
     switch (engine) {
@@ -390,13 +386,11 @@ module.exports = {
   dependencies: [],
   init(_Core) {
     Core = _Core;
-    console.log('🌐 search.js init 开始...');
     
     if (!Core.config.searchEngine || Core.config.searchEngine === '') {
       Core.config.searchEngine = 'bing';
       Core.saveConfig({ searchEngine: 'bing' });
     }
-    console.log('🌐 当前搜索引擎:', getEffectiveEngine(), '(配置:', Core.config.searchEngine + ')');
     
     var btn = Core.dom.webSearchBtn || document.getElementById('webSearchBtn');
     updateWebSearchAvailability();

@@ -96,7 +96,6 @@ async function generateSiliconFlow(prompt, size) {
   for (var tryIdx = 0; tryIdx < modelsToTry.length; tryIdx++) {
     var tryModel = modelsToTry[tryIdx];
     try {
-      console.log('🎨 SiliconFlow 尝试模型: ' + tryModel + ' (第' + (tryIdx + 1) + '次)');
       var resp = await fetch('https://api.siliconflow.cn/v1/images/generations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
@@ -163,7 +162,6 @@ async function checkComfyUI(force) {
         os: data.os || ''
       };
       _comfyuiStatusTime = now;
-      console.log('✅ ComfyUI 在线:', JSON.stringify(_comfyuiStatus.gpu || {}));
       return _comfyuiStatus;
     }
   } catch (e) {
@@ -198,7 +196,6 @@ async function getComfyUIModels() {
       }
     } catch (e) {}
     _comfyuiModels = { checkpoints: checkpoints, loras: loras };
-    console.log('🎨 ComfyUI 模型: ' + checkpoints.length + ' checkpoints, ' + loras.length + ' LoRAs');
     return _comfyuiModels;
   } catch (e) {
     console.warn('⚠️ ComfyUI 模型列表获取失败:', e.message);
@@ -369,7 +366,6 @@ async function generateComfyUI(prompt, options) {
   var promptId = queueData.prompt_id;
   if (!promptId) throw new Error('ComfyUI 未返回 prompt_id');
 
-  console.log('🎨 ComfyUI 任务已提交:', promptId);
 
   // 轮询结果（WebSocket 提供进度，这里只检查完成状态）
   var maxAttempts = 90; // 3 分钟
@@ -399,7 +395,6 @@ async function generateComfyUI(prompt, options) {
                   + '&subfolder=' + (imgInfo.subfolder || '') + '&type=' + (imgInfo.type || 'output');
                 // 关闭 WebSocket
                 if (_comfyuiWs) { try { _comfyuiWs.close(); } catch (e) {} _comfyuiWs = null; }
-                console.log('✅ ComfyUI 生成完成:', imgInfo.filename);
                 return {
                   url: imgUrl,
                   revised_prompt: '',
@@ -458,7 +453,6 @@ async function generateVideo(prompt, options) {
   if (apiKey.startsWith('Bearer ')) apiKey = apiKey.substring(7);
   var model = options.model || Core.config.videoGenModel || 'Wan-AI/Wan2.1-T2V-14B';
 
-  console.log('\ud83c\udfac \u89c6\u9891\u751f\u6210: model=' + model + ', prompt="' + prompt.substring(0, 50) + '..."');
 
   // Step 1: 提交生成任务
   var createResp = await fetch('https://api.siliconflow.cn/v1/video/generations', {
@@ -528,7 +522,6 @@ async function generateVideo(prompt, options) {
           videoUrl = statusData.video;
         }
         if (!videoUrl) {
-          console.log('\u89c6\u9891\u4efb\u52a1\u8fd4\u56de\u6570\u636e:', JSON.stringify(statusData).substring(0, 500));
           throw new Error('\u89c6\u9891\u751f\u6210\u5b8c\u6210\u4f46\u672a\u627e\u5230\u89c6\u9891 URL');
         }
         return { url: videoUrl, type: 'video', model: model };
@@ -623,7 +616,6 @@ function registerCommands() {
     });
   });
 
-  console.log('\u2705 /draw \u548c /video \u547d\u4ee4\u5df2\u6ce8\u518c');
 }
 
 module.exports = {
@@ -652,13 +644,10 @@ module.exports = {
     // 启动时检查 ComfyUI 状态
     checkComfyUI().then(function(status) {
       if (status.online) {
-        console.log('✅ ComfyUI 已连接');
         getComfyUIModels(); // 预加载模型列表
       } else {
-        console.log('⚠️ ComfyUI 未运行（本地图片生成将使用 SiliconFlow 降级）');
       }
     });
 
-    console.log('✅ 图像 + 视频生成模块已加载（DALL-E / Silicon Flow / ComfyUI + 自动降级 / Wan 2.1）');
   }
 };

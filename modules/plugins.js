@@ -88,7 +88,6 @@ function init(_Core) {
     try { marketplaceRegistry = JSON.parse(fs.readFileSync(localMarketplace, 'utf8')); } catch(e) {}
   }
   console.log('✅ 插件系统已加载');
-  console.log('🔍 已加载插件数:', Object.keys(loadedPlugins).length);
 }
 
 // 将项目目录中的示例插件复制到用户插件目录
@@ -97,7 +96,6 @@ function copySamplePlugins() {
     let appDir = __dirname;
     appDir = appDir.replace(/[\\/]modules[\\/]?$/, '').replace(/[\\/]$/, '');
     const sampleDir = appDir + '/plugins';
-    console.log('🔍 检查示例插件目录:', sampleDir);
     if (!fs.existsSync(sampleDir)) {
       console.warn('⚠️ 示例插件目录不存在:', sampleDir);
       return;
@@ -132,7 +130,6 @@ function processSampleEntries(entries, sampleDir) {
       const stat = fs.statSync(srcPath);
       if (stat.isDirectory() && !fs.existsSync(destPath)) {
         copyDirStr(srcPath, destPath);
-        console.log('📦 已复制示例插件:', entry);
       }
     } catch (e) {
       console.warn('⚠️ 复制示例插件条目失败:', entry, e.message);
@@ -167,7 +164,6 @@ function loadAllPlugins() {
     }
     
     if (!entries || entries.length === 0) {
-      console.log('📦 插件目录为空');
       return;
     }
     
@@ -182,7 +178,6 @@ function loadAllPlugins() {
         console.warn('⚠️ 插件状态检查失败:', entry, e.message);
       }
     });
-    console.log(`📦 已加载 ${Object.keys(loadedPlugins).length} 个插件`);
   } catch (err) {
     console.warn('⚠️ 加载插件失败:', err.message);
   }
@@ -234,7 +229,6 @@ function loadPluginFromDir(pluginId, pluginPath) {
       path: pluginPath,
     };
 
-    console.log(`📦 插件 ${manifest.id} v${manifest.version} ${enabled ? '已启用' : '已禁用'}`);
   } catch (err) {
     console.error(`❌ 加载插件 ${pluginId} 失败:`, err.message);
   }
@@ -449,7 +443,6 @@ function installPlugin(sourcePath) {
     
     // 如果已存在，先卸载
     if (fs.existsSync(destDir)) {
-      console.log(`📦 插件 ${pluginId} 已存在，正在卸载旧版本...`);
       uninstallPlugin(pluginId);
     }
     
@@ -460,7 +453,6 @@ function installPlugin(sourcePath) {
     // 加载新插件
     loadPluginFromDir(pluginId, destDir);
     
-    console.log(`📦 插件 ${pluginId} v${manifest.version} 安装成功`);
     return { success: true, id: pluginId, manifest: manifest };
   } catch (err) {
     console.error('❌ 安装插件失败:', err.message);
@@ -482,7 +474,6 @@ function uninstallPlugin(pluginId) {
       disabledPlugins.splice(idx, 1);
       Core.saveConfig({ disabledPlugins: disabledPlugins });
     }
-    console.log(`📦 插件 ${pluginId} 已卸载`);
     return { success: true };
   } catch (err) {
     console.error('❌ 卸载插件失败:', err.message);
@@ -569,7 +560,6 @@ async function fetchMarketplace(url) {
     const localPath = path.join(Core.DATA_ROOT, 'plugins-marketplace.json');
     if (fs.existsSync(localPath)) {
       marketplaceRegistry = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-      console.log('📦 市场: 从本地注册表加载', marketplaceRegistry.plugins.length, '个插件');
       return marketplaceRegistry;
     }
     return { version: '1.0.0', plugins: [] };
@@ -581,7 +571,6 @@ async function fetchMarketplace(url) {
     // 缓存到本地
     var cachePath = path.join(Core.DATA_ROOT, 'plugins-marketplace-cache.json');
     try { fs.writeFileSync(cachePath, JSON.stringify(marketplaceRegistry, null, 2)); } catch(e) {}
-    console.log('📦 市场: 从远程加载', marketplaceRegistry.plugins.length, '个插件');
     return marketplaceRegistry;
   } catch (err) {
     console.warn('⚠️ 市场: 远程获取失败，尝试本地缓存:', err.message);
@@ -673,7 +662,6 @@ async function installFromMarketplace(pluginId) {
       }
 
       installed.push(skill.id);
-      console.log('📦 市场安装: ' + skill.id + ' ✅');
     } catch (err) {
       errors.push(skill.id + ': ' + err.message);
       console.error('📦 市场安装失败: ' + skill.id, err.message);
@@ -745,12 +733,11 @@ function startAutoUpdateCheck() {
   _updateCheckTimer = setInterval(function() {
     checkForUpdates().then(function(updates) {
       if (updates && updates.length > 0) {
-        console.log('📦 发现 ' + updates.length + ' 个插件更新');
         if (Core.errorHandler && Core.errorHandler.showWarningToast) {
           Core.errorHandler.showWarningToast(updates.length + ' 个插件有可用更新，使用 /plugin update 查看');
         }
       }
-    }).catch(function() {});
+    }).catch(function(e) { console.warn('[Plugins] Update check failed:', e.message); });
   }, UPDATE_CHECK_INTERVAL);
 }
 

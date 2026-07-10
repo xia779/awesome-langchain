@@ -440,7 +440,9 @@ function saveGenerationState() {
     };
     var statePath = path.join(Core.DATA_ROOT || '', 'generation-state.json');
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[Performance] Failed to save generation state:', e.message);
+  }
 }
 
 function getLastPartialReply() {
@@ -679,7 +681,9 @@ function cleanupOldMessages(sessionId, keepCount) {
     try {
       fs.mkdirSync(path.dirname(archivePath), { recursive: true });
       fs.writeFileSync(archivePath, JSON.stringify(oldMessages, null, 2));
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[Performance] Archive write failed:', e.message);
+    }
 
     console.log('\u26a1 \u4f1a\u8bdd ' + sessionId.substring(0, 8) + ' \u5df2\u5f52\u6863 ' + oldMessages.length + ' \u6761\u65e7\u6d88\u606f');
     Core.emit && Core.emit('messagesArchived', { sessionId: sessionId, count: oldMessages.length });
@@ -709,7 +713,9 @@ function archiveOldSessions(maxAge) {
           fs.writeFileSync(archivePath, JSON.stringify(session, null, 2));
           delete sessions[id];
           archived++;
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[Performance] Archive write failed:', e.message);
+        }
       }
     });
 

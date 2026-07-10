@@ -57,7 +57,6 @@ function getDataRoot() {
   try {
     if (app) {
       var fallback = path.join(app.getPath('userData'), 'ai-data');
-      console.log('📂 数据路径回退到 userData:', fallback);
       return fallback;
     }
   } catch (e) { console.warn('⚠️ [core] 获取 userData 路径失败:', e.message); }
@@ -275,7 +274,6 @@ const Core = {
           console.log('✅ 配置已从 SQLite 全局表加载');
         } else {
           // SQLite 中没有数据，从 JSON 读取并自动迁移
-          console.log('📂 SQLite 无数据，尝试从 JSON 迁移...');
           this.loadConfigFromJSON(defaultConfig);
           
           // 自动迁移到 SQLite
@@ -332,7 +330,6 @@ const Core = {
     }
     // 如果检测到旧的明文密钥，自动重新保存为加密格式
     if (hadPlaintextKeys) {
-      console.log('🔒 检测到明文 API 密钥，自动加密保存...');
       setTimeout(() => {
         try { this.saveConfig({}); } catch(e) { console.warn('⚠️ 自动加密保存失败:', e.message); }
       }, 2000);
@@ -348,9 +345,7 @@ const Core = {
       if (fs.existsSync(this.CONFIG_FILE) && fs.statSync(this.CONFIG_FILE).isFile()) {
         const content = fs.readFileSync(this.CONFIG_FILE, 'utf8');
         this.config = JSON.parse(content);
-        console.log('🔍 配置从 JSON 加载: CONFIG_FILE=' + this.CONFIG_FILE);
       } else {
-        console.log('📂 配置文件不存在，使用默认配置');
         this.config = { ...defaultConfig };
       }
     } catch (e) {
@@ -407,7 +402,6 @@ const Core = {
         clearedCount++;
       }
     }
-    console.log('🧹 已清除 ' + clearedCount + ' 个模块缓存');
 
     // ===== Phase 1: 加载所有模块，收集依赖元数据 =====
     var loadedModules = {};
@@ -486,14 +480,12 @@ const Core = {
       var targetFile = nameToFile[sortedNames[s]];
       if (targetFile) sortedFiles.push(targetFile);
     }
-    console.log('📋 拓扑排序加载顺序:', sortedFiles.join(' → '));
 
     // ===== Phase 3: 按拓扑顺序调用 init() =====
     for (var j = 0; j < sortedFiles.length; j++) {
       var file2 = sortedFiles[j];
       var entry = loadedModules[file2];
       if (!entry || typeof entry.module.init !== 'function') {
-        if (entry) console.log('⚠️ 模块 ' + file2 + ' 没有 init 函数');
         continue;
       }
       try {
@@ -504,7 +496,6 @@ const Core = {
           } catch (e) { console.warn('⚠️ [core] 暴露 Node API 到 window 失败:', e.message); }
         }
         entry.module.init(this);
-        console.log('✅ 模块 ' + file2 + ' 已加载');
       } catch (err) {
         console.error('❌ 模块 ' + file2 + ' init 失败:', err.message);
       }
@@ -529,11 +520,22 @@ Core.showToast = function(message, type, duration) {
     container.style.cssText = 'position:fixed;top:16px;right:16px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
     document.body.appendChild(container);
   }
-  var colors = { info: '#3b82f6', success: '#22c55e', error: '#ef4444', warning: '#f59e0b' };
-  var icons = { info: '💡', success: '✅', error: '❌', warning: '⚠️' };
+  var colors = { info: 'var(--primary)', success: 'var(--success)', error: 'var(--danger)', warning: '#f59e0b' };
+  var icons = { info: '\u{1F4A1}', success: '\u2705', error: '\u274C', warning: '\u26A0\uFE0F' };
   var toast = document.createElement('div');
   toast.style.cssText = 'pointer-events:auto;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:8px;background:' + (colors[type] || colors.info) + ';color:#fff;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.3);max-width:400px;word-break:break-word;opacity:0;transform:translateX(40px);transition:all 0.3s ease;';
-  toast.innerHTML = '<span>' + (icons[type] || '') + '</span><span style="flex:1">' + (message || '').replace(/</g, '&lt;') + '</span><span style="cursor:pointer;opacity:0.7;font-size:16px" onclick="this.parentElement.remove()">&times;</span>';
+  var iconSpan = document.createElement('span');
+  iconSpan.textContent = icons[type] || '';
+  var msgSpan = document.createElement('span');
+  msgSpan.style.cssText = 'flex:1';
+  msgSpan.textContent = message || '';
+  var closeSpan = document.createElement('span');
+  closeSpan.style.cssText = 'cursor:pointer;opacity:0.7;font-size:16px';
+  closeSpan.textContent = '\u00D7';
+  closeSpan.onclick = function() { toast.remove(); };
+  toast.appendChild(iconSpan);
+  toast.appendChild(msgSpan);
+  toast.appendChild(closeSpan);
   container.appendChild(toast);
   requestAnimationFrame(function() { toast.style.opacity = '1'; toast.style.transform = 'translateX(0)'; });
   setTimeout(function() {
@@ -541,6 +543,9 @@ Core.showToast = function(message, type, duration) {
     setTimeout(function() { if (toast.parentElement) toast.remove(); }, 300);
   }, duration);
 };
+Core.showErrorToast = function(message, duration) { Core.showToast(message, 'error', duration || 5000); };
+Core.showSuccessToast = function(message, duration) { Core.showToast(message, 'success', duration || 3000); };
+Core.showWarningToast = function(message, duration) { Core.showToast(message, 'warning', duration || 4000); };
 Core.showAlert = function(message) {
   if (Core.showToast) { Core.showToast(message, 'info', 4000); }
   else { alert(message); }
@@ -550,7 +555,6 @@ window.showAlert = Core.showAlert;
 
 // ===== 启动入口 =====
 (function main() {
-  console.log('🚀 Core 启动中... v11 (最终修复版)');
 
   // 🔧 缓存清除由 loadModules() 统一处理，此处不再重复
   
@@ -626,7 +630,6 @@ window.showAlert = Core.showAlert;
         }
       });
     });
-    console.log('✅ 应用菜单已初始化');
   })();
   var modelSelect = document.getElementById('modelSelect');
   var modelTagName = document.getElementById('modelTagName');
@@ -650,7 +653,6 @@ window.showAlert = Core.showAlert;
     if (tempSlider && Core.config.temperature !== undefined) {
       tempSlider.value = Core.config.temperature;
       if (tempDisplay) tempDisplay.textContent = Core.config.temperature;
-      console.log('✅ 温度已加载:', Core.config.temperature);
     }
   }, 100);
   
@@ -659,7 +661,6 @@ window.showAlert = Core.showAlert;
   function loadModulesWhenReady() {
     if (window.marked) {
       Core.loadModules();
-      console.log('✅ Core.loadModules 已执行（marked 已加载）');
     } else if (markedCheckCount < 60) {
       markedCheckCount++;
       console.log('⏳ 等待 marked 库加载... (' + markedCheckCount + '/60)');
@@ -716,13 +717,11 @@ window.showAlert = Core.showAlert;
                      (engine === 'tavily' && !Core.config.tavilyApiKey);
       if (!needsKey) {
         webBtn.disabled = false;
-        console.log('✅ 联网按钮备份启用 (engine=' + engine + ')');
       }
     }
     // 恢复联网按钮上次状态（search.js init 之后执行，覆盖 search.js 的状态）
     if (webBtn && Core.config.webSearch && !webBtn.disabled) {
       webBtn.classList.add('active');
-      console.log('🌐 联网搜索状态恢复');
     }
 
     // 🔧 深度思考按钮：完全独立的初始化
@@ -732,7 +731,6 @@ window.showAlert = Core.showAlert;
       var dtBtn = dtBtnOld.cloneNode(true);
       dtBtnOld.parentNode.replaceChild(dtBtn, dtBtnOld);
       Core.dom.deepThinkBtn = dtBtn;
-      console.log('✅ 深度思考按钮已clone替换，旧监听器已清除');
       dtBtn.addEventListener('click', function onDeepThinkClick() {
         var currentlyActive = dtBtn.classList.contains('active');
         var newActive = !currentlyActive;
@@ -766,7 +764,6 @@ window.showAlert = Core.showAlert;
         dtBtn.style.color = '#3b82f6';
         dtBtn.style.borderColor = '#3b82f6';
         dtBtn.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.2)';
-        console.log('🧠 深度思考状态已恢复为开启');
       } else {
         // 确保非 active 状态的样式正确
         dtBtn.style.background = '#f8fafc';
@@ -778,7 +775,6 @@ window.showAlert = Core.showAlert;
       console.warn('⚠️ 深度思考按钮未找到，跳过');
     }
 
-    console.log('✅ 深度思考按钮初始化完成');
   })();
 
   const streamBtn = document.getElementById('streamBtn');
@@ -807,17 +803,13 @@ window.showAlert = Core.showAlert;
         setTimeout(function() { status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 2000);
       }
     });
-    console.log('✅ Agent 模式按钮初始化完成' + (Core.config.agentMode ? '（当前已启用）' : ''));
   })();
 
   // 🔧 全局调试函数
   window.debugWebSearch = function() {
     var btn = document.getElementById('webSearchBtn');
     if (!btn) { console.error('❌ webSearchBtn 不存在'); return; }
-    console.log('=== 联网按钮诊断 ===');
     console.log('ID:', btn.id);
-    console.log('disabled:', btn.disabled);
-    console.log('classList:', btn.classList.value);
     console.log('title:', btn.title);
     console.log('config.searchEngine:', Core.config.searchEngine);
     console.log('config.bochaApiKey:', Core.config.bochaApiKey ? '已设置' : '未设置');
@@ -836,12 +828,7 @@ window.showAlert = Core.showAlert;
   window.debugDeepThink = function() {
     var btn = document.getElementById('deepThinkBtn');
     if (!btn) { console.error('❌ deepThinkBtn 不存在'); return; }
-    console.log('=== 深度思考按钮诊断 ===');
     console.log('ID:', btn.id);
-    console.log('classList:', btn.classList.value);
-    console.log('disabled:', btn.disabled);
-    console.log('style.background:', btn.style.background);
-    console.log('computed.background:', getComputedStyle(btn).backgroundColor);
     console.log('config.deepThink:', Core.config.deepThink);
     console.log('dom.deepThinkBtn:', Core.dom.deepThinkBtn === btn);
   };
@@ -893,7 +880,6 @@ window.showAlert = Core.showAlert;
     initMultiSelect();
     initContextMenu();
 
-    console.log('\u2705 消息操作按钮已启用（编辑/复制/重新生成/删除/多选/右键菜单）');
   }
 
   function createMsgActions(msgDiv) {
@@ -1196,7 +1182,6 @@ window.showAlert = Core.showAlert;
       }
     }
     msgDiv.parentNode.removeChild(msgDiv);
-    console.log('\u2705 消息已删除');
   }
 
   function regenerateMessage(msgDiv) {
@@ -1630,7 +1615,6 @@ window.showAlert = Core.showAlert;
     };
     chatContainer.addEventListener('contextmenu', chatContainer._contextMenuHandler);
 
-    console.log('✅ 右键菜单已初始化');
   }
 
   function showContextMenu(x, y, msgDiv) {
@@ -1986,7 +1970,6 @@ window.showAlert = Core.showAlert;
         });
       }, 100);
     });
-    console.log('✅ 导出按钮已绑定下拉菜单');
   }
 
   // 🔧 绑定导入按钮和拖拽导入
@@ -2090,7 +2073,6 @@ window.showAlert = Core.showAlert;
       });
     }
 
-    console.log('✅ 导入功能已初始化（按钮 + 拖拽）');
   })();
 
   // ===== 初始化方向A/B/C =====
@@ -2156,7 +2138,6 @@ window.showAlert = Core.showAlert;
       chatContainer.scrollTo({ top: chatContainer.scrollHeight, behavior: 'smooth' });
     });
 
-    console.log('✅ 滚动到底部按钮已初始化');
   })();
 
   // 🔧 配置 marked：启用 GFM 和语法高亮，确保代码块正确渲染

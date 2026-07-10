@@ -14,7 +14,6 @@ function extendDatabase() {
     var hasImportance = cols.some(function(c) { return c.name === 'importance'; });
     if (!hasImportance) {
       Core.db.run("ALTER TABLE memories ADD COLUMN importance TEXT DEFAULT 'normal'");
-      console.log('  📝 memories 表已添加 importance 列');
     }
     // 创建 daily_logs 表
     Core.db.run(`CREATE TABLE IF NOT EXISTS daily_logs (
@@ -27,7 +26,6 @@ function extendDatabase() {
       updated_at INTEGER DEFAULT (unixepoch())
     )`);
     Core.db.run("CREATE INDEX IF NOT EXISTS idx_daily_logs_date ON daily_logs(user_id, date DESC)");
-    console.log('  📝 daily_logs 表已创建');
   } catch (e) {
     console.warn('  ⚠️ 数据库扩展失败:', e.message);
   }

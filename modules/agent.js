@@ -160,11 +160,9 @@ async function planAndExecute(task, options) {
     var plan = parsePlan(planText);
     if (!plan || plan.length === 0) {
       // 无法解析计划，退回到普通 Agent 执行
-      console.log('⚠️ 无法解析执行计划，退回普通 Agent 模式');
       return await runAgent(task);
     }
 
-    console.log('📋 执行计划: ' + plan.length + ' 个步骤');
     var results = [];
     var context = { task: task, plan: plan, results: [] };
 
@@ -279,7 +277,6 @@ async function orchestrateSubtasks(task, subtasks) {
   var results = [];
   var maxConcurrency = 3; // 最多3个并行子任务
 
-  console.log('🎯 编排 ' + subtasks.length + ' 个子任务 (并发上限: ' + maxConcurrency + ')');
 
   // 分批并行执行
   for (var batch = 0; batch < subtasks.length; batch += maxConcurrency) {

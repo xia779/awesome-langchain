@@ -769,7 +769,9 @@ function saveWorkflows() {
   for (var id in workflows) {
     try {
       fs.writeFileSync(path.join(dir, id + '.json'), JSON.stringify(workflows[id], null, 2));
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[Workflow] Failed to save workflow:', e.message);
+    }
   }
 }
 
@@ -1180,7 +1182,6 @@ function init(_Core) {
     }
   };
 
-  console.log('✅ workflow.js 已加载 (模板:' + Object.keys(templates).length + ', 规则:' + rules.length + ', 工作流:' + Object.keys(workflows).length + ')');
 }
 
 exports.init = init;

@@ -85,7 +85,7 @@ async function generateAISummary(messages) {
     if (result && result.message && result.message.content) {
       return '【历史对话AI摘要】\n' + result.message.content;
     }
-  } catch (e) {}
+  } catch (e) { console.warn('[Context] AI summary failed, using fallback:', e.message); }
   return buildSummary(messages);
 }
 

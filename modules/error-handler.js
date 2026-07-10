@@ -136,7 +136,9 @@ function saveErrorLogs() {
     const path = require('path');
     const logPath = path.join(Core.DATA_ROOT, 'error-logs.json');
     fs.writeFileSync(logPath, JSON.stringify(errorLogs.slice(-500), null, 2), 'utf8');
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[ErrorHandler] Failed to save error logs:', e.message);
+  }
 }
 
 function loadErrorLogs() {
@@ -148,68 +150,20 @@ function loadErrorLogs() {
       const data = JSON.parse(fs.readFileSync(logPath, 'utf8'));
       if (Array.isArray(data)) errorLogs = data;
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[ErrorHandler] Failed to load error logs:', e.message);
+  }
 }
 
-// ===== 统一 Toast 提示 =====
-function showToast(message, type = 'info', duration = 3000) {
-  // 移除已存在的 toast
-  const existing = document.querySelectorAll('.app-toast');
-  existing.forEach(el => el.remove());
-  
-  const toast = document.createElement('div');
-  toast.className = 'app-toast toast-' + type;
-  
-  const icons = {
-    error: '❌',
-    success: '✅',
-    warning: '⚠️',
-    info: 'ℹ️'
-  };
-  
-  toast.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span class="toast-message">${message}</span>`;
-  
-  // 样式
-  toast.style.cssText = `
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%) translateY(-20px);
-    background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : '#3b82f6'};
-    color: #fff;
-    padding: 12px 24px;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: 500;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    opacity: 0;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    max-width: 90%;
-    word-break: break-word;
-  `;
-  
-  document.body.appendChild(toast);
-  
-  // 动画进入
-  requestAnimationFrame(() => {
-    toast.style.opacity = '1';
-    toast.style.transform = 'translateX(-50%) translateY(0)';
-  });
-  
-  // 自动消失
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(-50%) translateY(-20px)';
-    setTimeout(() => toast.remove(), 300);
-  }, duration);
+// ===== Toast 提示：委托给 Core.showToast（统一实现）=====
+function showErrorToast(message) {
+  if (Core && Core.showToast) Core.showToast(message, 'error', 5000);
 }
-
-function showErrorToast(message) { showToast(message, 'error', 5000); }
-function showSuccessToast(message) { showToast(message, 'success', 3000); }
-function showWarningToast(message) { showToast(message, 'warning', 4000); }
+function showSuccessToast(message) {
+  if (Core && Core.showToast) Core.showToast(message, 'success', 3000);
+}
+function showWarningToast(message) {
+  if (Core && Core.showToast) Core.showToast(message, 'warning', 4000);
+}
 
 module.exports = { name: 'error-handler', dependencies: [], init };

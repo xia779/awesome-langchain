@@ -43,7 +43,6 @@ function init(_Core) {
     Core.on('messageSent', onMessageChange);
   }
 
-  console.log('📋 智能上下文面板已加载');
 }
 
 // ===== 面板显隐 =====

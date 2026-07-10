@@ -10,7 +10,7 @@ function getOutputDir() {
   var base = Core.DATA_ROOT || Core._globalDataRoot || 'E:\\my-ai-data';
   var dir = path.join(base, 'documents');
   if (!fs.existsSync(dir)) {
-    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { console.warn('[DocHandler] Failed to create documents dir:', e.message); }
   }
   return dir;
 }

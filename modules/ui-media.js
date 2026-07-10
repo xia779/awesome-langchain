@@ -183,7 +183,6 @@ function syncCodeHighlighter(isDark) {
   var newHref = isDark
     ? 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css'
     : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css';
-  if (hljsLink.href !== newHref) { hljsLink.href = newHref; console.log('🎨 代码高亮主题:', isDark ? 'github-dark' : 'github'); }
 }
 
 // ===== 方向B2：字体大小调节 =====
@@ -272,7 +271,6 @@ function addTTSButton(aiMsgDiv) {
 
 // ===== 方向C2：Mermaid图表 =====
 function initMermaidSupport() {
-  if (typeof window.mermaid === 'undefined') { console.log('⏭️ Mermaid 未加载'); return; }
   window.mermaid.initialize({ startOnLoad: false, theme: document.body.classList.contains('dark-theme') ? 'dark' : 'default' });
   var chatContainer = document.getElementById('chatContainer');
   if (!chatContainer) return;

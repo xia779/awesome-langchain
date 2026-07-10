@@ -210,7 +210,6 @@ function connectSseStream(serverId) {
       });
 
       res.on('end', function () {
-        console.log('🔌 SSE 流断开:', serverId, '(5秒后重连)');
         server._sseConnected = false;
         // 自动重连
         setTimeout(connect, 5000);
@@ -243,7 +242,6 @@ function handleServerNotification(serverId, notification) {
   switch (notification.method) {
     case 'notifications/tools/list_changed':
       // 工具列表变更，重新发现
-      console.log('🔧 MCP 工具列表变更:', serverId);
       refreshServerTools(serverId);
       break;
 
@@ -251,14 +249,12 @@ function handleServerNotification(serverId, notification) {
       // 进度通知
       if (notification.params) {
         var p = notification.params;
-        console.log('📊 MCP 进度:', serverId, p.message || '', (p.progress || 0) + '/' + (p.total || '?'));
       }
       break;
 
     case 'notifications/message':
       // 服务器消息
       if (notification.params && notification.params.data) {
-        console.log('💬 MCP[' + serverId + ']:', notification.params.data);
       }
       break;
 
@@ -321,9 +317,6 @@ async function connectHttpServer(serverId, serverConfig) {
     // 建立 SSE 流连接（如果配置了）
     connectSseStream(serverId);
 
-    console.log('✅ HTTP MCP 服务器已连接: ' + serverId +
-      ' (' + server.tools.length + ' 个工具' +
-      (server.sessionId ? ', session=' + server.sessionId.substring(0, 8) : '') + ')');
 
     return server;
   } catch (e) {
@@ -350,7 +343,6 @@ function disconnectHttpServer(serverId) {
   server.sessionId = null;
   server._sseConnected = false;
 
-  console.log('🔌 HTTP MCP 服务器已断开:', serverId);
 }
 
 // ===== 工具注册 =====
@@ -404,7 +396,6 @@ function refreshServerTools(serverId) {
   sendHttpRpc(serverId, 'tools/list', {}).then(function (result) {
     if (result && result.tools) {
       registerHttpServerTools(serverId, result.tools);
-      console.log('🔄 工具列表已刷新:', serverId, result.tools.length, '个工具');
     }
   }).catch(function (e) {
     console.warn('⚠️ 刷新工具失败:', serverId, e.message);
@@ -611,6 +602,5 @@ module.exports = {
       }, 3000);
     }
 
-    console.log('✅ MCP-HTTP 传输层已加载（HTTP+SSE 远程 MCP 连接）');
   }
 };

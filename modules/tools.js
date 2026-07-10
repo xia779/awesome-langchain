@@ -426,7 +426,7 @@ const tools = {
           var backupDir = path.join(Core ? (Core.DATA_ROOT || Core._globalDataRoot || '.') : '.', 'tmp', 'file-backups');
           if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
           fs.copyFileSync(file_path, path.join(backupDir, path.basename(file_path) + '.' + Date.now() + '.bak'));
-        } catch(be) {}
+        } catch(be) { console.warn('[Tools] Pre-edit backup failed:', be.message); }
         fs.writeFileSync(file_path, newContent, 'utf8');
         return '✅ 编辑成功：替换了 ' + count + ' 处匹配文本\n文件：' + file_path;
       } catch (err) {

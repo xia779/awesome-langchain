@@ -102,11 +102,9 @@ function init(_Core) {
       return new Promise(function(resolve) {
         self.currentAudio = new Audio(url);
         self.currentAudio.volume = options.volume !== undefined ? options.volume : 1.0;
-        self.currentAudio.onplay = function() { console.log('🔊 本地 TTS 开始播放 (edge-tts: ' + voice + ')'); };
         self.currentAudio.onended = function() {
           URL.revokeObjectURL(url);
           self.currentAudio = null;
-          console.log('🔊 本地 TTS 播放结束');
           resolve(true);
         };
         self.currentAudio.onerror = function(e) {
@@ -164,11 +162,9 @@ function init(_Core) {
       return new Promise(function(resolve) {
         self.currentAudio = new Audio(url);
         self.currentAudio.volume = options.volume !== undefined ? options.volume : 1.0;
-        self.currentAudio.onplay = function() { console.log('🔊 云端 TTS 开始播放 (' + model + ')'); };
         self.currentAudio.onended = function() {
           URL.revokeObjectURL(url);
           self.currentAudio = null;
-          console.log('🔊 云端 TTS 播放结束');
           resolve(true);
         };
         self.currentAudio.onerror = function(e) {
@@ -208,8 +204,6 @@ function init(_Core) {
       });
       if (matchedVoice) utterance.voice = matchedVoice;
 
-      utterance.onstart = function() { console.log('🔊 浏览器 TTS 开始朗读'); };
-      utterance.onend = function() { console.log('🔊 浏览器 TTS 朗读结束'); };
       utterance.onerror = function(e) { console.warn('⚠️ 朗读错误:', e.error); };
 
       window.speechSynthesis.speak(utterance);
@@ -252,7 +246,6 @@ function init(_Core) {
           var data = await resp.json();
           if (data.success && data.voices) {
             this.localTtsVoices = data.voices;
-            console.log('🔊 本地 TTS 语音列表:', data.voices.length, '个');
             return data.voices;
           }
         }
@@ -265,7 +258,6 @@ function init(_Core) {
     setLocalVoice(name) {
       this.localVoice = name;
       if (Core && Core.config) Core.config.localVoice = name;
-      console.log('🔊 本地 TTS 语音切换为:', name);
     },
 
     // ================================================================
@@ -352,7 +344,6 @@ function init(_Core) {
 
               var data = await response.json();
               if (data.success && data.text) {
-                console.log('✅ 本地 ASR 识别完成:', data.text.substring(0, 50));
                 if (onResult) onResult(data.text, true);
               } else {
                 throw new Error(data.error || '识别结果为空');
@@ -371,7 +362,6 @@ function init(_Core) {
 
       this.mediaRecorder.start();
       this.isListening = true;
-      console.log('🎤 本地 ASR 录音中（faster-whisper，停止后自动识别）');
       if (onResult) onResult('🎤 正在录音（本地识别），再次点击停止...', false);
       return 'local-asr';
     },
@@ -415,7 +405,6 @@ function init(_Core) {
 
       this.mediaRecorder.start();
       this.isListening = true;
-      console.log('🎤 云端 ASR 录音中（停止后自动上传识别）');
       if (onResult) onResult('🎤 正在录音，再次点击停止...', false);
       return 'cloud-asr';
     },
@@ -586,7 +575,6 @@ function init(_Core) {
       volume: profile.volume,
       voice: profile.voiceName || 'default'
     });
-    console.log('🔊 自动朗读 AI 回复，长度:', cleanText.length, '音色:', this.voiceProfile);
   };
 
   // ===== 切换自动朗读 =====
@@ -643,13 +631,11 @@ function init(_Core) {
     if (/^(大声点|声音大点)/.test(lower)) {
       return { command: 'volume_up', action: function() {
         var p = voice.voiceProfiles[voice.voiceProfile];
-        if (p) { p.volume = Math.min(p.volume + 0.2, 1.5); console.log('音量:', p.volume); }
       }};
     }
     if (/^(小声点|声音小点|轻一点)/.test(lower)) {
       return { command: 'volume_down', action: function() {
         var p = voice.voiceProfiles[voice.voiceProfile];
-        if (p) { p.volume = Math.max(p.volume - 0.2, 0.2); console.log('音量:', p.volume); }
       }};
     }
     // 开关自动朗读
@@ -670,7 +656,6 @@ function init(_Core) {
     }
     this.voiceProfile = name;
     if (Core && Core.config) Core.config.voiceProfile = name;
-    console.log('🔊 音色已切换:', name);
     return true;
   };
 
@@ -741,7 +726,6 @@ function init(_Core) {
   if (voice.isSpeechSynthesisSupported()) {
     if (window.speechSynthesis.getVoices().length === 0) {
       window.speechSynthesis.onvoiceschanged = function() {
-        console.log('🔊 浏览器语音列表已加载:', voice.getVoices().length, '个');
       };
     }
   }
@@ -751,10 +735,6 @@ function init(_Core) {
   if (Core) Core.voice = voice;
 
   console.log('✅ 语音模块已加载（本地优先 + 云端 + 浏览器三级降级）');
-  console.log('🔊 TTS: edge-tts(本地) → SiliconFlow(云端) → speechSynthesis(浏览器)');
-  console.log('🎤 ASR: faster-whisper(本地) → SiliconFlow(云端) → SpeechRecognition(浏览器) → MediaRecorder');
-  console.log('☁️ 云端 API:', voice.isCloudAvailable() ? '已配置' : '未配置 siliconFlowKey');
-  console.log('🔊 本地 TTS 默认语音:', voice.localVoice);
 }
 
 // 获取当前语言（优先 i18n 模块，回退 zh-CN）

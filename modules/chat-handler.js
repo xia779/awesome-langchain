@@ -147,13 +147,9 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   const autoRoute = Core.config.autoRoute;
   let selectedValue = Core.dom.modelSelect.value;
   // 🔧 诊断日志：确认用户实际选择的模型
-  console.log('🔍 handleNormalChat: modelSelect.value=' + selectedValue + ', autoRoute=' + autoRoute + ', webSearchActive=' + (Core.dom.webSearchBtn.classList.contains('active')));
   // 🔧 额外诊断：检查 selectedIndex 和选项
-  console.log('🔍 handleNormalChat: modelSelect.selectedIndex=' + Core.dom.modelSelect.selectedIndex);
-  console.log('🔍 handleNormalChat: modelSelect.options.length=' + Core.dom.modelSelect.options.length);
   if (Core.dom.modelSelect.selectedIndex >= 0) {
     const opt = Core.dom.modelSelect.options[Core.dom.modelSelect.selectedIndex];
-    console.log('🔍 handleNormalChat: selectedOption.value=' + opt.value + ', text=' + opt.textContent);
   }
   
   // 🔧 修复：自动路由只在用户未手动选择模型时生效
@@ -210,7 +206,6 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   }
   // 云端模型：不做强验证，允许任何非空模型名（用户可能使用自定义模型端点）
   
-  console.log('🔍 handleNormalChat: provider=' + provider + ', model=' + model + ', deepseekKey=' + (Core.config.deepseekKey ? 'yes' : 'no'));
 
   // 🔧 检查 API Key 是否配置
   const keyMap = {
@@ -241,7 +236,6 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   if (currentSess && currentSess.temperature !== temperature) {
     currentSess.temperature = temperature;
     if (Core.session.saveSession) Core.session.saveSession(currentSessId);
-    console.log('💾 已保存会话温度:', temperature);
   }
   let userSystemPrompt = Core.dom.systemPrompt.value || Core.config.systemInstruction || '';
   
@@ -500,7 +494,6 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
           var sessionTitle = (Core.session.sessions && Core.session.sessions[currentSessionId]) ?
             Core.session.sessions[currentSessionId].title : '';
           Core.knowledge.saveConversation(sessionData.messages, sessionTitle).then(function (r) {
-            if (r.success) console.log('📝 对话已自动存入知识库');
           }).catch(function (e) { console.warn('⚠️ [api] 知识库自动保存失败:', e.message); });
         } catch (e) { console.warn('⚠️ [api] 知识库自动记忆出错:', e.message); }
       }

@@ -72,16 +72,13 @@ function extractJSONFromText(text) {
     return null;
   }
   const trimmed = text.trim();
-  console.log('🔍 extractJSON 输入前100字:', trimmed.substring(0, 100));
   
   // 尝试1：直接解析纯JSON（trim后以{开头以}结尾）
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
     try {
       const result = JSON.parse(trimmed);
-      console.log('✅ extractJSON 尝试1成功: 直接解析');
       return result;
     } catch (e) {
-      console.log('⚠️ extractJSON 尝试1失败:', e.message);
     }
   }
   
@@ -90,10 +87,8 @@ function extractJSONFromText(text) {
   if (codeBlockMatch) {
     try {
       const result = JSON.parse(codeBlockMatch[1].trim());
-      console.log('✅ extractJSON 尝试2成功: 代码块提取');
       return result;
     } catch (e) {
-      console.log('⚠️ extractJSON 尝试2失败:', e.message);
     }
   }
   
@@ -110,10 +105,8 @@ function extractJSONFromText(text) {
       const jsonStr = text.substring(firstBrace, endPos + 1);
       try {
         const result = JSON.parse(jsonStr);
-        console.log('✅ extractJSON 尝试3成功: 花括号提取, JSON长度:', jsonStr.length);
         return result;
       } catch (e) {
-        console.log('⚠️ extractJSON 尝试3失败:', e.message, '提取内容:', jsonStr.substring(0, 200));
       }
     }
   }
@@ -123,14 +116,11 @@ function extractJSONFromText(text) {
   if (actionMatch) {
     try {
       const result = JSON.parse(actionMatch[0]);
-      console.log('✅ extractJSON 尝试4成功: 正则匹配');
       return result;
     } catch (e) {
-      console.log('⚠️ extractJSON 尝试4失败:', e.message);
     }
   }
   
-  console.log('❌ extractJSON 所有尝试均失败');
   return null;
 }
 
@@ -275,19 +265,15 @@ async function sendToAgent(task, isDeepThink) {
 
     // 解析JSON action
     const action = extractJSONFromText(reply);
-    console.log('🔍 Agent步骤' + step + ' 解析结果:', action ? 'action=' + action.action : 'null');
 
     if (!action || !action.action) {
-      console.log('⚠️ 无法解析JSON，尝试提取中文内容');
       const chineseMatch = reply.match(/[一-龥　-〿＀-￯].{10,}/);
       if (chineseMatch) {
         finalAnswer = chineseMatch[0];
-        console.log('✅ 从原始回复中提取到中文内容');
       } else {
         const answerMatch = reply.match(/"answer"\s*:\s*"([^"]{5,})"/);
         if (answerMatch) {
           finalAnswer = answerMatch[1];
-          console.log('✅ 通过正则提取到answer字段');
         } else {
           finalAnswer = '抱歉，AI 返回的格式不正确，无法解析结果。请重试。';
         }
@@ -303,7 +289,6 @@ async function sendToAgent(task, isDeepThink) {
       if (!answer && action.answer) answer = action.answer;
       if (!answer && action.result) answer = action.result;
       finalAnswer = answer || reply;
-      console.log('✅ Agent完成，提取到回答长度:', finalAnswer.length);
       break;
     }
 
@@ -416,12 +401,10 @@ async function sendToAgent(task, isDeepThink) {
       if (lastTry.params) extracted = lastTry.params.answer || lastTry.params.result || lastTry.params.content || '';
       if (!extracted && lastTry.answer) extracted = lastTry.answer;
       if (extracted) finalAnswer = extracted;
-      console.log('🔄 保险1: 最终JSON提取成功');
     } else if (lastTry && lastTry.action) {
       // 不是complete但解析成功，提取有用信息
       let extracted = lastTry.action === 'complete' ? '' : JSON.stringify(lastTry);
       if (lastTry.params && lastTry.params.answer) extracted = lastTry.params.answer;
-      if (extracted) { finalAnswer = extracted; console.log('🔄 保险1b: 提取到action内容'); }
     }
   }
   
@@ -430,7 +413,6 @@ async function sendToAgent(task, isDeepThink) {
     const forcedMatch = (finalAnswer || '').match(/"answer"\s*:\s*"([^"]{5,})"/);
     if (forcedMatch) {
       finalAnswer = forcedMatch[1];
-      console.log('🔄 保险2: 正则强制提取answer成功');
     }
   }
   
@@ -439,7 +421,6 @@ async function sendToAgent(task, isDeepThink) {
     const cleanMatch = finalAnswer.match(/[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]+(?:[，。！？、；：""''（）【】\s]*[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]+)*/);
     if (cleanMatch && cleanMatch[0].length > 5) {
       finalAnswer = cleanMatch[0];
-      console.log('🔄 保险3: 清理JSON残留，提取中文');
     }
   }
   
@@ -459,7 +440,6 @@ async function sendToAgent(task, isDeepThink) {
       const answerValMatch = finalAnswer.match(/"answer"\s*:\s*"((?:[^"]|\\.){5,})"/);
       if (answerValMatch) {
         finalAnswer = answerValMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
-        console.log('🔄 最终强力提取: answer字段值');
       } else {
         // 方法B：删除所有JSON结构，只保留中文
         const chineseOnly = finalAnswer.replace(/\{[^{}]*\}/g, '').replace(/"[^"]*":\s*/g, '');
@@ -472,7 +452,6 @@ async function sendToAgent(task, isDeepThink) {
     finalAnswer = finalAnswer.replace(/\s+$/, '');
   }
 
-  console.log('📝 Agent最终渲染，回答长度:', (finalAnswer || '').length, '内容前50:', (finalAnswer || '').substring(0, 50));
 
   // 🔧 渲染：保留实时步骤面板，折叠为思考过程，追加最终回答
   statusRow.remove(); // 移除状态行（含取消按钮）

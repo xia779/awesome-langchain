@@ -33,7 +33,7 @@ function runPython(code) {
     var baseDir = (Core && Core._globalDataRoot) || path.join(os.tmpdir(), 'ai-agent-data');
     var tempDir = path.join(baseDir, 'temp');
     if (!fs.existsSync(tempDir)) {
-      try { fs.mkdirSync(tempDir, { recursive: true }); } catch (e) {}
+      try { fs.mkdirSync(tempDir, { recursive: true }); } catch (e) { console.warn('[Python] Failed to create temp dir:', e.message); }
     }
     var tempFile = path.join(tempDir, 'py_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '.py');
     try {

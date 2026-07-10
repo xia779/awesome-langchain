@@ -346,11 +346,11 @@ function startAutoBackup() {
   if (_syncTimer) clearInterval(_syncTimer);
   _syncTimer = setInterval(function() {
     // 自动本地备份
-    autoBackup().catch(function() {});
+    autoBackup().catch(function(e) { console.warn('[Sync] Auto-backup failed:', e.message); });
     // 自动 WebDAV 同步
     var config = getSyncConfig();
     if (config.enabled) {
-      syncToWebDAV().catch(function() {});
+      syncToWebDAV().catch(function(e) { console.warn('[Sync] WebDAV sync failed:', e.message); });
     }
   }, CONFIG.SYNC_INTERVAL_MS);
 }

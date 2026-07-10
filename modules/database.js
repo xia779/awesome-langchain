@@ -55,14 +55,12 @@ function init(_Core) {
   }
   
   if (!sqliteAvailable) {
-    console.log('📂 使用 JSON 文件存储模式（数据库功能不受影响）');
   }
   
   // 挂载到 Core（接口统一，无论底层是 SQLite 还是 JSON）
   Core.db = createDbInterface();
   
   if (!sqliteAvailable) {
-    console.log('📂 database.js 初始化完成（JSON 文件模式）');
   }
 }
 

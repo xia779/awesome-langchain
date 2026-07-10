@@ -114,7 +114,6 @@ function init(_Core) {
     parseCommand,
   };
   
-  console.log('⚙️ 自定义功能模块已加载');
 }
 
 // ===== 快捷指令 =====
@@ -154,7 +153,6 @@ function registerCommand(name, desc, action) {
   if (!name.startsWith('/')) name = '/' + name;
   customCommands[name] = { desc, action };
   saveCustomCommands();
-  console.log('⚙️ 自定义指令已注册:', name);
 }
 
 function unregisterCommand(name) {
@@ -169,7 +167,9 @@ function saveCustomCommands() {
     const path = require('path');
     const filePath = path.join(Core.DATA_ROOT, 'custom-commands.json');
     fs.writeFileSync(filePath, JSON.stringify(customCommands, null, 2));
-  } catch (e) {}
+  } catch (e) {
+    console.warn('[Custom] Failed to save custom commands:', e.message);
+  }
 }
 
 function loadCustomCommands() {

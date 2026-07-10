@@ -151,7 +151,6 @@ async function startWebServer() {
   app2.post('/api/search', async (req, res) => {
     try {
       const { query, engine, apiKeys } = req.body;
-      console.log(`Search backend: engine=${engine}, query="${query}"`);
       
       let results = '';
       
@@ -170,7 +169,6 @@ async function startWebServer() {
               const bingData2 = JSON.parse(bingOut2.trim());
               if (bingData2.success && bingData2.results && bingData2.results.length > 0) {
                 results = bingData2.results.map(r => `${r.title}\n${r.snippet}\n${r.url || ''}`).join('\n\n');
-                console.log(`Bing China: ${bingData2.results.length} results`);
               } else if (bingData2.error) {
                 console.warn('Bing China error:', bingData2.error);
               }
@@ -194,7 +192,6 @@ async function startWebServer() {
               const ddgData = JSON.parse(ddgOut.trim());
               if (ddgData.success && ddgData.results && ddgData.results.length > 0) {
                 results = ddgData.results.map(r => `${r.title}\n${r.snippet}\n${r.url || ''}`).join('\n\n');
-                console.log(`DuckDuckGo: ${ddgData.results.length} results`);
               } else if (ddgData.error) {
                 console.warn('DuckDuckGo error:', ddgData.error);
               }
@@ -218,7 +215,6 @@ async function startWebServer() {
                 }),
                 signal: AbortSignal.timeout(15000)
               });
-              console.log(`Tavily response status: ${tavilyResp.status}`);
               if (tavilyResp.ok) {
                 const data = await tavilyResp.json();
                 if (data.answer) {
@@ -242,10 +238,8 @@ async function startWebServer() {
                 body: JSON.stringify({ query, count: 5 }),
                 signal: AbortSignal.timeout(15000)
               });
-              console.log(`Bocha response status: ${bochaResp.status}`);
               if (bochaResp.ok) {
                 const data = await bochaResp.json();
-                console.log('Bocha response keys:', Object.keys(data).join(', '));
                 if (data.data) console.log('Bocha data keys:', Object.keys(data.data).join(', '));
                 
                 if (data.data && data.data.webPages && data.data.webPages.value && data.data.webPages.value.length > 0) {
@@ -286,7 +280,6 @@ async function startWebServer() {
           const ddgData2 = JSON.parse(ddgOut2.trim());
           if (ddgData2.success && ddgData2.results && ddgData2.results.length > 0) {
             results = ddgData2.results.map(r => `${r.title}\n${r.snippet}\n${r.url || ''}`).join('\n\n');
-            console.log(`DuckDuckGo fallback: ${ddgData2.results.length} results`);
           }
         } catch (e) { console.warn('DuckDuckGo fallback failed:', e.message); }
 
@@ -304,17 +297,14 @@ async function startWebServer() {
             const bingData = JSON.parse(bingOut.trim());
             if (bingData.success && bingData.results && bingData.results.length > 0) {
               results = bingData.results.map(r => `${r.title}\n${r.snippet}\n${r.url || ''}`).join('\n\n');
-              console.log(`Bing China fallback: ${bingData.results.length} results`);
             }
           } catch (e) { console.warn('Bing China fallback failed:', e.message); }
         }
       }
       
       if (results && results.length > 10) {
-        console.log(`Search success: ${results.length} chars`);
         res.json({ results: results });
       } else {
-        console.log('Search no valid results');
         res.json({ error: 'No results', results: `Search for "${query}" found no valid results. Please configure a search API key in Settings for better results.` });
       }
       
@@ -517,7 +507,6 @@ async function startWebServer() {
         });
         testServer.once('listening', () => {
           server = testServer;
-          console.log(`🚀 本地服务器已启动: http://0.0.0.0:${port}`);
           console.log(`📱 移动端访问: http://<本机IP>:${port}/m`);
           resolve(port);
         });
@@ -603,7 +592,6 @@ function createWindow() {
   Menu.setApplicationMenu(menu);
 
   mainWindow.webContents.on('did-finish-load', () => {
-    console.log('🌐 窗口加载完成');
     // 🔍 诊断：检查 Core.session.renderChatList 是否是树形版本
     setTimeout(() => {
       mainWindow.webContents.executeJavaScript(`
@@ -623,11 +611,9 @@ function createWindow() {
               }
             }
           } catch(e) {}
-          console.log('🔍 诊断结果:', JSON.stringify(result));
           return result;
         })()
       `).then(r => {
-        console.log('🔍 主进程诊断:', JSON.stringify(r));
       }).catch(e => {
         console.error('❌ 诊断失败:', e.message);
       });
@@ -924,7 +910,6 @@ ipcMain.on('restore-data', (event) => {
             if (fs.existsSync(DATA_ROOT)) {
               fs.cpSync(DATA_ROOT, safetyBackup, { recursive: true });
               hasSafetyBackup = true;
-              console.log('🔒 安全备份已创建:', safetyBackup);
             }
             // 删除旧数据并复制恢复数据
             fs.rmSync(DATA_ROOT, { recursive: true, force: true });
@@ -963,7 +948,6 @@ ipcMain.on('restore-data', (event) => {
 
 // ===== 应用生命周期 =====
 app.whenReady().then(async () => {
-  console.log('🚀 main.js v9 已加载 | 缓存清除中...');
 
   // 🔧 启动时清除 HTTP 缓存（保留 localStorage/IndexedDB 等用户数据）
   try {
@@ -1004,7 +988,6 @@ app.on('activate', () => {
 ipcMain.on('toggle-devtools', () => {
   if (mainWindow && mainWindow.webContents) {
     mainWindow.webContents.toggleDevTools();
-    console.log('🔧 Ctrl+Shift+I: 切换 DevTools (IPC)');
   }
 });
 

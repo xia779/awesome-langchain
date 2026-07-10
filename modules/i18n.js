@@ -175,7 +175,6 @@ function init(_Core) {
   // 启动时刷新 UI
   setTimeout(() => refreshUI(), 1000);
   
-  console.log('🌐 多语言模块已加载，当前语言:', currentLang);
 }
 
 // 翻译函数
@@ -202,7 +201,6 @@ function setLanguage(lang) {
   Core.saveConfig({ language: lang });
   refreshUI();
   
-  console.log('🌐 语言已切换为:', lang);
   Core.emit('languageChanged', lang);
   return true;
 }
@@ -237,7 +235,6 @@ function refreshUI() {
   document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : currentLang;
   document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
 
-  console.log('🌐 UI 文本已刷新');
 }
 
 // ================================================================

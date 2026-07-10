@@ -92,18 +92,6 @@ function injectPolishStyles() {
     '}',
     '.copy-flash { animation: copy-flash 0.6s ease-out; }',
 
-    // Toast 样式
-    '.polish-toast {',
-    '  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);',
-    '  padding: 8px 20px; border-radius: 20px; font-size: 13px; z-index: 10000;',
-    '  background: var(--bg-tertiary,#2a2a3a); color: var(--text-primary,#eee);',
-    '  border: 1px solid var(--border-color,#444); box-shadow: 0 4px 12px rgba(0,0,0,0.3);',
-    '  transition: opacity 0.3s, transform 0.3s; pointer-events: none;',
-    '}',
-    '.polish-toast.toast-success { border-color: #10b981; }',
-    '.polish-toast.toast-error { border-color: #ef4444; }',
-    '.polish-toast.toast-info { border-color: #3b82f6; }',
-
     // 空状态
     '.empty-state {',
     '  display: flex; flex-direction: column; align-items: center; justify-content: center;',
@@ -288,34 +276,9 @@ function checkEmptyState() {
   }
 }
 
-// ===== Toast =====
-var _toastTimer = null;
+// ===== Toast：委托给 Core.showToast =====
 function showToast(message, type, duration) {
-  type = type || 'info';
-  duration = duration || 2500;
-
-  // 移除已有的 toast
-  var existing = document.querySelectorAll('.polish-toast');
-  existing.forEach(function(el) { el.remove(); });
-
-  var toast = document.createElement('div');
-  toast.className = 'polish-toast toast-' + type;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-
-  // 入场
-  requestAnimationFrame(function() {
-    toast.style.opacity = '1';
-    toast.style.transform = 'translateX(-50%) translateY(0)';
-  });
-
-  // 自动消失
-  if (_toastTimer) clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(function() {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(-50%) translateY(10px)';
-    setTimeout(function() { toast.remove(); }, 300);
-  }, duration);
+  if (Core && Core.showToast) Core.showToast(message, type || 'info', duration || 2500);
 }
 
 // ===== 智能滚动 =====

@@ -782,7 +782,6 @@ function init(_Core) {
     injectMessageActions();
     enhanceCodeBlocks();
     _registerKeyboardShortcuts();
-    console.log('⌨️ 快捷键已注册: Ctrl+K(命令面板), Ctrl+F(搜索), Ctrl+N(新建), Ctrl+D(深度思考)');
   }, 1000);
 
   // Expose API
