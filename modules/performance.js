@@ -608,7 +608,6 @@ function compressImage(file, maxSize) {
         ctx.drawImage(img, 0, 0, width, height);
         canvas.toBlob(function(blob) {
           var compressed = new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
-          console.log('\u26a1 \u56fe\u7247\u538b\u7f29: ' + (file.size / 1048576).toFixed(2) + 'MB \u2192 ' + (compressed.size / 1048576).toFixed(2) + 'MB');
           resolve(compressed);
         }, 'image/jpeg', 0.85);
       };
@@ -668,8 +667,6 @@ function triggerGC() {
   if (window.gc) {
     try { window.gc(); } catch (e) {}
   }
-
-  console.log('\u26a1 GC \u5df2\u89e6\u53d1\uff08\u7d2f\u8ba1 ' + stats.gcTriggered + ' \u6b21\uff09');
 }
 
 function cleanupOldMessages(sessionId, keepCount) {
@@ -691,7 +688,6 @@ function cleanupOldMessages(sessionId, keepCount) {
       console.warn('[Performance] Archive write failed:', e.message);
     }
 
-    console.log('\u26a1 \u4f1a\u8bdd ' + sessionId.substring(0, 8) + ' \u5df2\u5f52\u6863 ' + oldMessages.length + ' \u6761\u65e7\u6d88\u606f');
     Core.emit && Core.emit('messagesArchived', { sessionId: sessionId, count: oldMessages.length });
   } catch (e) {
     console.warn('\u26a0\ufe0f \u6e05\u7406\u65e7\u6d88\u606f\u5931\u8d25:', e.message);
@@ -727,7 +723,6 @@ function archiveOldSessions(maxAge) {
 
     if (archived > 0) {
       stats.archiveCount += archived;
-      console.log('\u26a1 \u5df2\u5f52\u6863 ' + archived + ' \u4e2a\u65e7\u4f1a\u8bdd');
       // 逐个保存受影响的会话
       if (Core.session && Core.session.saveSession) {
         Object.keys(sessions).forEach(function(sid) {
@@ -1108,7 +1103,6 @@ function capSessionMessages(session) {
   // 保留最新的消息，丢弃最旧的
   session.messages = session.messages.slice(-MESSAGE_MEMORY_CAP);
   session._messagesTruncated = overflow;
-  console.log('🧹 会话消息裁剪: 丢弃 ' + overflow + ' 条旧消息 (上限 ' + MESSAGE_MEMORY_CAP + ')');
 }
 
 function capAllSessions() {
@@ -1125,7 +1119,7 @@ function capAllSessions() {
     }
   });
   if (totalTruncated > 0) {
-    console.log('🧹 全量消息裁剪: 共丢弃 ' + totalTruncated + ' 条旧消息');
+    // silently capped
   }
 }
 

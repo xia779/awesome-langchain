@@ -30,23 +30,23 @@ function buildContextWindow(messages, options) {
   var minMessages = options.minMessages || MIN_MESSAGES;
   if (!messages || messages.length === 0) return { window: [], summary: null, totalTokens: 0, skippedMessages: 0, totalMessages: 0 };
 
-  var window = [];
+  var contextWindow = [];
   var usedTokens = 0;
-  for (var i = messages.length - 1; i >= 0 && window.length < maxMessages; i--) {
+  for (var i = messages.length - 1; i >= 0 && contextWindow.length < maxMessages; i--) {
     var msg = messages[i];
     var msgTokens = estimateTokens(msg.content || '') + 4;
-    if (usedTokens + msgTokens > tokenBudget && window.length >= minMessages) break;
-    window.unshift(msg);
+    if (usedTokens + msgTokens > tokenBudget && contextWindow.length >= minMessages) break;
+    contextWindow.unshift(msg);
     usedTokens += msgTokens;
   }
 
-  var skippedCount = messages.length - window.length;
+  var skippedCount = messages.length - contextWindow.length;
   var summaryText = null;
   if (skippedCount > 0) {
     summaryText = buildSummary(messages.slice(0, skippedCount));
   }
 
-  return { window: window, summary: summaryText, totalTokens: usedTokens, skippedMessages: skippedCount, totalMessages: messages.length };
+  return { window: contextWindow, summary: summaryText, totalTokens: usedTokens, skippedMessages: skippedCount, totalMessages: messages.length };
 }
 
 // ===== 摘要生成 =====

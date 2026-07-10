@@ -228,7 +228,6 @@ function loadSessions() {
       });
       if (needsSave) {
         saveSession(id);
-        console.log('🕐 已为会话', id, '的', sess.messages.length, '条消息修复时间戳');
       }
     }
   });

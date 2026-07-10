@@ -43,7 +43,6 @@ try {
 
   // 保存原始 sendMessage
   var origSendMessage = Core.api.sendMessage;
-  console.log('✅ initStopGeneration: 已绑定');
 
   function setGenState(generating) {
     isGenerating = generating;
@@ -112,8 +111,6 @@ try {
     };
   }
 
-  console.log('✅ 停止生成功能已绑定');
-
   // 🔧 覆盖 callAPI 同样添加中断支持（非流式模式）
   if (Core.api && Core.api.callAPI) {
     var origCallAPI = Core.api.callAPI;
@@ -125,8 +122,6 @@ try {
       return origCallAPI.apply(this, arguments);
     };
   }
-
-  console.log('✅ 停止生成功能 v2（内联版）已激活');
 })();
 
 
@@ -688,21 +683,12 @@ try {
           if (chatContainer) chatContainer.innerHTML = '';
           return originalLogout.apply(this, arguments);
         };
-        console.log('✅ 补丁已应用：logoutUser 增强版');
       } else {
         setTimeout(applyPatch, 200);
       }
     }
     applyPatch();
   })();
-
-
-// ===== Block: escapeHtml utility (from index.html L5226-L5231) =====
-
-window.escapeHtml = function(str) {
-  if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
-};
 
 
 // ===== Block: login/registration (from index.html L5234-L5351) =====

@@ -618,13 +618,13 @@ function init(_Core) {
     if (/^(快一点|说快点|加速)/.test(lower)) {
       return { command: 'speed_up', action: function() {
         var p = voice.voiceProfiles[voice.voiceProfile];
-        if (p) { p.speed = Math.min(p.speed + 0.2, 2.0); console.log('语速:', p.speed); }
+        if (p) { p.speed = Math.min(p.speed + 0.2, 2.0); }
       }};
     }
     if (/^(慢一点|说慢点|减速)/.test(lower)) {
       return { command: 'slow_down', action: function() {
         var p = voice.voiceProfiles[voice.voiceProfile];
-        if (p) { p.speed = Math.max(p.speed - 0.2, 0.5); console.log('语速:', p.speed); }
+        if (p) { p.speed = Math.max(p.speed - 0.2, 0.5); }
       }};
     }
     // 音量调整

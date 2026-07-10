@@ -335,7 +335,6 @@ const Core = {
       }, 2000);
     }
     
-    console.log('✅ loadConfig 完成');
     return this.config;
   },
   
@@ -369,7 +368,6 @@ const Core = {
         Object.keys(newConfigEncrypted).forEach(key => {
           Core.db.set(userId + ':' + key, JSON.stringify(newConfigEncrypted[key]));
         });
-        console.log('✅ 配置已保存到 SQLite（敏感字段已加密）');
       }
     } catch (e) {
       console.warn('⚠️ SQLite 保存失败:', e.message);
@@ -824,11 +822,6 @@ Core.renderMarkdown = function(text) {
   // 🔧 已提取到 modules/ui-interactions.js（文件拖拽 + 剪贴板粘贴 + 快捷键 + 主题切换）
 
   console.log('✅ Core 启动完成');
-  console.log('✅ 当前配置:', { 
-    service: Core.config.currentService, 
-    model: Core.config.ollamaModel,
-    user: Core._currentUser 
-  });
 
   // ===== 选项1：消息编辑与重新生成 =====
   // ===== 选项1：消息操作增强（编辑/复制/重新生成/删除）=====
@@ -1120,7 +1113,6 @@ Core.renderMarkdown = function(text) {
         if (msgIndex < msgs.length) {
           msgs.splice(msgIndex, 1);
           Core.session.saveSession(sessionId);
-          console.log('\u2705 消息已从session删除');
         }
       }
     }

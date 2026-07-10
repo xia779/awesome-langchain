@@ -650,7 +650,6 @@ async function sendMessage() {
     const handled = Core.custom.executeCommand(inputText);
     if (handled) {
       Core.dom.input.value = '';
-      console.log('快捷指令已拦截（sendMessage 入口）:', inputText);
       return;
     }
   }

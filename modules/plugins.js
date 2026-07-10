@@ -10,7 +10,6 @@ try {
 } catch (e) {
   if (typeof window !== 'undefined' && window.__nodeFs) {
     fs = window.__nodeFs;
-    console.log('✅ plugins.js: 使用 window.__nodeFs');
   } else {
     console.error('❌ fs 模块不可用:', e.message);
   }
@@ -22,7 +21,6 @@ try {
 } catch (e) {
   if (typeof window !== 'undefined' && window.__nodePath) {
     path = window.__nodePath;
-    console.log('✅ plugins.js: 使用 window.__nodePath');
   } else {
     console.warn('⚠️ path 模块不可用，使用备选方案:', e.message);
     path = {

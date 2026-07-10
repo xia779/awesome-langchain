@@ -73,7 +73,6 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   if (text && text.startsWith('/') && Core.custom && Core.custom.executeCommand) {
     var handled = Core.custom.executeCommand(text);
     if (handled) {
-      console.log('✅ 快捷指令已拦截（api.js）:', text);
       return;
     }
   }
@@ -94,7 +93,6 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   var finalText = text;
   if (knowledgeContext && knowledgeContext.trim()) {
     finalText = text + '\n\n[知识库检索结果]\n' + knowledgeContext;
-    console.log('✅ 知识库上下文已附加，长度:', knowledgeContext.length);
   }
 
   let sessionData = sessions && currentSessionId ? sessions[currentSessionId] : null;
@@ -283,7 +281,6 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
     var roleLabel = quote.role === 'user' ? '用户' : 'AI';
     var quoteSnippet = quote.content.length > 200 ? quote.content.substring(0, 200) + '...' : quote.content;
     quoteText = `【引用${roleLabel}消息】\n${quoteSnippet}\n\n【当前问题】\n${promptForAPI}`;
-    console.log('📌 已附加引用消息，角色:', roleLabel, '内容长度:', quote.content.length);
   }
 
   // 联网搜索
