@@ -69,6 +69,8 @@ var _recovery = {
 
 // 性能采样定时器
 var _perfTimer = null;
+var _gcTimer = null;
+var _memCleanupTimer = null;
 
 // ===== 模块初始化 =====
 function init(_Core) {
@@ -94,6 +96,11 @@ function init(_Core) {
     endStreamingOptimization: endStreamingOptimization,
     capSessionMessages: capSessionMessages,
     queueAsyncSave: queueAsyncSave,
+    destroyTimers: function() {
+      if (_gcTimer) { clearInterval(_gcTimer); _gcTimer = null; }
+      if (_memCleanupTimer) { clearInterval(_memCleanupTimer); _memCleanupTimer = null; }
+      if (_perfTimer) { clearInterval(_perfTimer); _perfTimer = null; }
+    },
     CONFIG: PERF_CONFIG,
   };
 
@@ -782,7 +789,7 @@ function setupPerformanceOptimizations() {
   }, 500);
 
   // 定期内存清理
-  var _gcTimer = setInterval(function() {
+  _gcTimer = setInterval(function() {
     monitorMemory();
   }, PERF_CONFIG.gcInterval);
 
@@ -1204,7 +1211,7 @@ function setupTTSDelegation() {
 
 // ----- 5f: 定期执行内存清理 -----
 function startMemoryCleanup() {
-  var _memCleanupTimer = setInterval(function() {
+  _memCleanupTimer = setInterval(function() {
     // 1. 消息内存上限
     capAllSessions();
     // 2. 知识库缓存过期

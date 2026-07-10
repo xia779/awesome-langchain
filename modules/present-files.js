@@ -254,11 +254,17 @@ function processMessage(msgEl) {
 }
 
 var observer = null;
+var _retries = 0;
 
 function startObserver() {
   var container = document.getElementById('chatContainer');
   if (!container) {
-    setTimeout(startObserver, 1000);
+    if (_retries < 10) {
+      _retries++;
+      setTimeout(startObserver, 1000);
+    } else {
+      console.warn('⚠️ [present-files] startObserver max retries reached');
+    }
     return;
   }
 

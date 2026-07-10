@@ -409,11 +409,18 @@ function processMessage(msgEl) {
   }
 }
 
+var _retries = 0;
+
 function startObserver() {
   var container = document.getElementById('chatContainer');
   if (!container) {
-    console.warn('artifact-render: chatContainer 不存在，延迟重试');
-    setTimeout(startObserver, 1000);
+    if (_retries < 10) {
+      _retries++;
+      console.warn('artifact-render: chatContainer 不存在，延迟重试');
+      setTimeout(startObserver, 1000);
+    } else {
+      console.warn('⚠️ [artifact-render] startObserver max retries reached');
+    }
     return;
   }
 

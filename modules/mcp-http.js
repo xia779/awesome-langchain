@@ -162,6 +162,8 @@ function parseSseResponse(body, targetId) {
 function connectSseStream(serverId) {
   var server = httpServers[serverId];
   if (!server) return;
+  var _sseRetries = 0;
+  var _MAX_SSE_RETRIES = 10;
 
   // 如果服务器配置了 SSE 端点，建立持久连接接收通知
   if (!server.config || !server.config.sseEndpoint) return;
@@ -211,21 +213,29 @@ function connectSseStream(serverId) {
 
       res.on('end', function () {
         server._sseConnected = false;
-        // 自动重连
-        setTimeout(connect, 5000);
+        if (_sseRetries < _MAX_SSE_RETRIES) {
+          _sseRetries++;
+          setTimeout(connect, Math.min(5000 * _sseRetries, 30000));
+        }
       });
 
       res.on('error', function (e) {
-        console.warn('⚠️ SSE 流错误:', serverId, e.message);
+        console.warn('\u26a0\ufe0f SSE \u6d41\u9519\u8bef:', serverId, e.message);
         server._sseConnected = false;
-        setTimeout(connect, 10000);
+        if (_sseRetries < _MAX_SSE_RETRIES) {
+          _sseRetries++;
+          setTimeout(connect, Math.min(10000 * _sseRetries, 60000));
+        }
       });
     });
 
     req.on('error', function (e) {
-      console.warn('⚠️ SSE 连接失败:', serverId, e.message);
+      console.warn('\u26a0\ufe0f SSE \u8fde\u63a5\u5931\u8d25:', serverId, e.message);
       server._sseConnected = false;
-      setTimeout(connect, 10000);
+      if (_sseRetries < _MAX_SSE_RETRIES) {
+        _sseRetries++;
+        setTimeout(connect, Math.min(10000 * _sseRetries, 60000));
+      }
     });
 
     req.end();

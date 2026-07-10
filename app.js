@@ -673,6 +673,7 @@ try {
 // ===== Block: logout patch (from index.html L5204-L5223) =====
 
   (function patchLogout() {
+    var _retries = 0;
     function applyPatch() {
       if (window.Core && Core.user && Core.user.logoutUser) {
         const originalLogout = Core.user.logoutUser;
@@ -683,8 +684,11 @@ try {
           if (chatContainer) chatContainer.innerHTML = '';
           return originalLogout.apply(this, arguments);
         };
-      } else {
+      } else if (_retries < 20) {
+        _retries++;
         setTimeout(applyPatch, 200);
+      } else {
+        console.warn('⚠️ [app] applyPatch max retries reached');
       }
     }
     applyPatch();

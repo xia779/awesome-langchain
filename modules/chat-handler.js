@@ -34,9 +34,12 @@ function typewriterEffect(element, fullText) {
         contentSpan.textContent += fullText[index];
         index++;
         
-        // 自动滚动
+        // 自动滚动（仅在用户靠近底部时）
         var container = document.getElementById('chatContainer');
-        if (container) container.scrollTop = container.scrollHeight;
+        if (container) {
+          var isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+          if (isNearBottom) container.scrollTop = container.scrollHeight;
+        }
         
         setTimeout(typeNext, speed);
       } else {
@@ -373,25 +376,32 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       reply = await Core.api.callAPIStream(finalPrompt, injectedSystemPrompt, temperature, model, provider, (function() {
         var _streamRafId = 0;
         var _pendingFullText = '';
+        var _lastParseTime = 0;
+        var _PARSE_INTERVAL = 100;
         return function(chunk, fullText) {
           reply = fullText;
           _pendingFullText = fullText;
-          // Phase 3-2：流式朗读 — 将新文本块送入语音缓冲
           if (Core.voice && Core.voice.streamAppend) {
-            try { Core.voice.streamAppend(chunk); } catch (e) { console.warn('⚠️ [api] 流式语音追加失败:', e.message); }
+            try { Core.voice.streamAppend(chunk); } catch (e) { console.warn('\u26a0\ufe0f [api] \u6d41\u5f0f\u8bed\u97f3\u8ffd\u52a0\u5931\u8d25:', e.message); }
           }
           if (_streamRafId) return;
           _streamRafId = requestAnimationFrame(function() {
             _streamRafId = 0;
-            if (window.marked) {
+            var now = performance.now();
+            if (window.marked && (now - _lastParseTime >= _PARSE_INTERVAL || !_lastParseTime)) {
+              _lastParseTime = now;
               aiDiv.innerHTML = Core.renderMarkdown(_pendingFullText);
               var cursor = document.createElement('span');
               cursor.className = 'typing-cursor';
               aiDiv.appendChild(cursor);
-            } else {
+            } else if (!window.marked) {
               aiDiv.textContent = _pendingFullText;
             }
-            Core.dom.chatContainer.scrollTop = Core.dom.chatContainer.scrollHeight;
+            var container = Core.dom.chatContainer;
+            var isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+            if (isNearBottom) {
+              container.scrollTop = container.scrollHeight;
+            }
           });
         };
       })(), signal);
