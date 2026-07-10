@@ -325,7 +325,7 @@ function saveSession(id) {
   // 2. 同时保存到 JSON 作为备份
   try {
     const dir = getSessionsDir();
-    fs.writeFileSync(path.join(dir, id + '.json'), JSON.stringify(saveData, null, 2));
+    fs.writeFile(path.join(dir, id + '.json'), JSON.stringify(saveData, null, 2), function() {});
   } catch (e) {
     console.error('❌ JSON 保存会话失败:', e.message);
   }
@@ -659,23 +659,6 @@ function switchSession(id) {
     if (Core.dom.deepThinkBtn) Core.dom.deepThinkBtn.disabled = isGenerating;
     if (Core.dom.webSearchBtn) Core.dom.webSearchBtn.disabled = isGenerating;
   }
-  if (Core && Core.dom) {
-    var apiState = session && session._apiState;
-    var isGenerating = apiState && apiState.isGenerating;
-    if (Core.dom.sendBtn) {
-      if (isGenerating) {
-        Core.dom.sendBtn.textContent = '⏹';
-        Core.dom.sendBtn.style.background = '#ef4444';
-        Core.dom.sendBtn.disabled = false;
-      } else {
-        Core.dom.sendBtn.textContent = '↑';
-        Core.dom.sendBtn.style.background = '';
-        Core.dom.sendBtn.disabled = false;
-      }
-    }
-    if (Core.dom.deepThinkBtn) Core.dom.deepThinkBtn.disabled = isGenerating;
-    if (Core.dom.webSearchBtn) Core.dom.webSearchBtn.disabled = isGenerating;
-  }
 }
 
 // ===== 高亮当前会话 =====
@@ -691,13 +674,19 @@ function highlightChatItem(id) {
 function renderMessages(id, ensureMsgIndex) {
   var container = document.getElementById('chatContainer');
   if (!container) return;
-  container.innerHTML = '';
+  // 使用 DocumentFragment 原子化渲染，避免 innerHTML='' 造成的空白闪烁
+  var fragment = document.createDocumentFragment();
   var session = sessions[id];
-  if (!session || !session.messages) return;
-  
+  if (!session || !session.messages) {
+    container.replaceChildren(fragment);
+    return;
+  }
+
   var msgs = session.messages;
   var total = msgs.length;
-  
+  // 收集所有消息 div，批量添加代码按钮（替代逐条 setTimeout 100ms 引起的二次闪烁）
+  var _batchMsgDivs = [];
+
   // 虚拟滚动：如果消息数超过阈值，只渲染后 100 条
   var startIndex = 0;
   var VIRTUAL_PAGE_SIZE = 100;
@@ -708,7 +697,7 @@ function renderMessages(id, ensureMsgIndex) {
     }
     if (startIndex > 0) {
       var loadMoreBtn = createLoadMoreBtn(id, startIndex, VIRTUAL_PAGE_SIZE);
-      container.appendChild(loadMoreBtn);
+      fragment.appendChild(loadMoreBtn);
     }
   }
   
@@ -746,7 +735,7 @@ function renderMessages(id, ensureMsgIndex) {
     // 日期分割线
     if (group.date) {
       var divider = createDateDivider(group.date);
-      container.appendChild(divider);
+      fragment.appendChild(divider);
     }
     
     // 判断是否是今天
@@ -790,16 +779,37 @@ function renderMessages(id, ensureMsgIndex) {
           lastDiv.style.display = 'none';
         }
       }
-      container.appendChild(groupWrapper);
+      fragment.appendChild(groupWrapper);
     } else {
       // 正常渲染该组所有消息
       for (var m = 0; m < group.messages.length; m++) {
         var item = group.messages[m];
-        renderSingleMessage(item.msg, item.index, container);
+        renderSingleMessage(item.msg, item.index, fragment);
       }
     }
   }
   
+  // ===== 原子化渲染：禁止入场动画 → 一次性替换 DOM → 恢复动画 =====
+  container.classList.add('batch-render');
+  container.replaceChildren(fragment);
+
+  // 批量添加代码按钮（单次 setTimeout 替代逐条 setTimeout 100ms）
+  var allMsgDivs = container.querySelectorAll('.msg');
+  if (allMsgDivs.length > 0) {
+    setTimeout(function() {
+      allMsgDivs.forEach(function(div) {
+        addCodeButtonsToDiv(div);
+      });
+    }, 50);
+  }
+
+  // 首帧绘制后恢复动画
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      container.classList.remove('batch-render');
+    });
+  });
+
   scrollToBottom();
 }
 
@@ -1023,12 +1033,8 @@ function renderSingleMessage(msg, index, container) {
   }
   
   // \u4fee\u590d\u4ee3\u7801\u5757\u6309\u94ae\uff08\u590d\u5236 + \u8fd0\u884c\uff09
-  if (msg.content) {
-    setTimeout(function() {
-      addCodeButtonsToDiv(div);
-    }, 100);
-  }
-  
+  // 代码按钮由 renderMessages 批量添加（避免逐条 setTimeout 引起二次闪烁）
+
   // 🔧 快速操作面板（AI消息）— Material Icons 版
   if (msg.role === 'assistant' && msg.content && !msg.type) {
     var quickActions = document.createElement('div');

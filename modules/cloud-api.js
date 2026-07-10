@@ -313,6 +313,9 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
       let actualModel = model;
       if (provider === 'doubao') {
         actualModel = model || Core.config.doubaoModel;
+        if (!actualModel || !actualModel.startsWith('ep-')) {
+          throw new Error('豆包需要配置 Endpoint ID（格式 ep-xxx），请在设置面板 → 豆包 中填写从火山引擎 Ark 控制台创建的 Endpoint ID');
+        }
       }
 
       // 🔧 F12: Function Calling — 构建请求体，支持 tools 参数
@@ -394,9 +397,10 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
   let actualModel = model;
   if (provider === 'doubao') {
     actualModel = model || Core.config.doubaoModel;
+    if (!actualModel || !actualModel.startsWith('ep-')) {
+      throw new Error('豆包需要配置 Endpoint ID（格式 ep-xxx），请在设置面板 → 豆包 中填写从火山引擎 Ark 控制台创建的 Endpoint ID');
+    }
   }
-  
-  // 🔧 F12: Function Calling — 构建流式请求体
   const requestBody = {
     model: actualModel || 'gpt-3.5-turbo',
     messages: messages,
