@@ -284,24 +284,29 @@ function setupSmartScroll() {
   var chatContainer = document.getElementById('chatContainer');
   if (!chatContainer) return;
 
-  // 检测用户是否向上滚动
+  // 检测用户是否向上滚动（rAF 节流，防止滚动卡顿）
+  var _scrollRafId = 0;
   chatContainer.addEventListener('scroll', function() {
-    var scrollTop = chatContainer.scrollTop;
-    var scrollHeight = chatContainer.scrollHeight;
-    var clientHeight = chatContainer.clientHeight;
-    var distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    if (_scrollRafId) return;
+    _scrollRafId = requestAnimationFrame(function() {
+      _scrollRafId = 0;
+      var scrollTop = chatContainer.scrollTop;
+      var scrollHeight = chatContainer.scrollHeight;
+      var clientHeight = chatContainer.clientHeight;
+      var distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-    // 如果距离底部超过 100px，认为用户在看历史消息
-    polishState.userScrolledUp = distanceFromBottom > 100;
-    polishState.lastScrollTop = scrollTop;
+      // 如果距离底部超过 100px，认为用户在看历史消息
+      polishState.userScrolledUp = distanceFromBottom > 100;
+      polishState.lastScrollTop = scrollTop;
 
-    // 显示/隐藏回到底部按钮
-    var btn = document.getElementById('scrollToBottomBtn');
-    if (polishState.userScrolledUp) {
-      if (!btn) createScrollToBottomBtn();
-    } else {
-      if (btn) btn.style.opacity = '0';
-    }
+      // 显示/隐藏回到底部按钮
+      var btn = document.getElementById('scrollToBottomBtn');
+      if (polishState.userScrolledUp) {
+        if (!btn) createScrollToBottomBtn();
+      } else {
+        if (btn) btn.style.opacity = '0';
+      }
+    });
   }, { passive: true });
 }
 

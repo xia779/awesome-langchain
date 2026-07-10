@@ -141,31 +141,27 @@ var _comfyuiWs = null;
 
 // 健康检查（60s 缓存）
 async function checkComfyUI(force) {
-  var baseUrl = Core.config.comfyuiBase || 'http://127.0.0.1:8188';
   var now = Date.now();
   if (!force && _comfyuiStatus && (now - _comfyuiStatusTime) < 60000) {
     return _comfyuiStatus;
   }
   try {
-    var resp = await fetch(baseUrl + '/system_stats', { signal: AbortSignal.timeout(5000) });
+    // 通过服务端代理检查 ComfyUI 状态，避免浏览器控制台显示 ERR_CONNECTION_REFUSED
+    var resp = await fetch('http://127.0.0.1:8080/api/comfyui/status', { signal: AbortSignal.timeout(8000) });
     if (resp.ok) {
       var data = await resp.json();
       _comfyuiStatus = {
-        online: true,
-        gpu: (data.devices && data.devices[0]) ? {
-          name: data.devices[0].name,
-          vram_total: data.devices[0].vram_total,
-          vram_free: data.devices[0].vram_free
-        } : null,
-        python: data.python_version || '',
-        torch: data.torch_version || '',
+        online: !!data.online,
+        gpu: data.gpu || null,
+        python: data.python || '',
+        torch: data.torch || '',
         os: data.os || ''
       };
       _comfyuiStatusTime = now;
       return _comfyuiStatus;
     }
   } catch (e) {
-    // ComfyUI 不可用
+    // 代理服务不可用
   }
   _comfyuiStatus = { online: false };
   _comfyuiStatusTime = now;
@@ -175,27 +171,12 @@ async function checkComfyUI(force) {
 // 获取可用模型列表（checkpoints + LoRA）
 async function getComfyUIModels() {
   if (_comfyuiModels) return _comfyuiModels;
-  var baseUrl = Core.config.comfyuiBase || 'http://127.0.0.1:8188';
   try {
-    var resp = await fetch(baseUrl + '/object_info/CheckpointLoaderSimple', { signal: AbortSignal.timeout(5000) });
+    // 通过服务端代理获取模型列表，避免浏览器直接连接 ComfyUI
+    var resp = await fetch('http://127.0.0.1:8080/api/comfyui/models', { signal: AbortSignal.timeout(8000) });
     if (!resp.ok) return { checkpoints: [], loras: [] };
     var data = await resp.json();
-    var checkpoints = [];
-    if (data.CheckpointLoaderSimple && data.CheckpointLoaderSimple.input && data.CheckpointLoaderSimple.input.required) {
-      checkpoints = data.CheckpointLoaderSimple.input.required.ckpt_name[0] || [];
-    }
-    // 获取 LoRA 列表
-    var loras = [];
-    try {
-      var loraResp = await fetch(baseUrl + '/object_info/LoraLoader', { signal: AbortSignal.timeout(5000) });
-      if (loraResp.ok) {
-        var loraData = await loraResp.json();
-        if (loraData.LoraLoader && loraData.LoraLoader.input && loraData.LoraLoader.input.required) {
-          loras = loraData.LoraLoader.input.required.lora_name[0] || [];
-        }
-      }
-    } catch (e) {}
-    _comfyuiModels = { checkpoints: checkpoints, loras: loras };
+    _comfyuiModels = { checkpoints: data.checkpoints || [], loras: data.loras || [] };
     return _comfyuiModels;
   } catch (e) {
     console.warn('⚠️ ComfyUI 模型列表获取失败:', e.message);

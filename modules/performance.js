@@ -744,11 +744,35 @@ function archiveOldSessions(maxAge) {
 // ================================================================
 //  8. 性能采样与监控
 // ================================================================
+// 轻量 DOM 节点计数（避免 querySelectorAll('*') 全量遍历）
+var _domNodeCount = 0;
+function _updateDomNodeCount() {
+  // 仅在初始化时计算一次，后续通过增量更新
+  if (_domNodeCount === 0) {
+    _domNodeCount = document.querySelectorAll('*').length;
+  }
+  return _domNodeCount;
+}
+// 监听 DOM 变化增量更新计数
+var _domCountObserver = null;
+function _initDomCountObserver() {
+  if (_domCountObserver) return;
+  _domNodeCount = document.querySelectorAll('*').length;
+  _domCountObserver = new MutationObserver(function(mutations) {
+    for (var i = 0; i < mutations.length; i++) {
+      var m = mutations[i];
+      _domNodeCount += m.addedNodes.length - m.removedNodes.length;
+    }
+  });
+  _domCountObserver.observe(document.body, { childList: true, subtree: true });
+}
+
 function setupPerfMonitoring() {
+  _initDomCountObserver();
   _perfTimer = setInterval(function() {
     var sample = {
       time: Date.now(),
-      domNodes: document.querySelectorAll('*').length,
+      domNodes: _domNodeCount,
       memory: null,
       renderTime: stats.renderTimes.length > 0
         ? stats.renderTimes.reduce(function(a, b) { return a + b; }, 0) / stats.renderTimes.length

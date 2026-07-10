@@ -141,7 +141,7 @@
     #loginOverlay {
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
-      background: linear-gradient(135deg, #0a0f1a 0%, var(--bg) 50%, #0a0f1a 100%);
+      background: linear-gradient(135deg, #0a0a0a 0%, #0d0d0d 50%, #0a0a0a 100%);
       display: flex;
       justify-content: center;
       align-items: center;
@@ -202,7 +202,7 @@
       top: 0; left: 50%;
       transform: translateX(-50%);
       width: 80px; height: 3px;
-      background: linear-gradient(90deg, transparent, var(--primary), #8b5cf6, transparent);
+      background: linear-gradient(90deg, transparent, #3b82f6, #8b5cf6, transparent);
       border-radius: 0 0 4px 4px;
     }
     .login-box::after {
@@ -234,14 +234,14 @@
       text-align: center;
       font-size: 24px;
       font-weight: 700;
-      background: linear-gradient(135deg, var(--accent-light), #a78bfa);
+      background: linear-gradient(135deg, #60a5fa, #a78bfa);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 6px;
     }
     .login-subtitle {
       text-align: center;
-      color: var(--text-muted);
+      color: #64748b;
       font-size: 14px;
       margin-bottom: 0;
     }
@@ -251,7 +251,7 @@
       display: block;
       font-size: 13px;
       font-weight: 500;
-      color: var(--text-alt);
+      color: #94a3b8;
       margin-bottom: 8px;
     }
     .login-input-wrap { position: relative; }
@@ -262,12 +262,12 @@
       border-radius: 14px;
       font-size: 15px;
       background: rgba(15,23,42,0.6);
-      color: var(--border);
-      transition: opacity 0.25s ease, visibility 0.25s ease;
+      color: #e0e0e0;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
       font-family: inherit;
       outline: none;
     }
-    .login-input-wrap input::placeholder { color: var(--text-muted); }
+    .login-input-wrap input::placeholder { color: #64748b; }
     .login-input-wrap input:focus {
       border-color: rgba(59,130,246,0.5);
       background: rgba(15,23,42,0.8);
@@ -295,23 +295,23 @@
       font-family: inherit;
     }
     #loginBtn {
-      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
-      color: var(--white);
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: #ffffff;
       box-shadow: 0 4px 16px rgba(59,130,246,0.3);
     }
     #loginBtn:hover {
-      background: linear-gradient(135deg, var(--primary-hover), #1d4ed8);
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
       transform: translateY(-1px);
       box-shadow: 0 6px 24px rgba(59,130,246,0.4);
     }
     #registerBtn {
       background: rgba(255,255,255,0.05);
-      color: var(--text-alt);
+      color: #94a3b8;
       border: 1px solid rgba(255,255,255,0.1);
     }
     #registerBtn:hover {
       background: rgba(255,255,255,0.1);
-      color: var(--border);
+      color: #e0e0e0;
       border-color: rgba(255,255,255,0.2);
     }
 
@@ -334,7 +334,7 @@
     }
     .login-users-title {
       font-size: 12px;
-      color: var(--text-muted);
+      color: #64748b;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 12px;
@@ -355,11 +355,11 @@
       background: rgba(255,255,255,0.06);
       border-color: rgba(59,130,246,0.2);
     }
-    .login-user-item span { color: var(--border); font-size: 14px; font-weight: 500; }
+    .login-user-item span { color: #e0e0e0; font-size: 14px; font-weight: 500; }
     .login-user-item button {
       background: rgba(59,130,246,0.15);
       border: none;
-      color: var(--accent-light);
+      color: #60a5fa;
       padding: 6px 16px;
       border-radius: 8px;
       font-size: 13px;
@@ -3433,41 +3433,7 @@
 
     /* ===== Light Theme: 完整补全 ===== */
 
-    /* 登录界面 */
-    body.light-theme #loginOverlay {
-      background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 50%, #eff6ff 100%);
-    }
-    body.light-theme .login-box {
-      background: #ffffff;
-      border-color: #e2e8f0;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.1);
-    }
-    body.light-theme .login-box h2 { color: #1e293b; }
-    body.light-theme .login-subtitle { color: #64748b; }
-    body.light-theme .login-input-group label { color: #475569; }
-    body.light-theme .login-input-wrap {
-      background: #f8fafc;
-      border-color: #e2e8f0;
-    }
-    body.light-theme .login-input-wrap input {
-      background: transparent;
-      color: #1e293b;
-    }
-    body.light-theme .login-input-wrap input::placeholder { color: #94a3b8; }
-    body.light-theme .login-btn-group button {
-      background: #3b82f6;
-      color: #ffffff;
-    }
-    body.light-theme .login-btn-group button:hover {
-      background: #2563eb;
-    }
-    body.light-theme .login-btn-group button:nth-child(2) {
-      background: transparent;
-      color: #3b82f6;
-      border-color: #3b82f6;
-    }
-    body.light-theme .login-users-title { color: #475569; }
-    body.light-theme .login-users-section { border-color: #e2e8f0; }
+    /* 登录界面始终使用深色主题（不受 light-theme 影响） */
 
     /* 设置面板 */
     body.light-theme .settings-modal {
