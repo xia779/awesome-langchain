@@ -655,8 +655,9 @@ module.exports = {
       if (status.online) {
         getComfyUIModels(); // 预加载模型列表
       } else {
+        console.log('ℹ️ ComfyUI 未运行 (本地图像生成将降级到 SiliconFlow)');
       }
-    });
+    }).catch(function(e) { console.warn('ComfyUI 启动检查失败:', e.message); });
 
   }
 };

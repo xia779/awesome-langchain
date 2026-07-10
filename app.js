@@ -681,6 +681,7 @@ try {
       if (window.Core && Core.user && Core.user.logoutUser) {
         const originalLogout = Core.user.logoutUser;
         Core.user.logoutUser = function() {
+          document.body.classList.remove('logged-in');
           const chatList = document.getElementById('chatList');
           if (chatList) chatList.innerHTML = '';
           const chatContainer = document.getElementById('chatContainer');
@@ -760,6 +761,7 @@ try {
       if (!hasCoreUser()) {
         console.warn('Core.user 未加载，降级登录');
         overlay.style.display = 'none'; overlay.classList.add('hidden');
+        document.body.classList.add('logged-in');
         if (hasCore()) {
           try {
             if (Core.session && typeof Core.session.loadSessions === 'function') Core.session.loadSessions();
@@ -775,6 +777,7 @@ try {
         const result = Core.user.loginUser(username);
         if (result.success) {
           overlay.style.display = 'none'; overlay.classList.add('hidden');
+          document.body.classList.add('logged-in');
           if (Core.session && typeof Core.session.loadSessions === 'function') Core.session.loadSessions();
           if (Core.dom && Core.dom.currentUserDisplay) Core.dom.currentUserDisplay.textContent = '&#128100; ' + username;
           if (Core.dom && Core.dom.status) Core.dom.status.textContent = '&#9989; 已就绪';
@@ -842,6 +845,7 @@ try {
       // 显示登录界面
       overlay.style.display = 'flex';
       overlay.classList.remove('hidden');
+      document.body.classList.remove('logged-in');
 
       // 刷新用户列表
       if (window._loadUserList) window._loadUserList();

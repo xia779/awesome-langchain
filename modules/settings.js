@@ -12,6 +12,14 @@ function loadSettingsToUI() {
     safeSet('bgInput', c.chatBackground);
     safeSet('bubbleUserInput', c.chatBubbleUser || '#3b82f6');
     safeSet('bubbleAIInput', c.chatBubbleAI || '#1e1e32');
+    // 自定义颜色
+    safeSet('sidebarColorInput', c.sidebarColor || '#141414');
+    safeSet('panelColorInput', c.panelColor || '#141414');
+    safeSet('accentColorInput', c.accentColor || '#3b82f6');
+    safeSet('textColorInput', c.textColor || '#e8e8e8');
+    // 主题模式
+    var themeSelect = document.getElementById('themeSelect');
+    if (themeSelect) themeSelect.value = c.themeMode || 'dark';
     safeSet('temperatureSlider', c.temperature);
     const tempDisplay = document.getElementById('tempDisplay');
     if (tempDisplay) tempDisplay.textContent = c.temperature || 0.7;
@@ -92,6 +100,11 @@ function saveSettings() {
       chatBackground: safeVal('bgInput'),
       chatBubbleUser: safeVal('bubbleUserInput') || '#3b82f6',
       chatBubbleAI: safeVal('bubbleAIInput') || '#1e1e32',
+      sidebarColor: safeVal('sidebarColorInput') || '#141414',
+      panelColor: safeVal('panelColorInput') || '#141414',
+      accentColor: safeVal('accentColorInput') || '#3b82f6',
+      textColor: safeVal('textColorInput') || '#e8e8e8',
+      themeMode: (document.getElementById('themeSelect') || {}).value || 'dark',
       temperature: parseFloat(safeVal('temperatureSlider') || 0.7),
       systemPrompt: safeVal('systemPrompt'),
       systemInstruction: safeVal('systemPrompt'),
@@ -1277,6 +1290,90 @@ function renderFavoritesList() {
     });
   }
 
+// ===== 主题模式切换 =====
+function _applyThemeMode(mode) {
+  var root = document.documentElement;
+  var body = document.body;
+
+  if (mode === 'system') {
+    var isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    mode = isDark ? 'dark' : 'light';
+  }
+
+  if (mode === 'light') {
+    body.classList.add('light-theme');
+    body.classList.remove('dark-theme');
+    // Apply light theme CSS variables
+    if (Core.customizer && Core.customizer.themes && Core.customizer.themes.apply) {
+      Core.customizer.themes.apply('light-default');
+    } else {
+      _setLightThemeVars(root);
+    }
+  } else {
+    body.classList.remove('light-theme');
+    body.classList.add('dark-theme');
+    if (Core.customizer && Core.customizer.themes && Core.customizer.themes.apply) {
+      Core.customizer.themes.apply('dark-default');
+    } else {
+      _setDarkThemeVars(root);
+    }
+  }
+
+  // Sync code highlighter theme
+  if (Core.syncCodeHighlighter) {
+    Core.syncCodeHighlighter(mode === 'dark');
+  }
+}
+
+function _setLightThemeVars(root) {
+  root.style.setProperty('--bg', '#f8fafc');
+  root.style.setProperty('--bg-secondary', '#f1f5f9');
+  root.style.setProperty('--panel', '#ffffff');
+  root.style.setProperty('--text', '#1e293b');
+  root.style.setProperty('--text-secondary', '#64748b');
+  root.style.setProperty('--border', '#e2e8f0');
+  root.style.setProperty('--primary', '#2563eb');
+  root.style.setProperty('--primary-hover', '#1d4ed8');
+  root.style.setProperty('--shadow', '0 4px 24px rgba(0,0,0,0.08)');
+}
+
+function _setDarkThemeVars(root) {
+  root.style.setProperty('--bg', '#0d0d0d');
+  root.style.setProperty('--bg-secondary', '#1a1a1a');
+  root.style.setProperty('--panel', '#141414');
+  root.style.setProperty('--text', '#e8e8e8');
+  root.style.setProperty('--text-secondary', '#9ca3af');
+  root.style.setProperty('--border', '#2a2a2a');
+  root.style.setProperty('--primary', '#3b82f6');
+  root.style.setProperty('--primary-hover', '#2563eb');
+  root.style.setProperty('--shadow', '0 4px 24px rgba(0,0,0,0.4)');
+}
+
+function _applyCustomColors() {
+  var root = document.documentElement;
+  var sidebar = document.getElementById('sidebarColorInput');
+  var panel = document.getElementById('panelColorInput');
+  var accent = document.getElementById('accentColorInput');
+  var textColor = document.getElementById('textColorInput');
+
+  if (sidebar && sidebar.value) {
+    root.style.setProperty('--sidebar-bg', sidebar.value);
+    Core.saveConfig({ sidebarColor: sidebar.value });
+  }
+  if (panel && panel.value) {
+    root.style.setProperty('--panel', panel.value);
+    Core.saveConfig({ panelColor: panel.value });
+  }
+  if (accent && accent.value) {
+    root.style.setProperty('--primary', accent.value);
+    Core.saveConfig({ accentColor: accent.value });
+  }
+  if (textColor && textColor.value) {
+    root.style.setProperty('--text', textColor.value);
+    Core.saveConfig({ textColor: textColor.value });
+  }
+}
+
 module.exports = {
   name: 'settings',
   dependencies: ['knowledge'],
@@ -1345,6 +1442,28 @@ module.exports = {
     // 搜索引擎切换
     document.getElementById('searchEngineSelect')?.addEventListener('change', toggleKeyInputsVisibility);
 
+    // ===== 界面主题切换 =====
+    var themeSelect = document.getElementById('themeSelect');
+    if (themeSelect) {
+      // 加载当前主题到下拉框
+      var savedMode = Core.config.themeMode || 'dark';
+      themeSelect.value = savedMode;
+      themeSelect.addEventListener('change', function() {
+        var mode = themeSelect.value;
+        Core.saveConfig({ themeMode: mode });
+        _applyThemeMode(mode);
+      });
+    }
+
+    // ===== 自定义颜色实时预览 =====
+    var colorPickers = ['sidebarColorInput', 'panelColorInput', 'accentColorInput', 'textColorInput'];
+    colorPickers.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', function() { _applyCustomColors(); });
+      }
+    });
+
     // ===== 知识库管理 =====
     initKnowledgePanel();
     
@@ -1354,6 +1473,10 @@ module.exports = {
     // ===== 插件管理 =====
     initPluginsPanel();
   initMarketplacePanel();
+
+    // ===== 启动时应用保存的主题模式和自定义颜色 =====
+    _applyThemeMode(Core.config.themeMode || 'dark');
+    _applyCustomColors();
 
     // ===== 技能管理 =====
     initSkillsPanel();

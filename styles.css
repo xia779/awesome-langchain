@@ -5,6 +5,7 @@
       --bg: #0d0d0d;
       --bg-secondary: #1a1a1a;
       --panel: #141414;
+      --sidebar-bg: #141414;
       --text: #e8e8e8;
       --text-secondary: #9ca3af;
       --border: #2a2a2a;
@@ -128,6 +129,12 @@
       display: flex;
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== 未登录时隐藏主界面 ===== */
+    body:not(.logged-in) #sidebar,
+    body:not(.logged-in) #main-container {
+      display: none !important;
     }
 
     /* ===== 登录界面（科技风）===== */
@@ -367,13 +374,13 @@
     #sidebar {
       flex: 0 0 var(--sidebar-width);
       width: var(--sidebar-width);
-      background: var(--bg-secondary);
+      background: var(--sidebar-bg, var(--bg-secondary));
       color: var(--text);
       display: flex;
       flex-direction: column;
       border-right: 1px solid var(--border);
-      transition: flex-basis 0.3s ease, width 0.3s ease;
-  will-change: flex-basis;
+      transition: flex-basis 0.3s ease, width 0.3s ease, background-color 0.3s ease;
+      will-change: flex-basis;
       overflow: hidden;
     }
     #sidebar.hidden {

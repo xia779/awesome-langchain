@@ -3,6 +3,19 @@
 const path = require('path');
 const { ipcRenderer } = require('electron');
 
+// 根据背景色计算对比文字颜色（WCAG 相对亮度）
+function _contrastTextColor(hex) {
+  if (!hex || hex.charAt(0) !== '#') return '';
+  var r = parseInt(hex.slice(1, 3), 16) / 255;
+  var g = parseInt(hex.slice(3, 5), 16) / 255;
+  var b = parseInt(hex.slice(5, 7), 16) / 255;
+  r = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+  g = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+  b = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+  var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.4 ? '#1e293b' : '#e8e8e8';
+}
+
 let Core = null;
 
 // ===== P5: 打字机效果（返回 Promise）=====
@@ -222,7 +235,10 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
     }[provider] || provider;
     const aiDiv = document.createElement('div');
     aiDiv.className = 'msg ai';
-    if (Core.config.chatBubbleAI) aiDiv.style.backgroundColor = Core.config.chatBubbleAI;
+    if (Core.config.chatBubbleAI) {
+      aiDiv.style.backgroundColor = Core.config.chatBubbleAI;
+      aiDiv.style.color = _contrastTextColor(Core.config.chatBubbleAI);
+    }
     aiDiv.innerHTML = `<span style="color:#ef4444">❌ 未配置 ${providerName} API Key</span><br>请在设置面板中填写 ${providerName} API Key，或切换到其他模型（如本地 Ollama 模型）。`;
     Core.dom.chatContainer.appendChild(aiDiv);
     Core.dom.status.textContent = `❌ 未配置 ${providerName} API Key`;
@@ -358,7 +374,10 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
 
   const aiDiv = document.createElement('div');
   aiDiv.className = 'msg ai';
-  if (Core.config.chatBubbleAI) aiDiv.style.backgroundColor = Core.config.chatBubbleAI;
+  if (Core.config.chatBubbleAI) {
+    aiDiv.style.backgroundColor = Core.config.chatBubbleAI;
+    aiDiv.style.color = _contrastTextColor(Core.config.chatBubbleAI);
+  }
   aiDiv.innerHTML = '<span class="typing-cursor"></span>';
   Core.dom.chatContainer.appendChild(aiDiv);
   Core.dom.chatContainer.scrollTop = Core.dom.chatContainer.scrollHeight;

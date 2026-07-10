@@ -459,7 +459,7 @@ function initTheme() {
 // ===== Module Export =====
 module.exports = {
   name: 'ui-interactions',
-  dependencies: ['html-utils'],
+  dependencies: ['html-utils', 'ui-media'],
   init: function(_Core) {
     Core = _Core;
     // Attach public API
