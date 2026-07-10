@@ -37,32 +37,8 @@ function loadSettingsToUI() {
     // 向量后端状态显示
     var vbStatus = document.getElementById('vectorBackendStatus');
     if (vbStatus) {
-      if (c.vectorBackend === 'chroma' && Core.chroma && Core.chroma.isAvailable()) {
-        vbStatus.textContent = '🟢 ChromaDB 已连接';
-        vbStatus.style.color = '#22c55e';
-      } else if (c.vectorBackend === 'chroma') {
-        vbStatus.textContent = '🔴 ChromaDB 未连接（将回退 JSON）';
-        vbStatus.style.color = '#ef4444';
-      } else {
-        vbStatus.textContent = '📂 JSON 模式';
-        vbStatus.style.color = '';
-      }
-    }
-    // 后端切换事件
-    if (vectorBackend) {
-      vectorBackend.onchange = function() {
-        var val = this.value;
-        Core.saveConfig({ vectorBackend: val });
-        if (val === 'chroma' && Core.chroma && !Core.chroma.isAvailable()) {
-          Core.chroma.initChroma().then(function(ok) {
-            var st = document.getElementById('vectorBackendStatus');
-            if (st) {
-              if (ok) { st.textContent = '🟢 ChromaDB 已连接'; st.style.color = '#22c55e'; }
-              else { st.textContent = '🔴 连接失败'; st.style.color = '#ef4444'; }
-            }
-          });
-        }
-      };
+      vbStatus.textContent = '📂 JSON 模式';
+      vbStatus.style.color = '';
     }
     const lang = document.getElementById('languageSelect');
     if (lang) lang.value = c.language || 'zh-CN';
@@ -263,80 +239,6 @@ async function initKnowledgePanel() {
     refreshBtn.addEventListener('click', renderKnowledgeDocList);
   }
 
-  // ChromaDB 重连按钮
-  const reconnectBtn = document.getElementById('chromaReconnectBtn');
-  if (reconnectBtn) {
-    reconnectBtn.addEventListener('click', async function() {
-      reconnectBtn.textContent = '连接中...';
-      reconnectBtn.disabled = true;
-      try {
-        var ok = false;
-        if (Core.chroma && Core.chroma.reconnect) {
-          ok = await Core.chroma.reconnect();
-        }
-        updateChromaStatus(ok);
-        reconnectBtn.disabled = false;
-        if (ok) {
-          reconnectBtn.textContent = '已连接';
-          setTimeout(function() { reconnectBtn.textContent = '重连'; }, 2000);
-        } else {
-          reconnectBtn.textContent = '重连';
-        }
-      } catch (e) {
-        reconnectBtn.textContent = '重连';
-        reconnectBtn.disabled = false;
-      }
-    });
-  }
-
-  // 更新 ChromaDB 状态显示
-  function updateChromaStatus(connected) {
-    var statusEl = document.getElementById('vectorBackendStatus');
-    if (statusEl) {
-      if (connected) {
-        statusEl.textContent = '✅ 已连接';
-        statusEl.style.color = '#22c55e';
-      } else {
-        statusEl.textContent = '❌ 未连接';
-        statusEl.style.color = '#ef4444';
-      }
-    }
-    var rBtn = document.getElementById('chromaReconnectBtn');
-    if (rBtn) {
-      var select = document.getElementById('vectorBackendSelect');
-      rBtn.style.display = (select && select.value === 'chroma') ? 'inline-block' : 'none';
-    }
-  }
-
-  // 初始检查状态
-  setTimeout(function() {
-    var connected = Core.chroma && Core.chroma.isAvailable && Core.chroma.isAvailable();
-    updateChromaStatus(connected);
-  }, 1500);
-
-  // 向量后端切换时显示/隐藏重连按钮
-  var vectorSelect = document.getElementById('vectorBackendSelect');
-  if (vectorSelect) {
-    vectorSelect.addEventListener('change', function() {
-      var rBtn = document.getElementById('chromaReconnectBtn');
-      if (rBtn) {
-        rBtn.style.display = (vectorSelect.value === 'chroma') ? 'inline-block' : 'none';
-      }
-      if (vectorSelect.value === 'chroma') {
-        if (Core.chroma && Core.chroma.reconnect) {
-          Core.chroma.reconnect().then(function(ok) { updateChromaStatus(ok); });
-        }
-      }
-    });
-  }
-
-  // 监听 ChromaDB 状态变化事件
-  if (Core.on) {
-    Core.on('chromaStatusChanged', function(connected) {
-      updateChromaStatus(connected);
-    });
-  }
-
   if (testBtn && testQuery) {
     testBtn.addEventListener('click', async () => {
       const query = testQuery.value.trim();
@@ -406,7 +308,7 @@ function renderKnowledgeDocList() {
         if (!docId) return;
         if (!confirm('确定删除该文档及其所有分块吗？')) return;
         try {
-          // 🔧 使用 knowledge.deleteDocument 统一删除（Chroma + JSON）
+          // 🔧 使用 knowledge.deleteDocument 统一删除
           if (Core.knowledge && Core.knowledge.deleteDocument) {
             const result = await Core.knowledge.deleteDocument(docId);
             if (!result.success) throw new Error(result.error);

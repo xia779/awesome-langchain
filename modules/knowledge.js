@@ -1,5 +1,4 @@
-// modules/knowledge.js - 知识库模块（纯 JS 向量存储 + BM25 混合检索 + RRF 融合排序）
-// 移除 Chroma 依赖，使用 JSON 文件持久化 + Ollama 嵌入 + BM25 文本检索回退
+// modules/knowledge.js - 知识库模块（JSON 文件持久化 + Ollama 嵌入 + BM25 混合检索 + RRF 融合排序）
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -416,30 +415,6 @@ async function uploadDocument(filePathOrContent) {
       }
     }
 
-    // 同步到 ChromaDB（如果可用）
-    if (Core && Core.config && Core.config.vectorBackend === 'chroma' && Core.chroma && Core.chroma.isAvailable()) {
-      try {
-        var chromaIds = [];
-        var chromaEmbs = [];
-        var chromaDocs = [];
-        var chromaMetas = [];
-        for (var ci = 0; ci < chunks.length; ci++) {
-          if (chunkEmbeddings[ci]) {
-            chromaIds.push(docId + '_chunk_' + ci);
-            chromaEmbs.push(chunkEmbeddings[ci]);
-            chromaDocs.push(chunks[ci]);
-            chromaMetas.push({ fileName: fileName, chunkIndex: ci, docId: docId });
-          }
-        }
-        if (chromaIds.length > 0) {
-          await Core.chroma.addDocuments(chromaIds, chromaEmbs, chromaDocs, chromaMetas);
-          console.log('🔗 ChromaDB 同步: ' + chromaIds.length + ' 个向量');
-        }
-      } catch (e) {
-        console.warn('⚠️ ChromaDB 同步失败:', e.message);
-      }
-    }
-
     console.log(`✅ 文档已上传: ${fileName} (${chunks.length} 个分块${embedMsg})`);
     return {
       success: true,
@@ -460,24 +435,6 @@ async function search(query, topK = 5) {
   ensureDir();
 
   if (!query || !query.trim()) return [];
-
-  // === ChromaDB 向量检索（优先）===
-  if (Core && Core.config && Core.config.vectorBackend === 'chroma' && Core.chroma && Core.chroma.isAvailable()) {
-    try {
-      var queryEmb = await getEmbedding(query);
-      if (queryEmb) {
-        var chromaResults = await Core.chroma.queryDocuments(queryEmb, topK);
-        if (chromaResults.length > 0) {
-          console.log('✅ ChromaDB 检索到 ' + chromaResults.length + ' 条结果');
-          return chromaResults.map(function(r) {
-            return { text: r.text, fileName: r.metadata.fileName || '', docId: r.id, score: 1 - (r.distance || 0) };
-          });
-        }
-      }
-    } catch (e) {
-      console.warn('⚠️ ChromaDB 查询失败，降级到 JSON:', e.message);
-    }
-  }
 
   const allChunks = loadAllChunks();
   if (allChunks.length === 0) {
@@ -543,26 +500,6 @@ function listDocuments() {
 // ===== 删除文档 =====
 async function deleteDocument(docId) {
   ensureDir();
-  // 同步删除 ChromaDB 中的相关向量
-  if (Core && Core.config && Core.config.vectorBackend === 'chroma' && Core.chroma && Core.chroma.isAvailable()) {
-    try {
-      // 构造该文档的所有 chunk ID
-      var doc = listDocuments().find(function(d) { return d.id === docId; });
-      if (doc) {
-        var chunkCount = doc.chunkCount || 0;
-        var idsToDelete = [];
-        for (var di = 0; di < chunkCount; di++) {
-          idsToDelete.push(docId + '_chunk_' + di);
-        }
-        if (idsToDelete.length > 0) {
-          await Core.chroma.deleteDocuments(idsToDelete);
-          console.log('🔗 ChromaDB 删除: ' + idsToDelete.length + ' 个向量');
-        }
-      }
-    } catch (e) {
-      console.warn('⚠️ ChromaDB 删除失败:', e.message);
-    }
-  }
   try {
     // 1. 删除 JSON 文件
     const docPath = path.join(getKnowledgeDir(), `${docId}.json`);
@@ -656,14 +593,7 @@ function getStats() {
   const withEmbeddings = allChunks.filter(c => c.embedding).length;
 
   // 检测当前后端
-  var vectorBackend = 'json';
-  var chromaStats = null;
-  if (Core && Core.config && Core.config.vectorBackend === 'chroma' && Core.chroma && Core.chroma.isAvailable()) {
-    vectorBackend = 'chroma';
-  }
-
   var searchMode = withEmbeddings > 0 ? '向量 + BM25' : 'BM25 文本检索';
-  if (vectorBackend === 'chroma') searchMode = 'ChromaDB 向量检索';
 
   return {
     totalDocs: docs.length,
