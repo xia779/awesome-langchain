@@ -451,6 +451,9 @@ function renderFlatNode(id, container) {
   var item = document.createElement('div');
   item.className = 'chat-item' + (id === currentSessionId ? ' active' : '');
   item.dataset.id = id;
+  item.setAttribute('tabindex', '0');
+  item.setAttribute('role', 'treeitem');
+  if (id === currentSessionId) item.setAttribute('aria-selected', 'true');
   
   // emoji
   var emojiMap = { 'master': '👑', 'coder': '💻', 'writer': '✍️', 'analyst': '📊', 'teacher': '🎓', 'chat': '💬' };
@@ -499,7 +502,12 @@ function renderTreeNode(id, container, level) {
   var header = document.createElement('div');
   header.className = 'chat-item';
   header.dataset.id = id;  // 🔧 关键：设置 data-id，供右键菜单获取
-  if (id === currentSessionId) header.classList.add('active');
+  header.setAttribute('tabindex', '0');
+  header.setAttribute('role', 'treeitem');
+  if (id === currentSessionId) {
+    header.classList.add('active');
+    header.setAttribute('aria-selected', 'true');
+  }
   
   // 角色标签样式
   if (isMaster) header.classList.add('master-role');
@@ -510,7 +518,10 @@ function renderTreeNode(id, container, level) {
   if (isRole && !isMaster) {
     var foldBtn = document.createElement('span');
     foldBtn.className = 'fold-btn';
-    foldBtn.textContent = session.collapsed ? '▶' : '▼';
+    foldBtn.setAttribute('role', 'button');
+    foldBtn.setAttribute('aria-expanded', session.collapsed ? 'false' : 'true');
+    foldBtn.setAttribute('tabindex', '0');
+    foldBtn.textContent = session.collapsed ? '\u25b6' : '\u25bc';
     foldBtn.style.cssText = 'cursor:pointer; width:16px; display:inline-block; text-align:center;';
     header.appendChild(foldBtn);
   }
@@ -1375,6 +1386,8 @@ function init(core) {
         var sess = sessions[chatItem.dataset.id];
         if (sess) {
           sess.collapsed = !sess.collapsed;
+          foldBtn.setAttribute('aria-expanded', sess.collapsed ? 'false' : 'true');
+          foldBtn.textContent = sess.collapsed ? '\u25b6' : '\u25bc';
           saveSession(chatItem.dataset.id);
           // 🔧 直接 DOM 动画代替完整 renderChatList()
           // children-container 是 chat-item 的兄弟节点（在 chat-node 内），不是子节点
@@ -1475,6 +1488,38 @@ function init(core) {
         }
       }
     });
+
+  // ===== 侧边栏键盘导航 =====
+  chatList.addEventListener('keydown', function(e) {
+    var items = chatList.querySelectorAll('.chat-item');
+    if (items.length === 0) return;
+    var current = document.activeElement;
+    var idx = Array.from(items).indexOf(current);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      var next = idx < items.length - 1 ? idx + 1 : 0;
+      items[next].focus();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      var prev = idx > 0 ? idx - 1 : items.length - 1;
+      items[prev].focus();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (current && current.classList.contains('chat-item')) {
+        current.click();
+      }
+    } else if (e.key === 'Delete') {
+      e.preventDefault();
+      if (current && current.classList.contains('chat-item') && current.dataset.id) {
+        if (confirm('确定删除这个会话？')) {
+          if (Core.session && Core.session.deleteSession) {
+            Core.session.deleteSession(current.dataset.id);
+          }
+        }
+      }
+    }
+  });
 
     console.log('✅ chatList 事件委托已初始化');
   })();

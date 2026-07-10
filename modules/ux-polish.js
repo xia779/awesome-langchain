@@ -342,12 +342,12 @@ function smartScrollToBottom(force) {
   polishState.userScrolledUp = false;
 }
 
-// ===== 消息入场动画（通过统一 chatObserver 分发）=====
+// ===== 消息入场动画 =====
+// 入场动画由 styles.css .msg { animation: messageIn 0.25s ease } 处理
+// 此处仅处理空状态隐藏
 function setupMessageAnimation() {
   if (!Core.chatObserver) return;
   Core.chatObserver.onMessage(function(node) {
-    node.classList.add('msg-polish-enter');
-    setTimeout(function() { node.classList.remove('msg-polish-enter'); }, 350);
     hideEmptyState('chatContainer');
   });
 }

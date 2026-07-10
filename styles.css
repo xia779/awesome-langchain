@@ -14,7 +14,7 @@
       --radius-sm: 12px;
       --sidebar-width: 260px;
       --settings-width: 420px;
-      --transition: all 0.2s ease;
+      --transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
       /* 扩展色彩变量 */
       --white: #ffffff;
       --danger: #ef4444;
@@ -256,7 +256,7 @@
       font-size: 15px;
       background: rgba(15,23,42,0.6);
       color: var(--border);
-      transition: all 0.25s ease;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
       font-family: inherit;
       outline: none;
     }
@@ -284,7 +284,7 @@
       font-weight: 600;
       font-size: 15px;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
       font-family: inherit;
     }
     #loginBtn {
@@ -342,7 +342,7 @@
       border: 1px solid rgba(255,255,255,0.05);
       border-radius: 12px;
       margin-bottom: 6px;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
     }
     .login-user-item:hover {
       background: rgba(255,255,255,0.06);
@@ -358,7 +358,7 @@
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
     }
     .login-user-item button:hover { background: rgba(59,130,246,0.25); color: #93bbfc; }
 
@@ -373,6 +373,7 @@
       flex-direction: column;
       border-right: 1px solid var(--border);
       transition: flex-basis 0.3s ease, width 0.3s ease;
+  will-change: flex-basis;
       overflow: hidden;
     }
     #sidebar.hidden {
@@ -471,7 +472,7 @@
       color: var(--text-secondary);
       font-size: 11px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
     .filter-btn:hover {
       background: rgba(255,255,255,0.05);
@@ -536,7 +537,7 @@
       padding: 8px 12px;
       cursor: pointer;
       border-left: 3px solid transparent;
-      transition: all 0.15s;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
     }
     .search-result-item:hover {
       background: rgba(59,130,246,0.08);
@@ -732,7 +733,7 @@
       padding: 9px 12px;
       border-radius: var(--radius-sm);
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
       color: var(--text-alt);
       font-size: 13px;
       border: 1px solid transparent;
@@ -770,7 +771,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       position: relative;
       padding: 0;
       flex-shrink: 0;
@@ -863,7 +864,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
     }
     .top-bar-btn:hover {
       background: rgba(255,255,255,0.06);
@@ -881,6 +882,7 @@
       min-width: 0;
       margin-left: 0;
       transition: margin-left 0.3s ease;
+  will-change: margin-left;
       position: relative;
     }
 
@@ -996,7 +998,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
       user-select: none;
       -webkit-user-select: none;
       pointer-events: auto;
@@ -1169,7 +1171,7 @@
       align-items: center;
       justify-content: center;
       padding: 0;
-      transition: all 0.15s;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
     }
     .msg-actions-inline button:hover {
       background: #555;
@@ -1256,7 +1258,7 @@
       background: var(--primary-light);
       border: 1px solid var(--primary);
       white-space: nowrap;
-      transition: all 0.2s;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
     .load-more-divider:hover span {
       background: var(--primary);
@@ -1409,7 +1411,7 @@
       color: var(--text-secondary);
       font-size: 11px;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
     }
     .artifact-tab:hover { background: var(--bg-secondary); color: var(--text); }
     .artifact-tab.active { background: var(--primary); color: var(--white); border-color: var(--primary); }
@@ -1422,7 +1424,7 @@
       color: var(--text-secondary);
       font-size: 11px;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       white-space: nowrap;
     }
     .artifact-action-btn:hover { background: var(--bg-secondary); color: var(--text); border-color: var(--primary); }
@@ -1517,7 +1519,7 @@
       color: var(--text-secondary);
       font-size: 11px;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       white-space: nowrap;
     }
     .file-card-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
@@ -1558,7 +1560,8 @@
       height: 100%;
       background: var(--primary);
       border-radius: 2px;
-      transition: width 0.3s ease;
+      transition: transform 0.3s ease;
+  transform-origin: left;
     }
     .task-list { padding: 4px 0; }
     .task-row {
@@ -1654,6 +1657,7 @@
       max-height: 0;
       overflow: hidden;
       transition: max-height 0.3s ease, padding 0.3s ease;
+  contain: layout;
       padding: 0 14px;
     }
     .agent-think-panel.expanded .agent-think-content {
@@ -1760,7 +1764,7 @@
       white-space: nowrap;
       flex-shrink: 0;
       height: 36px;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
     }
     .model-tag:hover {
       background: rgba(255,255,255,0.08);
@@ -1812,7 +1816,7 @@
       border: none;
       border-radius: 10px;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2169,7 +2173,7 @@
       border: 1px solid var(--border);
       border-radius: 8px;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       background: transparent;
     }
     .ask-user-option:hover { border-color: var(--primary); background: var(--primary-light); }
@@ -2397,7 +2401,7 @@
     .msg-search-box .search-count { font-size: 12px; color: var(--text-secondary); min-width: 36px; text-align: center; }
     .msg-search-box .search-close { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 18px; padding: 2px 4px; line-height: 1; }
     .msg-search-box .search-close:hover { color: var(--danger); }
-    .msg .search-highlight { background: #fde047; color: var(--text-dark); padding: 1px 2px; border-radius: 3px; font-weight: 600; transition: all 0.2s; }
+    .msg .search-highlight { background: #fde047; color: var(--text-dark); padding: 1px 2px; border-radius: 3px; font-weight: 600; transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
     .msg .search-highlight.current { background: var(--primary); color: var(--white); padding: 2px 4px; border-radius: 4px; box-shadow: 0 0 8px rgba(59,130,246,0.6); animation: pulseHighlight 1.5s ease infinite; }
     @keyframes pulseHighlight {
       0% { box-shadow: 0 0 0 0 rgba(59,130,246,0.6); }
@@ -2442,7 +2446,7 @@
       font-size: 13px;
       color: var(--text);
       border-left: 3px solid transparent;
-      transition: all 0.15s;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2487,7 +2491,7 @@
       margin-bottom: 4px;
     }
     .search-history-title { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
-    .search-history-clear { font-size: 12px; color: var(--text-secondary); cursor: pointer; background: none; border: none; padding: 2px 6px; border-radius: 4px; transition: all 0.15s; }
+    .search-history-clear { font-size: 12px; color: var(--text-secondary); cursor: pointer; background: none; border: none; padding: 2px 6px; border-radius: 4px; transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease; }
     .search-history-clear:hover { color: var(--danger); background: rgba(239,68,68,0.08); }
     .search-history-item {
       display: flex;
@@ -2497,7 +2501,7 @@
       cursor: pointer;
       font-size: 13px;
       color: var(--text);
-      transition: all 0.15s;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
     }
     .search-history-item:hover { background: var(--primary-light); }
     .search-history-item .history-text {
@@ -2519,7 +2523,7 @@
       padding: 2px 6px;
       border-radius: 4px;
       opacity: 0;
-      transition: all 0.15s;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
     }
     .search-history-item:hover .history-delete { opacity: 1; }
     .search-history-item .history-delete:hover { color: var(--danger); background: rgba(239,68,68,0.08); }
@@ -2538,7 +2542,7 @@
       border: 1px solid var(--border);
       border-radius: 16px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
       user-select: none;
       width: fit-content;
       gap: 4px;
@@ -2626,7 +2630,7 @@
       border-radius: 10px;
       padding: 12px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
       text-align: center;
     }
     .prompt-item:hover {
@@ -2687,7 +2691,7 @@
       padding: 10px 12px;
       border-radius: 10px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
       margin-bottom: 4px;
     }
     .role-item:hover { background: var(--bg-secondary); }
@@ -2711,7 +2715,7 @@
       font-size: 12px;
       color: var(--primary);
       cursor: pointer;
-      transition: all 0.2s;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
     .current-role-display:hover {
       background: rgba(59,130,246,0.2);
@@ -2797,7 +2801,7 @@
       border-radius: 6px;
       cursor: pointer;
       font-size: 13px;
-      transition: all 0.15s;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       min-width: 32px;
     }
     .image-preview-bar button:hover { background: rgba(255,255,255,0.2); }
@@ -2845,7 +2849,7 @@
 
     /* 侧边栏项目悬停 */
     .chat-item, .role-item {
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease, border-color 0.2s ease, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     
     /* 联网按钮脉冲 */
@@ -3168,7 +3172,7 @@
       padding: 12px 8px;
       border-radius: 12px;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       font-size: 11px;
       color: var(--text-secondary);
     }
@@ -3198,7 +3202,7 @@
       border: 1px solid var(--border);
       border-radius: 16px;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       white-space: nowrap;
       line-height: 1;
     }
@@ -3319,7 +3323,7 @@
       background: transparent;
       color: var(--text-secondary, #94a3b8);
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
       white-space: nowrap;
     }
     .agent-cancel-btn:hover:not(:disabled) {
@@ -3406,7 +3410,7 @@
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.85); z-index: 10000;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      opacity: 0; visibility: hidden; transition: all 0.25s ease;
+      opacity: 0; visibility: hidden; transition: opacity 0.25s ease, visibility 0.25s ease;
     }
     .screenshot-overlay.active { opacity: 1; visibility: visible; }
     .screenshot-overlay .screenshot-toolbar {
@@ -3414,7 +3418,7 @@
     }
     .screenshot-overlay .screenshot-toolbar button {
       padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer;
-      font-size: 14px; font-weight: 500; transition: all 0.15s;
+      font-size: 14px; font-weight: 500; transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
     }
     .screenshot-overlay .ss-confirm {
       background: var(--primary, var(--primary)); color: var(--white);
@@ -3458,7 +3462,7 @@
     }
     .screenshot-window-item {
       width: 220px; background: rgba(255,255,255,0.08); border-radius: 12px;
-      padding: 8px; cursor: pointer; transition: all 0.15s; text-align: center;
+      padding: 8px; cursor: pointer; transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease; text-align: center;
       border: 2px solid transparent;
     }
     .screenshot-window-item:hover {
@@ -3811,3 +3815,67 @@
       color: #be185d;
     }
 
+
+
+/* ================================================================
+   Round 10: Focus-visible 焦点环（替代 outline:none）
+   ================================================================ */
+
+/* 全局 focus-visible 焦点环 — 只在键盘导航时显示 */
+:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* 输入框 focus 保持原有 box-shadow 效果，但增加 focus-visible 加强 */
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: none;
+  border-color: var(--primary, #3b82f6);
+  box-shadow: 0 0 0 3px var(--primary-light, rgba(59,130,246,0.15));
+}
+
+/* 按钮 focus-visible */
+button:focus-visible, [role="button"]:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* 图标按钮 focus-visible */
+.icon-btn:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm, 12px);
+}
+
+/* 会话列表项 focus-visible */
+.chat-item:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm, 12px);
+}
+
+/* 消息 focus-visible */
+.msg:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* ================================================================
+   prefers-reduced-motion 无障碍媒体查询
+   ================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ================================================================
+   GPU 加速提示：为无限动画添加 will-change
+   ================================================================ */
+.typing-cursor::after { will-change: opacity; }
+#voiceBtn.recording { will-change: box-shadow; }
+#webSearchBtn.active { will-change: box-shadow; }
+.app-spinner .spinner-ring { will-change: transform; }

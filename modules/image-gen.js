@@ -568,13 +568,20 @@ function registerCommands() {
     }
     Core.dom.status.textContent = '\ud83c\udfa8 \u6b63\u5728\u751f\u6210\u56fe\u7247...';
     Core.session.addMessage('\ud83c\udfa8 \u6b63\u5728\u751f\u6210\u56fe\u7247: *' + prompt + '*', 'ai');
+    var _drawStart = Date.now();
+    var _drawTimer = setInterval(function() {
+      var sec = Math.floor((Date.now() - _drawStart) / 1000);
+      Core.dom.status.textContent = '\ud83c\udfa8 \u751f\u6210\u4e2d... ' + sec + 's';
+    }, 1000);
     generateImage(prompt).then(function(result) {
+      clearInterval(_drawTimer);
       Core.dom.status.textContent = '\u2705 \u56fe\u7247\u751f\u6210\u5b8c\u6210';
       setTimeout(function() { Core.dom.status.textContent = '\u2705 \u5df2\u5c31\u7eea (' + (Core.getCurrentService ? Core.getCurrentService() : 'ollama') + ')'; }, 3000);
       var msg = '![' + prompt + '](' + result.url + ')';
       if (result.revised_prompt) msg += '\n\n*\u4f18\u5316\u63d0\u793a: ' + result.revised_prompt + '*';
       Core.session.addMessage(msg, 'ai');
     }).catch(function(err) {
+      clearInterval(_drawTimer);
       Core.dom.status.textContent = '\u274c \u56fe\u7247\u751f\u6210\u5931\u8d25';
       setTimeout(function() { Core.dom.status.textContent = '\u2705 \u5df2\u5c31\u7eea (' + (Core.getCurrentService ? Core.getCurrentService() : 'ollama') + ')'; }, 3000);
       Core.session.addMessage('\u274c \u56fe\u7247\u751f\u6210\u5931\u8d25: ' + err.message, 'ai');

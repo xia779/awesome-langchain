@@ -164,6 +164,9 @@ function init(_Core) {
   // 从配置加载语言设置
   currentLang = Core.config.language || 'zh';
   
+  // 暴露键盘导航 API 供其他模块使用
+  Core.KEYBOARD_NAV = KEYBOARD_NAV;
+
   Core.i18n = {
     t,           // 翻译
     setLanguage, // 切换语言

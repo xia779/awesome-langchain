@@ -129,7 +129,7 @@
 </div>
 
 <!-- ===== 方向A2：图片预览遮罩层 ===== -->
-<div class="image-preview-overlay" id="imagePreviewOverlay">
+<div class="image-preview-overlay" id="imagePreviewOverlay" role="dialog" aria-label="图片预览">
   <button class="image-preview-close" id="imagePreviewClose">&times;</button>
   <div class="preview-wrapper" id="previewWrapper">
     <img src="" alt="预览" id="imagePreviewImg" draggable="false" />
@@ -213,27 +213,27 @@
       <button class="apps-menu-close" id="appsMenuClose">&times;</button>
     </div>
     <div class="apps-menu-grid">
-      <div class="apps-menu-item" data-action="new-chat">
+      <div class="apps-menu-item" role="button" tabindex="0" data-action="new-chat">
         <span class="material-icons-outlined">add_circle</span>
         <span>新建对话</span>
       </div>
-      <div class="apps-menu-item" data-action="knowledge">
+      <div class="apps-menu-item" role="button" tabindex="0" data-action="knowledge">
         <span class="material-icons-outlined">menu_book</span>
         <span>知识库</span>
       </div>
-      <div class="apps-menu-item" data-action="agent">
+      <div class="apps-menu-item" role="button" tabindex="0" data-action="agent">
         <span class="material-icons-outlined">smart_toy</span>
         <span>Agent</span>
       </div>
-      <div class="apps-menu-item" data-action="tools">
+      <div class="apps-menu-item" role="button" tabindex="0" data-action="tools">
         <span class="material-icons-outlined">build</span>
         <span>工具集</span>
       </div>
-      <div class="apps-menu-item" data-action="history">
+      <div class="apps-menu-item" role="button" tabindex="0" data-action="history">
         <span class="material-icons-outlined">history</span>
         <span>历史记录</span>
       </div>
-      <div class="apps-menu-item" data-action="export-all">
+      <div class="apps-menu-item" role="button" tabindex="0" data-action="export-all">
         <span class="material-icons-outlined">file_download</span>
         <span>导出全部</span>
       </div>
@@ -261,7 +261,7 @@
 </div>
 
 <!-- ===== 设置面板 ===== -->
-<div class="settings-modal" id="settingsModal">
+<div class="settings-modal" id="settingsModal" role="dialog" aria-modal="true" aria-label="设置">
   <button class="close-modal" id="closeSettingsBtn">&times;</button>
   <h3><span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;">settings</span>全局设置</h3>
 
@@ -706,7 +706,7 @@
 </div>
 
 <!-- ===== 自定义弹窗 ===== -->
-<div id="customPromptOverlay">
+<div id="customPromptOverlay" role="alertdialog" aria-modal="true">
   <div id="customPromptBox">
     <h3 id="customPromptTitle">✏️ 重命名会话</h3>
     <input type="text" id="customPromptInput" placeholder="输入新名称..." />
@@ -718,24 +718,24 @@
 </div>
 
 <!-- ===== 右键菜单 ===== -->
-<div id="contextMenu">
-  <div class="menu-item" data-action="copy">📋 复制</div>
-  <div class="menu-item" data-action="paste">📥 粘贴</div>
+<div id="contextMenu" role="menu">
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="copy">📋 复制</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="paste">📥 粘贴</div>
   <div class="menu-divider"></div>
-  <div class="menu-item" data-action="rename">✏️ 重命名会话</div>
-  <div class="menu-item" data-action="pin">📌 置顶/取消置顶</div>
-  <div class="menu-item" data-action="delete">🗑️ 删除会话</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="rename">✏️ 重命名会话</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="pin">📌 置顶/取消置顶</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="delete">🗑️ 删除会话</div>
   <div class="menu-divider"></div>
-  <div class="menu-item" data-action="export-json">📦 导出 JSON</div>
-  <div class="menu-item" data-action="export-md">📝 导出 Markdown</div>
-  <div class="menu-item" data-action="export-html">🌐 导出 HTML</div>
-  <div class="menu-item" data-action="export-tree">🌳 导出会话树</div>
-  <div class="menu-item" data-action="copy-md">📋 复制 Markdown</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-json">📦 导出 JSON</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-md">📝 导出 Markdown</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-html">🌐 导出 HTML</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-tree">🌳 导出会话树</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="copy-md">📋 复制 Markdown</div>
   <div class="menu-divider"></div>
-  <div class="menu-item" data-action="export-pdf">📕 导出 PDF</div>
-  <div class="menu-item" data-action="export-docx">📘 导出 Word</div>
-  <div class="menu-item" data-action="export-xlsx">📗 导出 Excel</div>
-  <div class="menu-item" data-action="export-pptx">📙 导出 PPT</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-pdf">📕 导出 PDF</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-docx">📘 导出 Word</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-xlsx">📗 导出 Excel</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-pptx">📙 导出 PPT</div>
 </div>
 
 <!-- ===== 引入外部库 ===== -->
@@ -753,7 +753,7 @@
 <script src="core-v10.js?nocache=2"></script>
 
 <!-- ===== Screenshot overlay (relocated from between script blocks) ===== -->
-<div class="screenshot-overlay" id="screenshotOverlay">
+<div class="screenshot-overlay" role="dialog" aria-label="截图工具" id="screenshotOverlay">
   <div class="screenshot-toolbar">
     <div class="ss-mode-group">
       <button class="ss-mode-btn active" data-mode="full">全屏</button>

@@ -336,10 +336,24 @@ function renderKnowledgeDocList() {
 // ===== 打开/关闭设置面板 =====
 function openSettings() {
   loadSettingsToUI();
-  document.getElementById('settingsModal').classList.add('show');
+  var modal = document.getElementById('settingsModal');
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden', 'false');
+  // 焦点陷阱
+  if (Core.i18n && Core.KEYBOARD_NAV) {
+    Core.KEYBOARD_NAV.enableFocusTrap(modal);
+  }
 }
 function closeSettings() {
-  document.getElementById('settingsModal').classList.remove('show');
+  var modal = document.getElementById('settingsModal');
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden', 'true');
+  // 释放焦点陷阱
+  if (Core.KEYBOARD_NAV) {
+    Core.KEYBOARD_NAV.disableFocusTrap();
+  }
+  // 返回焦点到输入框
+  if (Core.dom && Core.dom.input) Core.dom.input.focus();
 }
 
 // ===== 模型管理（保持不变） =====
