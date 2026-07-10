@@ -392,11 +392,14 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       var state = Core._apiGetSessionState(currentSessionId);
       state.abortController = new AbortController();
       const signal = state.abortController.signal;
+      // 标记为流式中，防止虚拟滚动折叠
+      aiDiv.dataset.streaming = 'true';
       reply = await Core.api.callAPIStream(finalPrompt, injectedSystemPrompt, temperature, model, provider, (function() {
         var _streamRafId = 0;
         var _pendingFullText = '';
-        var _lastParseTime = 0;
-        var _PARSE_INTERVAL = 100;
+        // 创建持久的打字光标
+        var _cursor = document.createElement('span');
+        _cursor.className = 'typing-cursor';
         return function(chunk, fullText) {
           reply = fullText;
           _pendingFullText = fullText;
@@ -406,16 +409,10 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
           if (_streamRafId) return;
           _streamRafId = requestAnimationFrame(function() {
             _streamRafId = 0;
-            var now = performance.now();
-            if (window.marked && (now - _lastParseTime >= _PARSE_INTERVAL || !_lastParseTime)) {
-              _lastParseTime = now;
-              aiDiv.innerHTML = Core.renderMarkdown(_pendingFullText);
-              var cursor = document.createElement('span');
-              cursor.className = 'typing-cursor';
-              aiDiv.appendChild(cursor);
-            } else if (!window.marked) {
-              aiDiv.textContent = _pendingFullText;
-            }
+            // 流式期间用 textContent 避免 DOM 重建导致闪烁
+            aiDiv.textContent = _pendingFullText;
+            // 保留光标元素（textContent 会移除它）
+            aiDiv.appendChild(_cursor);
             var container = Core.dom.chatContainer;
             var isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
             if (isNearBottom) {
@@ -424,7 +421,9 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
           });
         };
       })(), signal);
-      // 最终渲染
+      // 流式结束，移除标记
+      delete aiDiv.dataset.streaming;
+      // 最终渲染：一次性 markdown 渲染
       if (window.marked) {
         aiDiv.innerHTML = Core.renderMarkdown(reply);
       } else {

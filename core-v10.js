@@ -608,6 +608,15 @@ Core.renderMarkdown = function(text) {
   if (window.marked) {
     if (_mdCache.has(text)) return _mdCache.get(text);
     var html = Core.sanitizeHtml(marked.parse(text));
+    // 将 ComfyUI 直连 URL 重写为代理 URL，避免 ComfyUI 离线时 500 错误
+    html = html.replace(
+      /https?:\/\/127\.0\.0\.1:8188\/view\?filename=([^"'\s&]+)(?:&amp;subfolder=([^"'\s&]*))?(?:&amp;type=([^"'\s&]*))?/g,
+      function(match, filename, subfolder, type) {
+        return 'http://127.0.0.1:8080/api/comfyui/view?filename=' + filename
+          + '&subfolder=' + (subfolder || '')
+          + '&type=' + (type || 'output');
+      }
+    );
     _mdCache.set(text, html);
     if (_mdCache.size > _MD_CACHE_MAX) {
       // 删除最早的 1/3 条目

@@ -483,6 +483,26 @@ async function startWebServer() {
     }
   });
 
+  // ComfyUI 图片代理（查看生成的图片）
+  app2.get('/api/comfyui/view', async (req, res) => {
+    var baseUrl = 'http://127.0.0.1:8188';
+    var filename = req.query.filename;
+    if (!filename) return res.status(400).json({ error: 'missing filename' });
+    try {
+      var url = baseUrl + '/view?filename=' + encodeURIComponent(filename)
+        + '&subfolder=' + encodeURIComponent(req.query.subfolder || '')
+        + '&type=' + encodeURIComponent(req.query.type || 'output');
+      var resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!resp.ok) return res.status(resp.status).json({ error: 'ComfyUI image fetch failed' });
+      var contentType = resp.headers.get('content-type') || 'image/png';
+      res.setHeader('Content-Type', contentType);
+      var buffer = Buffer.from(await resp.arrayBuffer());
+      res.send(buffer);
+    } catch (e) {
+      res.status(502).json({ error: 'ComfyUI 不可用: ' + e.message });
+    }
+  });
+
   // 📱 移动端 Web API
   setupMobileRoutes(app2, DATA_ROOT);
 

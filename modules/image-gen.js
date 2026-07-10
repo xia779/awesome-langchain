@@ -374,6 +374,22 @@ async function generateComfyUI(prompt, options) {
                 var imgInfo = node.images[0];
                 var imgUrl = baseUrl + '/view?filename=' + encodeURIComponent(imgInfo.filename)
                   + '&subfolder=' + (imgInfo.subfolder || '') + '&type=' + (imgInfo.type || 'output');
+                // 尝试将图片转为 base64 data URL，嵌入聊天记录后不依赖 ComfyUI
+                try {
+                  var imgResp = await fetch(imgUrl, { signal: AbortSignal.timeout(15000) });
+                  if (imgResp.ok) {
+                    var blob = await imgResp.blob();
+                    var dataUrl = await new Promise(function(resolve, reject) {
+                      var reader = new FileReader();
+                      reader.onloadend = function() { resolve(reader.result); };
+                      reader.onerror = reject;
+                      reader.readAsDataURL(blob);
+                    });
+                    imgUrl = dataUrl;
+                  }
+                } catch (fetchErr) {
+                  console.warn('⚠️ ComfyUI 图片 base64 转换失败，使用原始 URL');
+                }
                 // 关闭 WebSocket
                 if (_comfyuiWs) { try { _comfyuiWs.close(); } catch (e) {} _comfyuiWs = null; }
                 return {

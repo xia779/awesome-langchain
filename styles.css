@@ -2182,7 +2182,6 @@
       --bg: var(--bg);
       --bg-secondary: #263548;
       --panel: var(--text-dark);
-      --text: var(--border);
       --text-secondary: var(--text-alt);
       --border: var(--border-alt);
       --shadow: 0 4px 24px rgba(0,0,0,0.3);
@@ -2193,18 +2192,18 @@
     }
     body.dark-theme .msg.ai {
       background: var(--text-dark);
-      color: var(--border);
+      color: var(--text);
       border-color: var(--border-alt);
     }
     body.dark-theme .msg.ai .msg-timestamp {
       color: rgba(148, 163, 184, 0.45);
     }
-    body.dark-theme #input { background: rgba(255,255,255,0.03); color: var(--border); border-color: var(--border-alt); }
+    body.dark-theme #input { background: rgba(255,255,255,0.03); color: var(--text); border-color: var(--border-alt); }
     body.dark-theme #input:focus { background: var(--text-dark); }
     body.dark-theme .settings-modal { background: var(--text-dark); }
     body.dark-theme .settings-modal input,
     body.dark-theme .settings-modal select,
-    body.dark-theme .settings-modal textarea { background: var(--bg); color: var(--border); border-color: var(--border-alt); }
+    body.dark-theme .settings-modal textarea { background: var(--bg); color: var(--text); border-color: var(--border-alt); }
     body.dark-theme .settings-modal input:focus,
     body.dark-theme .settings-modal select:focus,
     body.dark-theme .settings-modal textarea:focus { background: var(--text-dark); }
@@ -2840,7 +2839,7 @@
     body.light-theme .msg.ai {
       background: #ffffff;
       border-color: #e2e8f0;
-      color: #1e293b;
+      color: var(--text);
     }
     body.light-theme .chat-item {
       color: #64748b;

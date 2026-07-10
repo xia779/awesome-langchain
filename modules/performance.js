@@ -174,6 +174,7 @@ function observeExistingMessages(container) {
 
 function collapseMessage(msg) {
   if (msg.dataset.collapsed === 'true') return;
+  if (msg.dataset.streaming === 'true') return; // 流式输出中不折叠
   // 保留高度占位，隐藏内容
   var h = msg.offsetHeight;
   if (h < 20) return; // 太小的不折叠

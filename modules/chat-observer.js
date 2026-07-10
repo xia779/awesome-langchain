@@ -86,6 +86,26 @@ function init(Core) {
 
   _observer.observe(container, { childList: true, subtree: true });
 
+  // 图片加载失败时显示占位符（处理 ComfyUI 离线等场景）
+  container.addEventListener('error', function(e) {
+    var img = e.target;
+    if (img.tagName !== 'IMG') return;
+    if (img.dataset.imgErrorHandled) return;
+    img.dataset.imgErrorHandled = 'true';
+    var placeholder = document.createElement('div');
+    placeholder.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:8px 16px;'
+      + 'background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;'
+      + 'color:#f87171;font-size:13px;';
+    placeholder.textContent = '🖼️ 图片加载失败';
+    if (img.alt) {
+      var alt = document.createElement('span');
+      alt.style.cssText = 'color:var(--text-secondary,#94a3b8);font-size:12px;';
+      alt.textContent = img.alt;
+      placeholder.appendChild(alt);
+    }
+    img.parentNode.replaceChild(placeholder, img);
+  }, true);
+
   // 处理已存在的消息
   var existing = container.querySelectorAll('.msg');
   for (var i = 0; i < existing.length; i++) {
