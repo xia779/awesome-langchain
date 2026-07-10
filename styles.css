@@ -902,6 +902,7 @@
       transition: transform 0.15s ease;
       width: fit-content;
       min-width: 60px;
+      contain: layout style;
     }
     .msg:hover {
       transform: translateY(-1px);

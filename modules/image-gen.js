@@ -117,7 +117,26 @@ async function generateSiliconFlow(prompt, size) {
       var imgList = data.images || data.data;
       if (imgList && imgList[0]) {
         var img = imgList[0];
-        if (img.url) return { url: img.url, revised_prompt: '' };
+        if (img.url) {
+          // 将远程 URL 转为 base64 data URL，避免 CDN 过期后图片 500
+          var finalUrl = img.url;
+          try {
+            var imgResp = await fetch(finalUrl, { signal: AbortSignal.timeout(30000) });
+            if (imgResp.ok) {
+              var blob = await imgResp.blob();
+              var dataUrl = await new Promise(function(resolve, reject) {
+                var reader = new FileReader();
+                reader.onloadend = function() { resolve(reader.result); };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+              finalUrl = dataUrl;
+            }
+          } catch (convErr) {
+            console.warn('⚠️ SiliconFlow 图片 base64 转换失败，使用原始 URL');
+          }
+          return { url: finalUrl, revised_prompt: '' };
+        }
         if (img.b64_json) return { url: 'data:image/png;base64,' + img.b64_json, revised_prompt: '' };
       }
       throw new Error('Silicon Flow \u8fd4\u56de\u683c\u5f0f\u5f02\u5e38');

@@ -1349,29 +1349,47 @@ function _setDarkThemeVars(root) {
   root.style.setProperty('--shadow', '0 4px 24px rgba(0,0,0,0.4)');
 }
 
+// 将 config 中的颜色值填充到 DOM 输入框（如果输入框存在）
+function _loadColorInputs() {
+  var c = Core.config || {};
+  var map = {
+    sidebarColorInput: c.sidebarColor || '#141414',
+    panelColorInput: c.panelColor || '#141414',
+    accentColorInput: c.accentColor || '#3b82f6',
+    textColorInput: c.textColor || '#e8e8e8',
+  };
+  Object.keys(map).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = map[id];
+  });
+}
+
 function _applyCustomColors() {
   var root = document.documentElement;
+  var c = Core.config || {};
+  // 优先读 DOM 输入框（用户正在拖动色盘时取实时值），否则回退到 config
   var sidebar = document.getElementById('sidebarColorInput');
   var panel = document.getElementById('panelColorInput');
   var accent = document.getElementById('accentColorInput');
   var textColor = document.getElementById('textColorInput');
 
-  if (sidebar && sidebar.value) {
-    root.style.setProperty('--sidebar-bg', sidebar.value);
-    Core.saveConfig({ sidebarColor: sidebar.value });
-  }
-  if (panel && panel.value) {
-    root.style.setProperty('--panel', panel.value);
-    Core.saveConfig({ panelColor: panel.value });
-  }
-  if (accent && accent.value) {
-    root.style.setProperty('--primary', accent.value);
-    Core.saveConfig({ accentColor: accent.value });
-  }
-  if (textColor && textColor.value) {
-    root.style.setProperty('--text', textColor.value);
-    Core.saveConfig({ textColor: textColor.value });
-  }
+  var sidebarVal = (sidebar && sidebar.value) || c.sidebarColor || '#141414';
+  var panelVal = (panel && panel.value) || c.panelColor || '#141414';
+  var accentVal = (accent && accent.value) || c.accentColor || '#3b82f6';
+  var textVal = (textColor && textColor.value) || c.textColor || '#e8e8e8';
+
+  root.style.setProperty('--sidebar-bg', sidebarVal);
+  root.style.setProperty('--panel', panelVal);
+  root.style.setProperty('--primary', accentVal);
+  root.style.setProperty('--text', textVal);
+
+  // 批量写入 config（单次 saveConfig，避免 4 次连续写文件）
+  Core.saveConfig({
+    sidebarColor: sidebarVal,
+    panelColor: panelVal,
+    accentColor: accentVal,
+    textColor: textVal,
+  });
 }
 
 module.exports = {
@@ -1452,6 +1470,9 @@ module.exports = {
         var mode = themeSelect.value;
         Core.saveConfig({ themeMode: mode });
         _applyThemeMode(mode);
+        // 主题切换会重置 :root CSS 变量，需重新填充自定义颜色
+        _loadColorInputs();
+        _applyCustomColors();
       });
     }
 
@@ -1475,8 +1496,9 @@ module.exports = {
   initMarketplacePanel();
 
     // ===== 启动时应用保存的主题模式和自定义颜色 =====
+    _loadColorInputs(); // 先将 config 颜色值写入 DOM 输入框
     _applyThemeMode(Core.config.themeMode || 'dark');
-    _applyCustomColors();
+    _applyCustomColors(); // 再应用（优先取 DOM 实时值 → config 回退）
 
     // ===== 技能管理 =====
     initSkillsPanel();

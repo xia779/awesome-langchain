@@ -396,7 +396,9 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       aiDiv.dataset.streaming = 'true';
       reply = await Core.api.callAPIStream(finalPrompt, injectedSystemPrompt, temperature, model, provider, (function() {
         var _streamRafId = 0;
+        var _scrollRafId = 0;
         var _pendingFullText = '';
+        var _container = Core.dom.chatContainer;
         // 创建持久的文本节点和光标（避免每帧 DOM 重建）
         var _textNode = document.createTextNode('');
         var _cursor = document.createElement('span');
@@ -412,18 +414,24 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
           if (_streamRafId) return;
           _streamRafId = requestAnimationFrame(function() {
             _streamRafId = 0;
-            // 直接修改文本节点值，不触发 DOM 增删（避免 MutationObserver 风暴）
+            // 写入：直接修改文本节点值（零 DOM 增删）
             _textNode.nodeValue = _pendingFullText;
-            var container = Core.dom.chatContainer;
-            var isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
-            if (isNearBottom) {
-              container.scrollTop = container.scrollHeight;
+            // 滚动检查延迟到下一帧，避免写后读导致强制重排
+            if (!_scrollRafId) {
+              _scrollRafId = requestAnimationFrame(function() {
+                _scrollRafId = 0;
+                var isNearBottom = _container.scrollHeight - _container.scrollTop - _container.clientHeight < 150;
+                if (isNearBottom) {
+                  _container.scrollTop = _container.scrollHeight;
+                }
+              });
             }
           });
         };
       })(), signal);
-      // 流式结束，移除标记
+      // 流式结束，设置冷却期标记（2 秒内不折叠）
       delete aiDiv.dataset.streaming;
+      aiDiv.dataset.streamEnded = Date.now().toString();
       // 最终渲染：一次性 markdown 渲染
       if (window.marked) {
         aiDiv.innerHTML = Core.renderMarkdown(reply);

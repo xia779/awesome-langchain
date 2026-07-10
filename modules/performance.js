@@ -175,6 +175,8 @@ function observeExistingMessages(container) {
 function collapseMessage(msg) {
   if (msg.dataset.collapsed === 'true') return;
   if (msg.dataset.streaming === 'true') return; // 流式输出中不折叠
+  // 流式结束后 2 秒冷却期不折叠，避免闪烁
+  if (msg.dataset.streamEnded && (Date.now() - parseInt(msg.dataset.streamEnded)) < 2000) return;
   // 保留高度占位，隐藏内容
   var h = msg.offsetHeight;
   if (h < 20) return; // 太小的不折叠
@@ -411,7 +413,7 @@ function saveDraft() {
     }
 
     var recoveryPath = path.join(Core.DATA_ROOT || '', PERF_CONFIG.crashRecoveryFile);
-    fs.writeFileSync(recoveryPath, JSON.stringify(recoveryData, null, 2));
+    fs.writeFile(recoveryPath, JSON.stringify(recoveryData, null, 2), function() {});
     stats.draftsSaved++;
   } catch (e) {
     // 静默失败
