@@ -151,27 +151,15 @@ function getTagColor(tag) {
 }
 
 function injectMessageActions() {
-  // 监听 chatContainer 的 DOM 变化，为新消息添加操作按钮
-  var container = document.getElementById('chatContainer');
-  if (!container) return;
-
-  var observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(m) {
-      m.addedNodes.forEach(function(node) {
-        if (node.nodeType === 1 && node.classList && (node.classList.contains('msg'))) {
-          addActionsToMessage(node);
-        }
-      });
-    });
+  // 通过统一 chatObserver 分发，不再创建独立 MutationObserver
+  if (!Core.chatObserver) {
+    console.warn('ux-enhance: Core.chatObserver 不可用，消息操作按钮未注册');
+    return;
+  }
+  Core.chatObserver.onMessage(function(node) {
+    addActionsToMessage(node);
   });
-  observer.observe(container, { childList: true });
-
-  // 也为现有消息添加
-  container.querySelectorAll('.msg').forEach(function(msgEl) {
-    addActionsToMessage(msgEl);
-  });
-
-  console.log('✅ ux-enhance: Message actions observer active');
+  console.log('✅ ux-enhance: Message actions 已注册到统一 chatObserver');
 }
 
 function addActionsToMessage(msgEl) {
@@ -262,10 +250,8 @@ function addActionsToMessage(msgEl) {
   }
 
   msgEl.appendChild(actionsDiv);
-
-  // Show/hide on hover
-  msgEl.addEventListener('mouseenter', function() { actionsDiv.style.display = 'flex'; });
-  msgEl.addEventListener('mouseleave', function() { actionsDiv.style.display = 'none'; });
+  // Show/hide 由 CSS .msg:hover .msg-hover-actions { display: flex !important; } 控制
+  // 不再需要 JS mouseenter/mouseleave 监听器（减少每消息 2 个 listener）
 }
 
 function createActionBtn(icon, title) {
@@ -289,24 +275,19 @@ function getMessageIndex(msgEl) {
 // ===== 代码块增强 =====
 
 function enhanceCodeBlocks() {
-  var container = document.getElementById('chatContainer');
-  if (!container) return;
-
-  var observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(m) {
-      m.addedNodes.forEach(function(node) {
-        if (node.nodeType === 1) {
-          var pres = node.querySelectorAll ? node.querySelectorAll('pre') : [];
-          pres.forEach(enhanceSingleCodeBlock);
-          if (node.tagName === 'PRE') enhanceSingleCodeBlock(node);
-        }
-      });
-    });
+  // 通过统一 chatObserver 分发，不再创建独立 MutationObserver
+  if (!Core.chatObserver) return;
+  Core.chatObserver.onMessage(function(node) {
+    if (node.querySelectorAll) {
+      var pres = node.querySelectorAll('pre');
+      for (var i = 0; i < pres.length; i++) enhanceSingleCodeBlock(pres[i]);
+    }
   });
-  observer.observe(container, { childList: true, subtree: true });
-
-  // Existing code blocks
-  container.querySelectorAll('pre').forEach(enhanceSingleCodeBlock);
+  // 处理已有代码块
+  var container = document.getElementById('chatContainer');
+  if (container) {
+    container.querySelectorAll('pre').forEach(enhanceSingleCodeBlock);
+  }
 }
 
 function enhanceSingleCodeBlock(pre) {
@@ -620,47 +601,46 @@ function _executePaletteCommand(cmdText) {
   }
 }
 
-// ===== 快捷键系统 =====
+// ===== 快捷键系统（通过统一 keyboard 分发器）=====
 function _registerKeyboardShortcuts() {
-  document.addEventListener('keydown', function(e) {
+  if (!Core.keyboard) return;
+  Core.keyboard.register('ux-enhance', 15, function(e) {
     // Ctrl+K / Cmd+K — 命令面板
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();
       if (_paletteOpen) _closePalette();
       else _openPalette();
-      return;
+      return false;
     }
     // Ctrl+F — 会话内搜索
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-      // 只在聊天区域内拦截
       e.preventDefault();
       _openConversationSearch();
-      return;
+      return false;
     }
     // Ctrl+N — 新建对话
     if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
       e.preventDefault();
       if (Core.session && Core.session.newChat) Core.session.newChat('chat');
-      return;
+      return false;
     }
     // Ctrl+Shift+S — 停止生成
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S') {
       e.preventDefault();
       if (Core.api && Core.api.stopGeneration) Core.api.stopGeneration();
-      return;
+      return false;
     }
     // Ctrl+D — 切换深度思考
     if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
       e.preventDefault();
       var btn = document.getElementById('deepThinkBtn');
       if (btn) btn.click();
-      return;
+      return false;
     }
-    // Escape — 关闭命令面板 / 停止生成
+    // Escape — 关闭命令面板 / 关闭搜索
     if (e.key === 'Escape') {
-      if (_paletteOpen) _closePalette();
-      else if (_searchPanelOpen) _closeConversationSearch();
-      return;
+      if (_paletteOpen) { _closePalette(); return false; }
+      if (_searchPanelOpen) { _closeConversationSearch(); return false; }
     }
   });
 }

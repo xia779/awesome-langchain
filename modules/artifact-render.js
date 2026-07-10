@@ -409,49 +409,18 @@ function processMessage(msgEl) {
   }
 }
 
-var _retries = 0;
-
 function startObserver() {
-  var container = document.getElementById('chatContainer');
-  if (!container) {
-    if (_retries < 10) {
-      _retries++;
-      console.warn('artifact-render: chatContainer 不存在，延迟重试');
-      setTimeout(startObserver, 1000);
-    } else {
-      console.warn('⚠️ [artifact-render] startObserver max retries reached');
-    }
+  // 通过统一 chatObserver 分发，不再创建独立 MutationObserver
+  if (!Core.chatObserver) {
+    console.warn('artifact-render: Core.chatObserver 不可用');
     return;
   }
-
-  observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(mutation) {
-      mutation.addedNodes.forEach(function(node) {
-        if (node.nodeType !== 1) return;
-        if (node.classList && node.classList.contains('msg')) {
-          // 延迟处理，等待 marked 渲染完成
-          setTimeout(function() { processMessage(node); }, 200);
-        }
-        // 也检查子节点中是否有 msg（批量渲染情况）
-        if (node.querySelectorAll) {
-          var msgs = node.querySelectorAll('.msg.ai');
-          msgs.forEach(function(msg) {
-            setTimeout(function() { processMessage(msg); }, 200);
-          });
-        }
-      });
-    });
+  Core.chatObserver.onMessage(function(node) {
+    if (node.classList.contains('msg')) {
+      setTimeout(function() { processMessage(node); }, 200);
+    }
   });
-
-  observer.observe(container, { childList: true, subtree: true });
-
-  // 处理已存在的消息
-  var existingMsgs = container.querySelectorAll('.msg.ai');
-  existingMsgs.forEach(function(msg) {
-    processMessage(msg);
-  });
-
-  console.log('✅ Artifact 渲染观察器已启动');
+  console.log('✅ Artifact 渲染已注册到统一 chatObserver');
 }
 
 // ═══════════════════════════════════════════

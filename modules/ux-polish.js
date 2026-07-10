@@ -342,72 +342,55 @@ function smartScrollToBottom(force) {
   polishState.userScrolledUp = false;
 }
 
-// ===== 消息入场动画 =====
+// ===== 消息入场动画（通过统一 chatObserver 分发）=====
 function setupMessageAnimation() {
-  var chatContainer = document.getElementById('chatContainer');
-  if (!chatContainer) return;
-
-  var observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(m) {
-      m.addedNodes.forEach(function(node) {
-        if (node.nodeType === 1 && node.classList && node.classList.contains('msg')) {
-          node.classList.add('msg-polish-enter');
-          // 动画结束后移除 class
-          setTimeout(function() { node.classList.remove('msg-polish-enter'); }, 350);
-
-          // 检查空状态
-          hideEmptyState('chatContainer');
-        }
-      });
-    });
+  if (!Core.chatObserver) return;
+  Core.chatObserver.onMessage(function(node) {
+    node.classList.add('msg-polish-enter');
+    setTimeout(function() { node.classList.remove('msg-polish-enter'); }, 350);
+    hideEmptyState('chatContainer');
   });
-
-  observer.observe(chatContainer, { childList: true });
 }
 
-// ===== 快捷键增强 =====
+// ===== 快捷键增强（通过统一 keyboard 分发器）=====
 function setupKeyboardShortcuts() {
-  document.addEventListener('keydown', function(e) {
+  if (!Core.keyboard) return;
+  Core.keyboard.register('ux-polish', 20, function(e) {
     // ? 键显示快捷键速查（不在输入框中时）
     if (e.key === '?' && !isInputFocused()) {
       e.preventDefault();
       toggleCheatsheet();
-      return;
+      return false;
     }
-
     // Escape 关闭速查
     if (e.key === 'Escape' && polishState.cheatsheetVisible) {
       e.preventDefault();
       toggleCheatsheet();
-      return;
+      return false;
     }
-
     // Ctrl+Shift+C 复制最后一条助手消息
     if (e.ctrlKey && e.shiftKey && e.key === 'C') {
       e.preventDefault();
       copyLastAssistantMessage();
-      return;
+      return false;
     }
-
     // Ctrl+Shift+N 新对话
     if (e.ctrlKey && e.shiftKey && e.key === 'N') {
       e.preventDefault();
       if (Core.session) Core.session.newChat();
-      return;
+      return false;
     }
-
     // Ctrl+. 切换上下文面板
     if (e.ctrlKey && e.key === '.') {
       e.preventDefault();
       if (Core.contextPanel) Core.contextPanel.toggle();
-      return;
+      return false;
     }
-
     // Ctrl+Shift+K 切换上下文面板（备选）
     if (e.ctrlKey && e.shiftKey && e.key === 'K') {
       e.preventDefault();
       if (Core.contextPanel) Core.contextPanel.toggle();
-      return;
+      return false;
     }
   });
 }

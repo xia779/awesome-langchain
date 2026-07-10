@@ -600,14 +600,59 @@ Core.sanitizeHtml = function(html) {
     .replace(/<object[\s\S]*?<\/object>/gi, '')
     .replace(/<embed[\s\S]*?>/gi, '');
 };
-// 安全渲染 Markdown：marked.parse() + DOMPurify
+// 安全渲染 Markdown：marked.parse() + DOMPurify（带 LRU 缓存）
+var _mdCache = new Map();
+var _MD_CACHE_MAX = 300;
 Core.renderMarkdown = function(text) {
   if (!text) return '';
   if (window.marked) {
-    return Core.sanitizeHtml(marked.parse(text));
+    if (_mdCache.has(text)) return _mdCache.get(text);
+    var html = Core.sanitizeHtml(marked.parse(text));
+    _mdCache.set(text, html);
+    if (_mdCache.size > _MD_CACHE_MAX) {
+      // 删除最早的 1/3 条目
+      var keys = _mdCache.keys();
+      var del = Math.floor(_MD_CACHE_MAX / 3);
+      while (del-- > 0) { var k = keys.next(); if (!k.done) _mdCache.delete(k.value); }
+    }
+    return html;
   }
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 };
+
+// ===== 统一键盘事件分发器 =====
+// 所有 document 级 keydown 监听器统一注册到此，按 priority 排序执行
+(function initKeyboardDispatcher() {
+  var _keyHandlers = [];
+  var _sorted = false;
+
+  Core.keyboard = {
+    /**
+     * 注册键盘快捷键处理器
+     * @param {string} name - 处理器名称（调试用）
+     * @param {number} priority - 优先级（数字越小越先执行）
+     * @param {Function} handler - fn(e) 返回 false 阻止后续处理器
+     */
+    register: function(name, priority, handler) {
+      _keyHandlers.push({ name: name, priority: priority, handler: handler });
+      _sorted = false;
+    },
+    _list: function() {
+      return _keyHandlers.slice().sort(function(a, b) { return a.priority - b.priority; });
+    }
+  };
+
+  document.addEventListener('keydown', function(e) {
+    if (!_sorted) {
+      _keyHandlers.sort(function(a, b) { return a.priority - b.priority; });
+      _sorted = true;
+    }
+    for (var i = 0; i < _keyHandlers.length; i++) {
+      var result = _keyHandlers[i].handler(e);
+      if (result === false) return; // 返回 false 表示已处理，阻止后续
+    }
+  });
+})();
 
 // ===== 启动入口 =====
 (function main() {
@@ -1512,7 +1557,8 @@ Core.renderMarkdown = function(text) {
     document.addEventListener('scroll', document._scrollMenuCloser, true);
 
     document._escMenuCloser = function(e) { if (e.key === 'Escape') menu.style.display = 'none'; };
-    document.addEventListener('keydown', document._escMenuCloser);
+    // 通过统一 keyboard 分发器注册（priority 2，仅次于截图）
+    if (Core.keyboard) Core.keyboard.register('context-menu-escape', 2, document._escMenuCloser);
 
     // 在聊天区域上监听右键（始终阻止默认菜单）
     chatContainer._contextMenuHandler = function(e) {
@@ -1995,29 +2041,30 @@ Core.renderMarkdown = function(text) {
   // ===== 初始化方向A/B/C =====
   // 🔧 initImagePreview/initFontSize/initTextToSpeech/loadMermaidCDN 已由 ui-media.js 模块自动初始化
 
-  // 🔧 统一 chatContainer Observer：TTS按钮注入 + Mermaid渲染（合并原两个独立 Observer）
-  (function initChatObserver() {
-    var chatContainer = document.getElementById('chatContainer');
-    if (!chatContainer) return;
-    var observer = new MutationObserver(function(mutations) {
-      for (var i = 0; i < mutations.length; i++) {
-        var nodes = mutations[i].addedNodes;
-        for (var j = 0; j < nodes.length; j++) {
-          var node = nodes[j];
-          if (node.nodeType !== 1 || !node.classList || !node.classList.contains('msg')) continue;
-          // TTS 按钮（仅 AI 消息）— 通过 Core 引用 ui-media.js 导出的函数
-          if (node.classList.contains('ai') && Core.addTTSButton) Core.addTTSButton(node);
-          // Mermaid 渲染（延迟 100ms 等待 innerHTML 稳定）
-          var _mermaidFn = Core._getRenderMermaidFn ? Core._getRenderMermaidFn() : null;
-          if (_mermaidFn) {
-            (function(n) { setTimeout(function() { _mermaidFn(n); }, 100); })(node);
-          }
-        }
+  // 🔧 TTS + Mermaid 处理（通过统一 chatObserver 分发，不再独立创建 MutationObserver）
+  if (Core.chatObserver) {
+    Core.chatObserver.onMessage(function(node) {
+      // TTS 按钮（仅 AI 消息）
+      if (node.classList.contains('ai') && Core.addTTSButton) Core.addTTSButton(node);
+      // Mermaid 渲染（延迟 100ms 等待 innerHTML 稳定）
+      var _mermaidFn = Core._getRenderMermaidFn ? Core._getRenderMermaidFn() : null;
+      if (_mermaidFn) {
+        setTimeout(function() { _mermaidFn(node); }, 100);
       }
     });
-    observer.observe(chatContainer, { childList: true });
-    console.log('✅ 统一 chatContainer Observer 已启动（TTS + Mermaid）');
-  })();
+    console.log('✅ TTS + Mermaid 已注册到统一 chatObserver');
+  } else {
+    // 回退：chatObserver 尚未就绪，延迟注册
+    setTimeout(function() {
+      if (Core.chatObserver) {
+        Core.chatObserver.onMessage(function(node) {
+          if (node.classList.contains('ai') && Core.addTTSButton) Core.addTTSButton(node);
+          var _mermaidFn = Core._getRenderMermaidFn ? Core._getRenderMermaidFn() : null;
+          if (_mermaidFn) setTimeout(function() { _mermaidFn(node); }, 100);
+        });
+      }
+    }, 2000);
+  }
 
   // ===== 初始化选项1：消息编辑与重新生成 =====
   initMessageActions();

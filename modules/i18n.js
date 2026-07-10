@@ -174,7 +174,15 @@ function init(_Core) {
   
   // 启动时刷新 UI
   setTimeout(() => refreshUI(), 1000);
-  
+
+  // Tab 键无障碍导航（通过统一 keyboard 分发器）
+  if (!_tabNavRegistered && Core.keyboard) {
+    _tabNavRegistered = true;
+    Core.keyboard.register('i18n-tab-nav', 60, function(e) {
+      KEYBOARD_NAV.handleTabKey(e);
+    });
+  }
+
 }
 
 // 翻译函数
@@ -381,9 +389,8 @@ var KEYBOARD_NAV = {
   }
 };
 
-document.addEventListener('keydown', function(e) {
-  KEYBOARD_NAV.handleTabKey(e);
-});
+// Tab 键导航（通过统一 keyboard 分发器注册，在 init 中执行）
+var _tabNavRegistered = false;
 
 // ----- 高对比度模式 -----
 function setHighContrast(enabled) {

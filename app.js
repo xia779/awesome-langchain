@@ -471,19 +471,22 @@ try {
     }
 
 
-    document.addEventListener('keydown', function(e) {
-      const input = document.getElementById('input');
-      const isInputFocused = document.activeElement === input;
-      // Enter 发送由 session.js 统一处理（Enter 发送, Shift+Enter 换行）
-      if (e.key === 'Escape' && isInputFocused) {
-        // 生成中 Escape 由 core-v10.js initShortcuts 处理（停止生成），此处不清空输入
-        var isGen = Core.api && typeof Core.api.isGenerating === 'function' && Core.api.isGenerating();
-        if (!isGen) {
-          e.preventDefault();
-          input.value = '';
+    // Escape 清空输入框（通过统一 keyboard 分发器，priority 40）
+    if (Core.keyboard) {
+      Core.keyboard.register('app-escape-clear', 40, function(e) {
+        if (e.key === 'Escape') {
+          var input = document.getElementById('input');
+          var isInputFocused = document.activeElement === input;
+          if (isInputFocused) {
+            var isGen = Core.api && typeof Core.api.isGenerating === 'function' && Core.api.isGenerating();
+            if (!isGen) {
+              e.preventDefault();
+              input.value = '';
+            }
+          }
         }
-      }
-    });
+      });
+    }
 
     // 导出格式选择器
     function showExportSelector() {
@@ -1146,14 +1149,16 @@ try {
       _resizing = false;
     });
 
-    // Escape 关闭截图覆盖
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && ssOverlay && ssOverlay.classList.contains('active')) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        closeScreenshot();
-      }
-    });
+    // Escape 关闭截图覆盖（通过统一 keyboard 分发器，priority 1 = 最高优先级）
+    if (Core.keyboard) {
+      Core.keyboard.register('screenshot-escape', 1, function(e) {
+        if (e.key === 'Escape' && ssOverlay && ssOverlay.classList.contains('active')) {
+          e.preventDefault();
+          closeScreenshot();
+          return false;
+        }
+      });
+    }
 
     // 暴露到 Core
     if (window.Core) {
@@ -1179,18 +1184,20 @@ try {
 })();
 
 
-// ===== Block: DevTools shortcut (from index.html L5754-L5765) =====
+// ===== Block: DevTools shortcut (通过统一 keyboard 分发器) =====
 
-window.addEventListener('keydown', function(e) {
-  if ((e.key === 'I' || e.key === 'i') && e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
-    e.preventDefault();
-    try {
-      const { ipcRenderer } = require('electron');
-      ipcRenderer.send('toggle-devtools');
-    } catch(err) {
+if (Core.keyboard) {
+  Core.keyboard.register('devtools', 50, function(e) {
+    if ((e.key === 'I' || e.key === 'i') && e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey) {
+      e.preventDefault();
+      try {
+        var ipcRenderer = require('electron').ipcRenderer;
+        ipcRenderer.send('toggle-devtools');
+      } catch(err) {}
+      return false;
     }
-  }
-});
+  });
+}
 
 
 // ===== Block: message search + lightbox (from index.html L5766-L6127) =====
@@ -1505,14 +1512,22 @@ window.addEventListener('keydown', function(e) {
     searchCount.textContent = '0/0'; 
   }
   
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'f' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
-      e.preventDefault(); 
-      if (searchBox.classList.contains('active')) hideSearch(); 
-      else showSearch(); 
-    }
-    if (e.key === 'Escape' && searchBox.classList.contains('active')) { e.preventDefault(); hideSearch(); }
-  });
+  // Ctrl+F / Escape 搜索（通过统一 keyboard 分发器，priority 30）
+  if (Core.keyboard) {
+    Core.keyboard.register('app-search', 30, function(e) {
+      if (e.key === 'f' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        e.preventDefault();
+        if (searchBox.classList.contains('active')) hideSearch();
+        else showSearch();
+        return false;
+      }
+      if (e.key === 'Escape' && searchBox.classList.contains('active')) {
+        e.preventDefault();
+        hideSearch();
+        return false;
+      }
+    });
+  }
   
   searchInput.addEventListener('input', function() {
     doSearch(this.value.trim());

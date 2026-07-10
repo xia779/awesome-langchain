@@ -76,10 +76,15 @@ function initImagePreview() {
   
   if (closeBtn) closeBtn.addEventListener('click', hidePreview);
   
-  // Escape 关闭
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && overlay.classList.contains('active')) hidePreview();
-  });
+  // Escape 关闭（通过统一 keyboard 分发器，priority 3 仅次于截图和右键菜单）
+  if (Core.keyboard) {
+    Core.keyboard.register('image-preview-escape', 3, function(e) {
+      if (e.key === 'Escape' && overlay.classList.contains('active')) {
+        hidePreview();
+        return false;
+      }
+    });
+  }
   
   // 滚轮缩放
   if (wrapper) {

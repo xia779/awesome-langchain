@@ -144,17 +144,12 @@ function enableVirtualScrolling(container) {
   // 监控已有的和未来的消息
   observeExistingMessages(container);
 
-  // MutationObserver 自动监控新添加的消息
-  var mutObs = new MutationObserver(function(mutations) {
-    mutations.forEach(function(m) {
-      m.addedNodes.forEach(function(node) {
-        if (node.nodeType === 1 && node.classList && node.classList.contains('msg')) {
-          _virtualState.observer.observe(node);
-        }
-      });
+  // 通过统一 chatObserver 监控新消息（不再创建独立 MutationObserver）
+  if (Core.chatObserver) {
+    Core.chatObserver.onMessage(function(node) {
+      if (_virtualState.observer) _virtualState.observer.observe(node);
     });
-  });
-  mutObs.observe(container, { childList: true });
+  }
 
   // 滚动节流：折叠/展开由 IntersectionObserver 驱动，此处只做统计
   var scrollTicking = false;
@@ -805,35 +800,32 @@ function setupPerformanceOptimizations() {
       enableVirtualScrolling(chatContainer);
       enableLazyLoading(chatContainer);
 
-      // 会话切换检测：chatContainer 被清空后重建时，重新初始化懒加载哨兵
-      var clearDetectObserver = new MutationObserver(function(mutations) {
-        for (var m = 0; m < mutations.length; m++) {
-          var mut = mutations[m];
-          // 大量子节点被移除 = 会话切换（innerHTML 清空）
-          if (mut.removedNodes.length > 5) {
-            // 短暂延迟等新消息渲染完毕
-            setTimeout(function() {
-              if (!document.getElementById('lazy-load-sentinel')) {
-                enableLazyLoading(chatContainer);
-              }
-            }, 200);
-            break;
-          }
-        }
-      });
-      clearDetectObserver.observe(chatContainer, { childList: true });
+      // 会话切换检测（通过统一 chatObserver.onClear）
+      if (Core.chatObserver) {
+        Core.chatObserver.onClear(function() {
+          setTimeout(function() {
+            if (!document.getElementById('lazy-load-sentinel')) {
+              enableLazyLoading(chatContainer);
+            }
+          }, 200);
+        });
+      }
     }
   }, 3000);
 
-  // 图片懒加载 — MutationObserver 自动处理
+  // 图片懒加载（通过统一 chatObserver.onMutation）
   setTimeout(function() {
     var container = document.getElementById('chatContainer');
     if (!container) return;
     lazyLoadImages(container);
-    var imgObserver = new MutationObserver(function() {
-      lazyLoadImages(container);
-    });
-    imgObserver.observe(container, { childList: true, subtree: true });
+    if (Core.chatObserver) {
+      var _lazyTimer = null;
+      Core.chatObserver.onMutation(function() {
+        // 防抖：100ms 内多次 DOM 变化只触发一次
+        if (_lazyTimer) clearTimeout(_lazyTimer);
+        _lazyTimer = setTimeout(function() { lazyLoadImages(container); }, 100);
+      });
+    }
   }, 2000);
 
   // 预热 marked 解析器

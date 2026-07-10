@@ -253,37 +253,16 @@ function processMessage(msgEl) {
   }
 }
 
-var observer = null;
-var _retries = 0;
-
 function startObserver() {
-  var container = document.getElementById('chatContainer');
-  if (!container) {
-    if (_retries < 10) {
-      _retries++;
-      setTimeout(startObserver, 1000);
-    } else {
-      console.warn('⚠️ [present-files] startObserver max retries reached');
-    }
+  // 通过统一 chatObserver 分发，不再创建独立 MutationObserver
+  if (!Core.chatObserver) {
+    console.warn('present-files: Core.chatObserver 不可用');
     return;
   }
-
-  observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(mutation) {
-      mutation.addedNodes.forEach(function(node) {
-        if (node.nodeType !== 1) return;
-        if (node.classList && node.classList.contains('msg')) {
-          setTimeout(function() { processMessage(node); }, 500);
-        }
-      });
-    });
-  });
-
-  observer.observe(container, { childList: true, subtree: true });
-
-  // 处理已存在的消息
-  container.querySelectorAll('.msg.ai').forEach(function(msg) {
-    processMessage(msg);
+  Core.chatObserver.onMessage(function(node) {
+    if (node.classList.contains('msg')) {
+      setTimeout(function() { processMessage(node); }, 500);
+    }
   });
 }
 

@@ -273,7 +273,9 @@ var _historyIndex = -1;
 var _currentQuote = null; // 当前引用的消息 { msgIndex, role, content }
 
 function initShortcuts() {
-  document.addEventListener('keydown', function(e) {
+  // 通过统一 keyboard 分发器注册（priority 5 = 最先执行）
+  if (!Core.keyboard) { console.warn('ui-interactions: Core.keyboard 不可用'); return; }
+  Core.keyboard.register('ui-interactions', 5, function(e) {
     var input = document.getElementById('input');
     if (!input) return;
     var isInputFocused = document.activeElement === input;
@@ -284,7 +286,7 @@ function initShortcuts() {
       e.preventDefault();
       input.focus();
       input.select();
-      return;
+      return false;
     }
     // Ctrl+N: 新建会话
     if (key === 'n' && (e.ctrlKey || e.metaKey) && !isInputFocused) {
@@ -292,7 +294,7 @@ function initShortcuts() {
       if (Core.session && typeof Core.session.newChat === 'function') {
         Core.session.newChat('chat', null);
       }
-      return;
+      return false;
     }
     // Esc: 优先退出多选模式，其次停止生成
     if (e.key === 'Escape') {
@@ -300,17 +302,17 @@ function initShortcuts() {
       if (multiSelectBtn && multiSelectBtn.classList.contains('active')) {
         e.preventDefault();
         if (Core.exitMultiSelectMode) Core.exitMultiSelectMode();
-        return;
+        return false;
       }
       if (Core.api) {
         var wasGenerating = typeof Core.api.isGenerating === 'function' && Core.api.isGenerating();
         if (wasGenerating && Core.api.stopGeneration) {
           e.preventDefault();
-          e.stopImmediatePropagation(); // 阻止后续 Escape 处理器（清空输入框等）
           Core.api.stopGeneration();
+          return false;
         }
       }
-      return;
+      return; // 不阻止后续 Escape 处理器（清空输入框等）
     }
     // Ctrl+Shift+S: 截图分析
     if (key === 's' && e.ctrlKey && e.shiftKey) {
@@ -318,13 +320,13 @@ function initShortcuts() {
       if (Core.screenshot && Core.screenshot.capture) {
         Core.screenshot.capture();
       }
-      return;
+      return false;
     }
     // Ctrl+Shift+F: 聚焦输入框
     if (key === 'f' && e.ctrlKey && e.shiftKey) {
       e.preventDefault();
       input.focus();
-      return;
+      return false;
     }
     // Ctrl+↑/↓: 切换历史输入
     if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.ctrlKey && isInputFocused) {
@@ -336,7 +338,7 @@ function initShortcuts() {
       if (_inputHistory.length > 0 && _historyIndex >= 0) {
         input.value = _inputHistory[_historyIndex];
       }
-      return;
+      return false;
     }
     // Ctrl+/: 显示/隐藏快捷键面板
     // 使用 e.keyCode 兼容不同键盘布局（191 = 主键盘 / 键）
@@ -346,14 +348,14 @@ function initShortcuts() {
       if (hint) {
         hint.classList.toggle('show');
       }
-      return;
+      return false;
     }
     if (key === 'e' && (e.ctrlKey || e.metaKey) && !isInputFocused) {
       e.preventDefault();
       if (Core.export && Core.export.exportCurrentSession) {
         Core.export.exportCurrentSession('json');
       }
-      return;
+      return false;
     }
     // Ctrl+1~9: 快速切换会话
     if (key >= '1' && key <= '9' && (e.ctrlKey || e.metaKey) && !isInputFocused) {
@@ -371,7 +373,7 @@ function initShortcuts() {
           setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 2000);
         }
       }
-      return;
+      return false;
     }
     // Enter 发送时记录到历史
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && isInputFocused) {
@@ -382,7 +384,7 @@ function initShortcuts() {
       }
     }
   });
-  console.log('✅ 快捷键系统已启用 (Ctrl+K聚焦, Ctrl+N新建, Ctrl+Shift+S截图, Esc停止, Ctrl+Shift+F聚焦, Ctrl+↑↓历史, Ctrl+E导出)');
+  console.log('✅ 快捷键系统已启用 (统一 keyboard 分发器)');
 }
 
 var _systemMediaQuery = null;
