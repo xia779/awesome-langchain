@@ -13,7 +13,8 @@
     "dist:linux": "electron-builder --linux --x64 --arm64",
     "dist:arm": "electron-builder --linux --armv7l",
     "dist:arm64": "electron-builder --linux --arm64",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "test": "node --test --test-force-exit tests/*.test.js"
   },
   "devDependencies": {
     "electron": "^42.4.1",

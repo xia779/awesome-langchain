@@ -610,6 +610,25 @@ function getProfileString() {
   return lines.length > 1 ? lines.join('\n') : '';
 }
 
+function formatProfile(profile) {
+  if (!profile || Object.keys(profile).length === 0) return '暂无用户画像';
+  var lines = [];
+  if (profile.name) lines.push('👤 ' + profile.name);
+  if (profile.role) lines.push('💼 ' + profile.role + (profile.company ? ' @ ' + profile.company : ''));
+  if (profile.email) lines.push('📧 ' + profile.email);
+  if (profile.os) lines.push('💻 ' + profile.os + (profile.editor ? ' + ' + profile.editor : ''));
+  if (profile.programming_languages) lines.push('🔧 ' + profile.programming_languages);
+  if (profile.preferences) {
+    var prefs = Array.isArray(profile.preferences) ? profile.preferences.join(', ') : profile.preferences;
+    lines.push('⚙️ ' + prefs);
+  }
+  if (profile.projects) {
+    var projs = Array.isArray(profile.projects) ? profile.projects.join(', ') : profile.projects;
+    lines.push('📁 ' + projs);
+  }
+  return lines.length > 0 ? lines.join('\n') : '暂无用户画像';
+}
+
 // ===== 4. 每日记忆日志 =====
 
 function _today() {
