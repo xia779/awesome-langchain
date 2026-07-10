@@ -546,6 +546,11 @@ Core.showToast = function(message, type, duration) {
 Core.showErrorToast = function(message, duration) { Core.showToast(message, 'error', duration || 5000); };
 Core.showSuccessToast = function(message, duration) { Core.showToast(message, 'success', duration || 3000); };
 Core.showWarningToast = function(message, duration) { Core.showToast(message, 'warning', duration || 4000); };
+Core.showNotification = function(title, body) {
+  var msg = title;
+  if (body) msg += ': ' + body;
+  Core.showToast(msg, 'info', 4000);
+};
 Core.showAlert = function(message) {
   if (Core.showToast) { Core.showToast(message, 'info', 4000); }
   else { alert(message); }
@@ -668,14 +673,14 @@ Core.renderMarkdown = function(text) {
         if (action === 'new-chat') {
           if (Core.session && Core.session.newChat) Core.session.newChat('chat', null);
         } else if (action === 'knowledge') {
-          if (Core.openSettingsBtn) Core.openSettingsBtn.click();
+          if (Core.dom.openSettingsBtn) Core.dom.openSettingsBtn.click();
         } else if (action === 'agent') {
           // 切换 Agent 模式按钮
           var agentBtn = document.getElementById('agentModeBtn');
           if (agentBtn) { agentBtn.click(); }
           else if (Core.dom.input) { Core.dom.input.value = '/agent '; Core.dom.input.focus(); }
         } else if (action === 'tools') {
-          if (Core.openSettingsBtn) Core.openSettingsBtn.click();
+          if (Core.dom.openSettingsBtn) Core.dom.openSettingsBtn.click();
         } else if (action === 'history') {
           var chatSearch = document.getElementById('chatSearch');
           if (chatSearch) chatSearch.focus();
@@ -779,56 +784,7 @@ Core.renderMarkdown = function(text) {
       webBtn.classList.add('active');
     }
 
-    // 🔧 深度思考按钮：完全独立的初始化
-    // 关键：clone 替换以彻底清除旧版本遗留的事件监听器
-    var dtBtnOld = document.getElementById('deepThinkBtn');
-    if (dtBtnOld) {
-      var dtBtn = dtBtnOld.cloneNode(true);
-      dtBtnOld.parentNode.replaceChild(dtBtn, dtBtnOld);
-      Core.dom.deepThinkBtn = dtBtn;
-      dtBtn.addEventListener('click', function onDeepThinkClick() {
-        var currentlyActive = dtBtn.classList.contains('active');
-        var newActive = !currentlyActive;
-        if (newActive) {
-          dtBtn.classList.add('active');
-          dtBtn.style.background = '#dbeafe';
-          dtBtn.style.color = '#3b82f6';
-          dtBtn.style.borderColor = '#3b82f6';
-          dtBtn.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.2)';
-          Core.dom.status.textContent = '🧠 深度思考已开启';
-          Core.config.deepThink = true;
-          console.log('🧠 深度思考已激活');
-        } else {
-          dtBtn.classList.remove('active');
-          dtBtn.style.background = '#f8fafc';
-          dtBtn.style.color = '#64748b';
-          dtBtn.style.borderColor = '#e2e8f0';
-          dtBtn.style.boxShadow = 'none';
-          Core.dom.status.textContent = '🧠 深度思考已关闭';
-          Core.config.deepThink = false;
-          console.log('🧠 深度思考已关闭');
-        }
-        setTimeout(function() { Core.saveConfig(Core.config); }, 50);
-        setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 1500);
-      });
-      
-      // 恢复上次状态
-      if (Core.config.deepThink) {
-        dtBtn.classList.add('active');
-        dtBtn.style.background = '#dbeafe';
-        dtBtn.style.color = '#3b82f6';
-        dtBtn.style.borderColor = '#3b82f6';
-        dtBtn.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.2)';
-      } else {
-        // 确保非 active 状态的样式正确
-        dtBtn.style.background = '#f8fafc';
-        dtBtn.style.color = '#64748b';
-        dtBtn.style.borderColor = '#e2e8f0';
-        dtBtn.style.boxShadow = 'none';
-      }
-    } else {
-      console.warn('⚠️ 深度思考按钮未找到，跳过');
-    }
+    // 🔧 深度思考按钮由 think.js 模块统一管理（避免双重绑定）
 
   })();
 
@@ -1201,6 +1157,10 @@ Core.renderMarkdown = function(text) {
       Core.api.sendMessage();
     }
   }
+
+  // 暴露给 ux-enhance.js 消息操作按钮使用
+  Core.enterEditMode = enterEditMode;
+  Core.regenerateMessage = regenerateMessage;
 
   // ===== 消息引用/回复功能 =====
   function initQuoteBar() {

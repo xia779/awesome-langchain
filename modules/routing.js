@@ -338,6 +338,24 @@ module.exports = {
       listAgents: listAgents,
       getAgent: function(id) { return AGENTS[id] || null; },
       callAgent: callAgent,
+
+      // 命令注册桥接：模块通过此方法注册斜杠命令，
+      // 实际委托给 Core.custom.registerCommand()
+      register: function(cmd, handler, desc) {
+        if (Core.custom && Core.custom.registerCommand) {
+          Core.custom.registerCommand(cmd, desc || '', handler, false);
+        } else {
+          // custom.js 尚未初始化，延迟注册
+          var pending = cmd;
+          setTimeout(function() {
+            if (Core.custom && Core.custom.registerCommand) {
+              Core.custom.registerCommand(cmd, desc || '', handler, false);
+            } else {
+              console.warn('[routing] register failed: Core.custom unavailable for ' + pending);
+            }
+          }, 500);
+        }
+      },
     };
     console.log('✅ 统一路由引擎已加载（主管模式 + 智能路由合并）');
   }

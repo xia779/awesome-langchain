@@ -238,12 +238,10 @@ function addActionsToMessage(msgEl) {
     var editBtn = createActionBtn('edit', '编辑');
     editBtn.onclick = function(e) {
       e.stopPropagation();
-      // Trigger existing edit functionality
-      var idx = getMessageIndex(msgEl);
       if (Core.enterEditMode) {
-        Core.enterEditMode(idx);
+        Core.enterEditMode(msgEl);
       } else if (typeof window.enterEditMode === 'function') {
-        window.enterEditMode(idx);
+        window.enterEditMode(msgEl);
       }
     };
     actionsDiv.appendChild(editBtn);
@@ -254,11 +252,10 @@ function addActionsToMessage(msgEl) {
     var regenBtn = createActionBtn('autorenew', '重新生成');
     regenBtn.onclick = function(e) {
       e.stopPropagation();
-      var idx = getMessageIndex(msgEl);
       if (Core.regenerateMessage) {
-        Core.regenerateMessage(idx);
+        Core.regenerateMessage(msgEl);
       } else if (typeof window.regenerateMessage === 'function') {
-        window.regenerateMessage(idx);
+        window.regenerateMessage(msgEl);
       }
     };
     actionsDiv.appendChild(regenBtn);

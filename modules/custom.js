@@ -149,10 +149,10 @@ function executeCommand(input) {
   }
 }
 
-function registerCommand(name, desc, action) {
+function registerCommand(name, desc, action, persist) {
   if (!name.startsWith('/')) name = '/' + name;
   customCommands[name] = { desc, action };
-  saveCustomCommands();
+  if (persist !== false) saveCustomCommands();
 }
 
 function unregisterCommand(name) {
