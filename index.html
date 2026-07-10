@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 🔧 禁用缓存，确保修改后的文件被重新加载 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>AI智能体</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-theme">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+
+<link rel="stylesheet" href="styles.css">
+<base target="_blank">
+</head>
+<body>
+
+<!-- ===== 登录遮罩（已修复语法 + 美化）===== -->
+<div id="loginOverlay">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="assets/ai-avatar.png" class="login-logo-icon" alt="AI" style="width:64px;height:64px;border-radius:50%;object-fit:cover;">
+      <h2>AI 智能体</h2>
+      <p class="login-subtitle">你的私人 AI 助手</p>
+    </div>
+
+    <div class="login-input-group">
+      <label for="loginUsername">用户名</label>
+      <div class="login-input-wrap">
+        <span class="login-input-icon">👤</span>
+        <input type="text" id="loginUsername" placeholder="请输入用户名（如 admin）" autocomplete="username" />
+      </div>
+    </div>
+
+    <div id="loginError"></div>
+
+    <div class="login-btn-group">
+      <button id="loginBtn">🔐 登录</button>
+      <button id="registerBtn">📝 注册</button>
+    </div>
+
+    <div class="login-users-section" id="userListSection" style="display:none;">
+      <div class="login-users-title">已有用户</div>
+      <div id="userListItems"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 汉堡菜单 ===== -->
+<div id="menuToggle" title="切换侧边栏">☰</div>
+<button id="shortcutHintBtn" class="icon-btn top-bar-btn" title="快捷键 (Ctrl+/)"><span class="material-icons-outlined" style="font-size:18px;">keyboard</span></button>
+
+<!-- ===== 侧边栏 ===== -->
+<div id="sidebar">
+  <div class="sidebar-header">
+    <span id="appTitle">AI 智能体</span>
+    <button id="newChatBtn" title="新建对话">+</button>
+  </div>
+  <div class="sidebar-search-area">
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="chatSearch" placeholder="搜索会话..." />
+      <button id="clearSearch" title="清除搜索">×</button>
+    </div>
+    <div class="date-filter">
+      <button class="filter-btn active" data-filter="all">全部</button>
+      <button class="filter-btn" data-filter="today">今天</button>
+      <button class="filter-btn" data-filter="yesterday">昨天</button>
+      <button class="filter-btn" data-filter="week">本周</button>
+    </div>
+  </div>
+    <div class="search-results-panel" id="searchResultsPanel">
+      <div class="search-results-header">
+        <span>🔍 搜索结果</span>
+        <button id="closeSearchResults" title="关闭">×</button>
+      </div>
+      <div class="search-results-list" id="searchResultsList"></div>
+    </div>
+    <ul id="chatList"></ul>
+
+  <!-- 角色选择区（已隐藏：角色已融入树形侧边栏） -->
+  <!-- 角色数据由 inline JS ROLES 对象和 Core.config.roles 统一管理 -->
+
+  <div class="sidebar-footer">
+    <!-- 功能图标栏 -->
+    <div class="icon-bar">
+      <input type="file" id="fileInput" accept=".txt,.md,.pdf,.json,.js,.py,.docx,.doc,.xlsx,.xls,.csv,.pptx,.ppt" style="display:none;" />
+      <input type="file" id="importFileInput" accept=".json" style="display:none;">
+      <button id="uploadBtn" class="icon-btn" title="上传文件"><span class="material-icons-outlined">upload_file</span></button>
+      <button id="exportBtn" class="icon-btn" title="导出会话"><span class="material-icons-outlined">download</span></button>
+      <button id="toolbarBackupBtn" class="icon-btn" title="备份数据"><span class="material-icons-outlined">backup</span></button>
+      <button id="importBtn" class="icon-btn" title="导入数据"><span class="material-icons-outlined">file_open</span></button>
+      <button id="checkUpdateBtn" class="icon-btn" title="检查更新"><span class="material-icons-outlined">update</span></button>
+      <button id="switchUserBtn" class="icon-btn" title="切换用户"><span class="material-icons-outlined">person</span></button>
+      <button id="openSettingsBtn" class="icon-btn" title="设置"><span class="material-icons-outlined">settings</span></button>
+    </div>
+    <div id="currentUserDisplay" class="user-display"></div>
+  </div>
+</div>
+
+<!-- ===== 主区域 ===== -->
+<div id="main-container">
+  <div id="chatContainer">
+</div>
+  
+  <!-- 🔧 滚动到底部按钮（居中悬浮于输入框上方） -->
+  <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" title="滚动到底部">
+    <span class="material-icons-outlined" style="font-size:20px;">keyboard_arrow_down</span>
+  </button>
+
+<!-- ===== 方向A1：消息搜索框 ===== -->
+<div class="msg-search-box" id="msgSearchBox">
+  <input type="text" id="msgSearchInput" placeholder="搜索消息..." />
+  <button class="search-btn" id="msgSearchPrev" title="上一个">▲</button>
+  <button class="search-btn" id="msgSearchNext" title="下一个">▼</button>
+  <span class="search-count" id="msgSearchCount">0/0</span>
+  <button class="search-close" id="msgSearchClose" title="关闭">&times;</button>
+</div>
+
+<!-- 搜索历史下拉面板 -->
+<div class="search-history-dropdown" id="searchHistoryDropdown">
+  <div class="search-history-header">
+    <span class="search-history-title">搜索历史</span>
+    <button class="search-history-clear" id="searchHistoryClear">清空</button>
+  </div>
+  <div id="searchHistoryList"></div>
+</div>
+
+<!-- ===== 方向A2：图片预览遮罩层 ===== -->
+<div class="image-preview-overlay" id="imagePreviewOverlay">
+  <button class="image-preview-close" id="imagePreviewClose">&times;</button>
+  <div class="preview-wrapper" id="previewWrapper">
+    <img src="" alt="预览" id="imagePreviewImg" draggable="false" />
+  </div>
+  <div class="image-preview-bar">
+    <button id="imagePreviewZoomOut" title="缩小">➖</button>
+    <span class="zoom-level" id="zoomLevel">100%</span>
+    <button id="imagePreviewZoomIn" title="放大">➕</button>
+    <div class="bar-divider"></div>
+    <button id="imagePreviewRotateLeft" title="向左旋转">↺</button>
+    <button id="imagePreviewRotateRight" title="向右旋转">↻</button>
+    <div class="bar-divider"></div>
+    <button id="imagePreviewReset" title="重置">⟲</button>
+    <div class="bar-divider"></div>
+    <button id="imagePreviewDownload">💾 下载</button>
+    <button id="imagePreviewCopy">📋 复制</button>
+  </div>
+</div>
+
+  <div id="input-area">
+    <div id="attachmentPreview" style="display:none; padding:8px 12px; gap:8px; flex-wrap:wrap; border-bottom:1px solid var(--border); background:var(--panel);"></div>
+
+    <!-- 顶部工具行：新建 + 模式标签 + 右侧工具图标 -->
+    <div class="input-top-row">
+      <div class="input-left-actions">
+        <button id="appsMenuBtn" class="icon-btn" title="应用与插件"><span class="material-icons-outlined">apps</span></button>
+        <button id="webSearchBtn" class="icon-btn mode-tag" title="联网搜索"><span class="material-icons-outlined">travel_explore</span></button>
+        <button id="deepThinkBtn" class="icon-btn mode-tag" title="深度思考"><span class="material-icons-outlined">psychology</span></button>
+        <button id="streamBtn" class="icon-btn mode-tag active" title="流式输出"><span class="material-icons-outlined">bolt</span></button>
+        <button id="agentModeBtn" class="icon-btn mode-tag" title="Agent 模式 — 启用后 AI 可自主调用工具完成复杂任务"><span class="material-icons-outlined">smart_toy</span></button>
+      </div>
+      <div class="input-right-actions">
+        <button id="voiceBtn" class="icon-btn" title="语音输入"><span class="material-icons-outlined">mic</span></button>
+        <button id="speakBtn" class="icon-btn" title="朗读回复"><span class="material-icons-outlined">volume_up</span></button>
+        <button id="imageBtn" class="icon-btn" title="上传图片"><span class="material-icons-outlined">image</span></button>
+        <button id="screenshotBtn" class="icon-btn" title="截图分析 (Ctrl+Shift+S)"><span class="material-icons-outlined">screenshot_monitor</span></button>
+        <button id="promptBtn" class="icon-btn" title="提示词库"><span class="material-icons-outlined">format_list_bulleted</span></button>
+        <button id="roleBtn" class="icon-btn" title="角色切换"><span class="material-icons-outlined">theater_comedy</span></button>
+      </div>
+    </div>
+
+    <!-- 输入行：模型选择 + 文本框 + 发送 -->
+    <div class="input-row">
+      <div class="model-tag" id="modelTag" title="切换模型">
+        <span class="material-icons-outlined" style="font-size:14px;">smart_toy</span>
+        <span id="modelTagName">DeepSeek V4</span>
+        <span class="material-icons-outlined" style="font-size:14px; opacity:0.5;">expand_more</span>
+        <select id="modelSelect" title="选择模型">
+          <option value="deepseek:deepseek-v4-flash">DeepSeek V4</option>
+          <option value="deepseek:deepseek-chat">DeepSeek V3</option>
+          <option value="deepseek:deepseek-reasoner">DeepSeek R1</option>
+          <option value="qwen:qwen-plus">通义千问 Plus</option>
+          <option value="doubao:doubao-pro-32k">豆包 Pro</option>
+          <option value="ollama:qwen2.5:7b">Qwen2.5 7B (Ollama)</option>
+          <option value="ollama:llama3.1:8b">Llama3.1 8B (Ollama)</option>
+          <option value="ollama:tinyllama:latest">TinyLlama (Ollama)</option>
+          <option value="silicon:deepseek-ai/DeepSeek-V3">DeepSeek-V3 (硅基流动)</option>
+          <option value="silicon:deepseek-ai/DeepSeek-V3.2">DeepSeek-V3.2 (硅基流动)</option>
+          <option value="silicon:deepseek-ai/DeepSeek-R1">DeepSeek-R1 (硅基流动)</option>
+          <option value="silicon:deepseek-ai/DeepSeek-V4-Flash">DeepSeek-V4-Flash (硅基流动)</option>
+          <option value="silicon:Qwen/Qwen3-32B">Qwen3-32B (硅基流动)</option>
+          <option value="silicon:Qwen/Qwen3-8B">Qwen3-8B (硅基流动)</option>
+          <option value="silicon:Qwen/Qwen3.5-397B-A17B">Qwen3.5-397B (硅基流动)</option>
+          <option value="silicon:Qwen/Qwen3.5-27B">Qwen3.5-27B (硅基流动)</option>
+          <option value="silicon:Qwen/QwQ-32B">QwQ-32B 推理 (硅基流动)</option>
+          <option value="silicon:zai-org/GLM-4.7">GLM-4.7 (硅基流动)</option>
+          <option value="silicon:zai-org/GLM-4.6V">GLM-4.6V 视觉 (硅基流动)</option>
+          <option value="silicon:Qwen/Qwen3-Coder-480B-A35B-Instruct">Qwen3-Coder-480B (硅基流动)</option>
+        </select>
+      </div>
+      <textarea id="input" placeholder="输入消息，Shift+Enter换行..." rows="1"></textarea>
+      <button id="send" title="发送" onclick="if(window.Core&&Core.api&&Core.api.sendMessage)Core.api.sendMessage()"><span class="material-icons-outlined" style="font-size:20px;">arrow_upward</span></button>
+    </div>
+    <div id="status">✅ 已就绪</div>
+  </div>
+
+  <!-- 应用与插件菜单 -->
+  <div class="apps-menu-panel" id="appsMenuPanel">
+    <div class="apps-menu-header">
+      <span>应用与插件</span>
+      <button class="apps-menu-close" id="appsMenuClose">&times;</button>
+    </div>
+    <div class="apps-menu-grid">
+      <div class="apps-menu-item" data-action="new-chat">
+        <span class="material-icons-outlined">add_circle</span>
+        <span>新建对话</span>
+      </div>
+      <div class="apps-menu-item" data-action="knowledge">
+        <span class="material-icons-outlined">menu_book</span>
+        <span>知识库</span>
+      </div>
+      <div class="apps-menu-item" data-action="agent">
+        <span class="material-icons-outlined">smart_toy</span>
+        <span>Agent</span>
+      </div>
+      <div class="apps-menu-item" data-action="tools">
+        <span class="material-icons-outlined">build</span>
+        <span>工具集</span>
+      </div>
+      <div class="apps-menu-item" data-action="history">
+        <span class="material-icons-outlined">history</span>
+        <span>历史记录</span>
+      </div>
+      <div class="apps-menu-item" data-action="export-all">
+        <span class="material-icons-outlined">file_download</span>
+        <span>导出全部</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== P2: 提示词面板 ===== -->
+<div class="prompt-panel" id="promptPanel">
+  <div class="prompt-panel-header">
+    <h4>📋 提示词库</h4>
+    <button class="prompt-panel-close" id="promptPanelClose">&times;</button>
+  </div>
+  <div class="prompt-list" id="promptList"></div>
+</div>
+
+<!-- ===== P2: 角色面板 ===== -->
+<div class="role-panel" id="rolePanel">
+  <div class="role-panel-header">
+    <h4>🎭 角色预设</h4>
+    <button class="role-panel-close" id="rolePanelClose">&times;</button>
+  </div>
+  <div class="role-list" id="roleList"></div>
+</div>
+
+<!-- ===== 设置面板 ===== -->
+<div class="settings-modal" id="settingsModal">
+  <button class="close-modal" id="closeSettingsBtn">&times;</button>
+  <h3><span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;">settings</span>全局设置</h3>
+
+  <!-- 分组1：外观与通用 -->
+  <details class="settings-group" open>
+    <summary class="settings-group-header">
+      <span class="material-icons-outlined">tune</span>
+      <span>外观与通用</span>
+    </summary>
+    <div class="settings-group-body">
+      <div class="api-group">
+        <label>界面语言</label>
+        <select id="languageSelect"><option value="zh-CN">中文</option><option value="en-US">English</option></select>
+      </div>
+      <div class="api-group">
+        <label>界面主题</label>
+        <select id="themeSelect">
+          <option value="dark">🌙 深色模式</option>
+          <option value="light">☀️ 浅色模式</option>
+          <option value="system">💻 跟随系统</option>
+        </select>
+      </div>
+      <div class="api-group">
+        <label>应用名称</label>
+        <input id="appNameInput" value="AI智能体" />
+        <label>聊天背景（图片路径或颜色）</label>
+        <input id="bgInput" placeholder="#f8fafc 或图片路径" />
+      </div>
+      <div class="api-group color-row">
+        <div class="color-item">
+          <label>用户气泡</label>
+          <input id="bubbleUserInput" type="color" value="#3b82f6" />
+        </div>
+        <div class="color-item">
+          <label>AI 气泡</label>
+          <input id="bubbleAIInput" type="color" value="#f1f5f9" />
+        </div>
+      </div>
+      <div class="api-group">
+        <label>聊天温度 <span class="temp-display" id="tempDisplay">0.7</span></label>
+        <input type="range" id="temperatureSlider" min="0" max="2" step="0.1" value="0.7" />
+      </div>
+      <div class="api-group">
+        <label>聊天字体大小 <span class="temp-display" id="fontSizeDisplay">14px</span></label>
+        <input type="range" id="fontSizeSlider" min="12" max="20" step="1" value="14" />
+      </div>
+      <div class="api-group">
+        <label class="auto-route-label"><input type="checkbox" id="autoRouteCheckbox" /> 自动路由模型（根据联网状态切换）</label>
+        <label class="auto-route-label"><input type="checkbox" id="notificationCheckbox" /> 新消息系统通知（窗口不在前台时）</label>
+        <label class="auto-route-label"><input type="checkbox" id="autoKnowledgeCheckbox" /> 自动存入知识库（每轮对话结束后）</label>
+        <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+          <label style="font-size:12px; color:var(--text-secondary);">向量后端:</label>
+          <select id="vectorBackendSelect" style="padding:4px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--bg-secondary,#1e293b); color:var(--text,#e2e8f0);">
+            <option value="json">JSON + Ollama（默认）</option>
+            <option value="chroma">ChromaDB（高性能）</option>
+          </select>
+          <span id="vectorBackendStatus" style="font-size:11px; color:var(--text-secondary);"></span>
+          <button id="chromaReconnectBtn" style="padding:3px 10px;border:none;border-radius:6px;background:var(--primary);color:#fff;cursor:pointer;font-size:11px;display:none;">重连</button>
+        </div>
+      </div>
+      <div class="api-group">
+        <label>角色预设</label>
+        <select id="rolePresetSelect">
+          <option value="">-- 自定义 --</option>
+          <option value="general">通用助手</option>
+          <option value="code">代码专家</option>
+          <option value="text">文案写作</option>
+          <option value="stock">金融分析</option>
+          <option value="knowledge">知识库问答</option>
+        </select>
+      </div>
+      <div class="api-group">
+        <label>系统提示词（角色设定）</label>
+        <textarea id="systemPrompt" placeholder="例如：你是一个专业的编程助手..."></textarea>
+      </div>
+    </div>
+  </details>
+
+  <!-- 分组2：模型与API -->
+  <details class="settings-group">
+    <summary class="settings-group-header">
+      <span class="material-icons-outlined">api</span>
+      <span>模型与 API</span>
+    </summary>
+    <div class="settings-group-body">
+      <div class="api-group">
+        <label>Ollama 模型名</label>
+        <input id="ollamaModel" value="qwen2.5:7b" />
+      </div>
+      <div class="api-group">
+        <label>DeepSeek API Key</label>
+        <input id="deepseekKey" type="password" placeholder="sk-..." />
+        <label>DeepSeek 模型</label>
+        <input id="deepseekModel" value="deepseek-chat" placeholder="如: deepseek-chat, deepseek-reasoner, deepseek-v4-flash" />
+      </div>
+      <div class="api-group">
+        <label>豆包 API Key</label>
+        <input id="doubaoKey" type="password" placeholder="火山引擎访问密钥（不是 ep- 开头的 ID）" />
+        <label>豆包 Endpoint ID（模型）</label>
+        <input id="doubaoModel" value="doubao-pro-32k" placeholder="如: ep-2026063014-xxx" />
+      </div>
+      <div class="api-group">
+        <label>通义千问 API Key</label>
+        <input id="qwenKey" type="password" placeholder="sk-..." />
+        <label>通义千问 模型</label>
+        <input id="qwenModel" value="qwen-plus" />
+      </div>
+      <div class="api-group">
+        <label>自定义 OpenAI 兼容 API</label>
+        <input id="customBase" placeholder="https://api.example.com/v1" />
+        <label>API Key</label>
+        <input id="customKey" type="password" placeholder="sk-..." />
+        <label>模型名</label>
+        <input id="customModel" placeholder="gpt-3.5-turbo" />
+      </div>
+    </div>
+  </details>
+
+  <!-- 分组3：搜索引擎 -->
+  <details class="settings-group">
+    <summary class="settings-group-header">
+      <span class="material-icons-outlined">travel_explore</span>
+      <span>搜索引擎</span>
+    </summary>
+    <div class="settings-group-body">
+      <div class="api-group">
+        <label>联网搜索引擎</label>
+        <select id="searchEngineSelect">
+          <option value="bocha" selected>博查 (Bocha)</option>
+          <option value="tavily">Tavily (AI搜索)</option>
+        </select>
+      </div>
+      <div class="api-group" id="bochaKeyGroup" style="display:none;">
+        <label>博查 API Key</label>
+        <input id="bochaApiKey" type="password" placeholder="博查 Key" />
+      </div>
+      <div class="api-group" id="tavilyKeyGroup" style="display:none;">
+        <label>Tavily API Key</label>
+        <input id="tavilyApiKey" type="password" placeholder="Tavily Key（在 tavily.com 免费获取）" />
+      </div>
+    </div>
+  </details>
+
+  <!-- 分组4：高级功能 -->
+  <details class="settings-group">
+    <summary class="settings-group-header">
+      <span class="material-icons-outlined">build</span>
+      <span>高级功能</span>
+    </summary>
+    <div class="settings-group-body">
+      <div class="api-group">
+        <label style="font-weight:600; color:var(--primary);">模型管理</label>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input id="modelDownloadInput" placeholder="输入模型名，如 qwen2.5:3b" style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px;" />
+          <button id="modelDownloadBtn" style="padding:8px 18px; background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:500;">下载</button>
+        </div>
+        <div id="downloadProgressContainer">
+          <div style="background:#e2e8f0; border-radius:5px; height:10px; overflow:hidden;">
+            <div id="downloadProgressBar" style="width:0%; height:100%; background:var(--primary); transition:width 0.3s;"></div>
+          </div>
+          <div id="downloadProgressText" style="font-size:12px; color:var(--text-secondary); margin-top:6px;">准备下载...</div>
+        </div>
+        <div id="modelListContainer" style="margin-top:12px; max-height:240px; overflow-y:auto;"></div>
+      </div>
+      <div class="api-group" id="knowledgeGroup">
+        <label>知识库管理</label>
+        <div style="margin-bottom:8px; font-size:12px; color:var(--text-secondary);">支持的格式：.txt .md .pdf .docx .xlsx .csv</div>
+        <div class="btn-group">
+          <button id="knowledgeUploadBtn" class="btn-primary" style="flex:1;">上传文档</button>
+          <button id="knowledgeRefreshBtn" class="btn-primary" style="background:#2a2a2a; flex:1;">刷新列表</button>
+        </div>
+        <input type="file" id="knowledgeFileInput" accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.csv" style="display:none;" />
+        <div id="knowledgeDocList" style="margin-top:12px; max-height:200px; overflow-y:auto;">
+          <div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:16px 0;">暂无文档，请上传</div>
+        </div>
+        <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
+          <label style="font-size:12px;">测试知识库检索</label>
+          <div style="display:flex; gap:8px; margin-top:6px;">
+            <input id="knowledgeTestQuery" placeholder="输入问题测试检索..." style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px; background:var(--bg); color:var(--text);" />
+            <button id="knowledgeTestBtn" style="padding:8px 16px; background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:13px;">检索</button>
+          </div>
+          <div id="knowledgeTestResults" style="margin-top:8px; font-size:12px; color:var(--text-secondary); max-height:150px; overflow-y:auto;"></div>
+        </div>
+      </div>
+      <div class="api-group" id="favoritesGroup">
+        <label>收藏夹</label>
+        <div style="margin-bottom:8px; font-size:12px; color:var(--text-secondary);">已收藏的消息</div>
+        <button id="favoritesRefreshBtn" class="btn-primary" style="width:100%; margin-bottom:8px;">刷新收藏列表</button>
+        <div id="favoritesList" style="max-height:250px; overflow-y:auto;">
+          <div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:16px 0;">暂无收藏消息</div>
+        </div>
+      </div>
+      <div class="api-group" id="pluginsGroup">
+        <label>插件管理</label>
+        <div style="margin-bottom:8px; font-size:12px; color:var(--text-secondary);">将插件目录放入 <code>E:\my-ai-data\plugins\</code></div>
+        <button id="pluginsRefreshBtn" class="btn-primary" style="width:100%; margin-bottom:8px;">刷新插件列表</button>
+        <div id="pluginsList" style="max-height:250px; overflow-y:auto;">
+          <div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:16px 0;">暂无插件</div>
+        </div>
+      </div>
+
+      <div class="api-group" id="imageGenGroup">
+        <label style="font-weight:600; color:var(--primary);">图像生成</label>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label style="font-size:12px; color:var(--text-secondary); min-width:60px;">引擎:</label>
+            <select id="imageGenProviderSelect" style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;">
+              <option value="silicon">Silicon Flow（国内推荐）</option>
+              <option value="openai">OpenAI DALL-E</option>
+              <option value="comfyui">ComfyUI（本地）</option>
+            </select>
+          </div>
+          <div id="siliconFlowKeyGroup">
+            <label style="font-size:12px; color:var(--text-secondary);">Silicon Flow API Key:</label>
+            <input id="siliconFlowKey" type="password" placeholder="sk-..." style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; margin-top:4px;" />
+          </div>
+          <div id="openaiImageKeyGroup" style="display:none;">
+            <label style="font-size:12px; color:var(--text-secondary);">OpenAI API Key:</label>
+            <input id="openaiImageKey" type="password" placeholder="sk-..." style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; margin-top:4px;" />
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label style="font-size:12px; color:var(--text-secondary); min-width:60px;">尺寸:</label>
+            <select id="imageGenSizeSelect" style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;">
+              <option value="1024x1024">1024×1024（方形）</option>
+              <option value="1024x1792">1024×1792（竖版）</option>
+              <option value="1792x1024">1792×1024（横版）</option>
+            </select>
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary); padding:4px 0;">
+            使用方式: 在聊天中输入 <code>/draw 描述文字</code> 即可生成图片
+          </div>
+        </div>
+      </div>
+      <div class="api-group" id="videoGenGroup">
+        <label style="font-weight:600; color:var(--primary);">视频生成</label>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label style="font-size:12px; color:var(--text-secondary); min-width:60px;">模型:</label>
+            <select id="videoGenModelSelect" style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;">
+              <option value="Wan-AI/Wan2.1-T2V-14B">Wan 2.1 (14B, 高质量)</option>
+              <option value="Wan-AI/Wan2.1-T2V-480P">Wan 2.1 (480P, 快速)</option>
+              <option value="THUDM/CogVideoX-5b">CogVideoX (5B)</option>
+            </select>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label style="font-size:12px; color:var(--text-secondary); min-width:60px;">分辨率:</label>
+            <select id="videoGenSizeSelect" style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;">
+              <option value="1280x720">1280×720 (720P)</option>
+              <option value="832x480">832×480 (480P)</option>
+              <option value="480x832">480×832 (竖版)</option>
+            </select>
+          </div>
+          <div style="font-size:11px; color:var(--text-secondary); padding:4px 0;">
+            使用方式: 在聊天中输入 <code>/video 描述文字</code> 即可生成视频。使用图片生成的同一 API Key（Silicon Flow）。生成通常需要 1-3 分钟。
+          </div>
+        </div>
+      </div>
+      <div class="api-group" id="marketplaceGroup">
+        <label style="font-weight:600; color:var(--primary);">插件市场</label>
+        <div style="margin-bottom:8px; font-size:12px; color:var(--text-secondary);">浏览并一键安装技能插件</div>
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <input id="marketplaceUrlInput" placeholder="注册表 URL（可选）..." style="flex:1; padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px;" />
+          <button id="marketplaceRefreshBtn" style="padding:6px 12px; background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:12px;">刷新</button>
+        </div>
+        <div id="marketplaceList" style="max-height:300px; overflow-y:auto;">
+          <div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:16px 0;">加载中...</div>
+        </div>
+      </div>
+            <div class="api-group" id="skillsGroup">
+        <label style="font-weight:600; color:var(--primary);">技能管理</label>
+        <div style="margin-bottom:8px; font-size:12px; color:var(--text-secondary);">技能文件存放于 <code>E:\my-ai-data\skills\</code>，每个技能一个目录（含 skill.json + prompt.md）</div>
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <input id="skillInstallInput" placeholder="粘贴技能目录路径安装..." style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px;" />
+          <button id="skillInstallBtn" style="padding:8px 14px; background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:500;">安装</button>
+        </div>
+        <button id="skillsRefreshBtn" class="btn-primary" style="width:100%; margin-bottom:8px;">刷新技能列表</button>
+        <div id="skillsList" style="max-height:280px; overflow-y:auto;">
+          <div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:16px 0;">正在加载...</div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <!-- 分组6：高级定制 -->
+  <details class="settings-group">
+    <summary class="settings-group-header">
+      <span class="material-icons-outlined">palette</span>
+      <span>高级定制</span>
+    </summary>
+    <div class="settings-group-body">
+
+      <!-- 主题选择 -->
+      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
+        <label style="font-weight:600;font-size:13px;">
+          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">palette</span>
+          UI 主题
+        </label>
+        <div id="themeList" style="width:100%;display:flex;flex-wrap:wrap;gap:6px;"></div>
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="newThemeName" placeholder="新主题名称" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+          <button id="createThemeBtn" style="padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;">创建</button>
+        </div>
+      </div>
+
+      <!-- 快捷键配置 -->
+      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
+        <label style="font-weight:600;font-size:13px;">
+          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">keyboard</span>
+          快捷键配置
+        </label>
+        <div id="keybindList" style="width:100%;max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+        <button id="resetKeybindsBtn" style="padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);cursor:pointer;font-size:13px;">恢复默认</button>
+      </div>
+
+      <!-- 工具栏布局 -->
+      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
+        <label style="font-weight:600;font-size:13px;">
+          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">tune</span>
+          工具栏按钮
+        </label>
+        <div id="toolbarList" style="width:100%;display:flex;flex-wrap:wrap;gap:6px;"></div>
+      </div>
+
+      <!-- 启动钩子 -->
+      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
+        <label style="font-weight:600;font-size:13px;">
+          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">bolt</span>
+          启动钩子 / 事件脚本
+        </label>
+        <div id="hookList" style="width:100%;max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+        <div style="display:flex;gap:4px;width:100%;flex-wrap:wrap;">
+          <input type="text" id="newHookName" placeholder="钩子名称" style="width:100px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+          <select id="newHookEvent" style="width:110px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+            <option value="onInit">启动时</option>
+            <option value="configChanged">配置变更</option>
+            <option value="typingEnd">AI回复完成</option>
+          </select>
+          <input type="text" id="newHookScript" placeholder="JS脚本 (可用 Core 变量)" style="flex:1;min-width:100px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+          <button id="addHookBtn" style="padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;">添加</button>
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+    <!-- 分组5：工作流自动化 -->
+  <details class="settings-group">
+    <summary class="settings-group-header">
+      <span class="material-icons-outlined">automation</span>
+      <span>工作流自动化</span>
+    </summary>
+    <div class="settings-group-body">
+
+      <!-- 会话模板管理 -->
+      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
+        <label style="font-weight:600;font-size:13px;">
+          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">dashboard_customize</span>
+          会话模板
+        </label>
+        <div id="templateList" style="width:100%;max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+        <div style="display:flex;gap:6px;width:100%;">
+          <input type="text" id="newTemplateName" placeholder="模板名称" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+          <button id="saveTemplateBtn" style="padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;">保存当前</button>
+        </div>
+      </div>
+
+      <!-- 自动回复规则 -->
+      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
+        <label style="font-weight:600;font-size:13px;">
+          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">rule</span>
+          自动回复规则
+        </label>
+        <div id="ruleList" style="width:100%;max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+        <div style="display:flex;gap:4px;width:100%;flex-wrap:wrap;">
+          <input type="text" id="newRuleName" placeholder="名称" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+          <input type="text" id="newRuleKeywords" placeholder="关键词(逗号分隔)" style="flex:1;min-width:100px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+          <input type="text" id="newRuleResponse" placeholder="自动回复" style="flex:1;min-width:100px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+          <button id="addRuleBtn" style="padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;">添加</button>
+        </div>
+      </div>
+
+      <!-- 定时任务 -->
+      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
+        <label style="font-weight:600;font-size:13px;">
+          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">schedule</span>
+          定时任务
+        </label>
+        <div id="scheduleList" style="width:100%;max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+        <div style="display:flex;gap:4px;width:100%;flex-wrap:wrap;">
+          <input type="text" id="newTaskName" placeholder="任务名称" style="width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+          <select id="newTaskScheduleType" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+            <option value="once">一次性</option>
+            <option value="interval">周期</option>
+            <option value="daily">每天</option>
+            <option value="weekly">每周</option>
+            <option value="cron">Cron</option>
+          </select>
+          <input type="text" id="newTaskTime" placeholder="如 5m / 2h / 09:00 / cron表达式" style="width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+          <input type="text" id="newTaskAction" placeholder="提醒内容" style="flex:1;min-width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+          <button id="addTaskBtn" style="padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;">添加</button>
+        </div>
+      </div>
+
+    </div>
+  </details>
+
+    <!-- 分组5：数据管理 + 保存 -->
+  <details class="settings-group">
+    <summary class="settings-group-header">
+      <span class="material-icons-outlined">storage</span>
+      <span>数据管理</span>
+    </summary>
+    <div class="settings-group-body">
+      <!-- 权限控制 -->
+      <div class="api-group" id="permissionsGroup">
+        <label>🔒 权限控制</label>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px; display:block; margin-bottom:6px;">权限模式</label>
+          <select id="permissionModeSelect" style="width:100%; padding:8px 12px; background:var(--bg-tertiary,#1a1a2e); border:1px solid var(--border,#334155); border-radius:8px; color:var(--text,#e2e8f0); font-size:13px;">
+            <option value="full">全权模式 — Agent 可自主执行所有操作</option>
+            <option value="ask">询问模式 — 敏感操作需用户确认</option>
+          </select>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px; display:block; margin-bottom:6px;">允许访问的目录</label>
+          <div id="allowedDirsList" style="max-height:120px; overflow-y:auto; margin-bottom:8px; font-size:12px; color:var(--text-secondary,#94a3b8);">加载中...</div>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="newAllowedDirInput" placeholder="输入目录路径，如 D:\projects" style="flex:1; padding:6px 10px; background:var(--bg-tertiary,#1a1a2e); border:1px solid var(--border,#334155); border-radius:6px; color:var(--text,#e2e8f0); font-size:12px;" />
+            <button id="addAllowedDirBtn" class="btn-primary" style="padding:6px 14px; font-size:12px;">添加</button>
+          </div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="font-size:12px; display:block; margin-bottom:6px;">审计日志</label>
+          <div id="auditLogStats" style="font-size:11px; color:var(--text-secondary,#94a3b8); margin-bottom:4px;">加载中...</div>
+          <button id="viewAuditLogBtn" style="padding:4px 12px; font-size:11px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); border-radius:6px; color:#3b82f6; cursor:pointer;">查看最近操作</button>
+          <button id="clearAuditLogBtn" style="padding:4px 12px; font-size:11px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); border-radius:6px; color:#ef4444; cursor:pointer; margin-left:8px;">清空日志</button>
+        </div>
+      </div>
+      <div class="api-group" style="border-bottom: none;">
+        <div class="btn-group">
+          <button id="backupBtn" class="btn-primary">备份数据</button>
+          <button id="restoreBtn" class="btn-danger">恢复数据</button>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <button class="save-settings" id="saveSettingsBtn">
+    <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">save</span>保存设置
+  </button>
+</div>
+
+<!-- ===== 自定义弹窗 ===== -->
+<div id="customPromptOverlay">
+  <div id="customPromptBox">
+    <h3 id="customPromptTitle">✏️ 重命名会话</h3>
+    <input type="text" id="customPromptInput" placeholder="输入新名称..." />
+    <div class="btn-row">
+      <button class="btn-cancel" id="customPromptCancel">取消</button>
+      <button class="btn-confirm" id="customPromptConfirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 右键菜单 ===== -->
+<div id="contextMenu">
+  <div class="menu-item" data-action="copy">📋 复制</div>
+  <div class="menu-item" data-action="paste">📥 粘贴</div>
+  <div class="menu-divider"></div>
+  <div class="menu-item" data-action="rename">✏️ 重命名会话</div>
+  <div class="menu-item" data-action="pin">📌 置顶/取消置顶</div>
+  <div class="menu-item" data-action="delete">🗑️ 删除会话</div>
+  <div class="menu-divider"></div>
+  <div class="menu-item" data-action="export-json">📦 导出 JSON</div>
+  <div class="menu-item" data-action="export-md">📝 导出 Markdown</div>
+  <div class="menu-item" data-action="export-html">🌐 导出 HTML</div>
+  <div class="menu-item" data-action="export-tree">🌳 导出会话树</div>
+  <div class="menu-item" data-action="copy-md">📋 复制 Markdown</div>
+  <div class="menu-divider"></div>
+  <div class="menu-item" data-action="export-pdf">📕 导出 PDF</div>
+  <div class="menu-item" data-action="export-docx">📘 导出 Word</div>
+  <div class="menu-item" data-action="export-xlsx">📗 导出 Excel</div>
+  <div class="menu-item" data-action="export-pptx">📙 导出 PPT</div>
+</div>
+
+<!-- ===== 引入外部库 ===== -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- 方向C2：Mermaid图表 -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+<!-- ===== 核心引擎（v10，最终修复版） ===== -->
+
+<!-- module.paths fix is in core-v10.js and app.js -->
+<script src="core-v10.js?nocache=2"></script>
+
+<!-- ===== Screenshot overlay (relocated from between script blocks) ===== -->
+<div class="screenshot-overlay" id="screenshotOverlay">
+  <div class="screenshot-toolbar">
+    <div class="ss-mode-group">
+      <button class="ss-mode-btn active" data-mode="full">全屏</button>
+      <button class="ss-mode-btn" data-mode="crop">区域</button>
+      <button class="ss-mode-btn" data-mode="window">窗口</button>
+    </div>
+    <button class="ss-confirm" id="ssConfirm">✓ 发送分析</button>
+    <button class="ss-cancel" id="ssCancel">✕ 取消</button>
+  </div>
+  <div class="screenshot-canvas-wrap" id="ssCanvasWrap">
+    <canvas id="ssCanvas"></canvas>
+    <div class="crop-rect" id="ssCropRect"></div>
+    <div class="crop-hint" id="ssCropHint"></div>
+  </div>
+  <div class="screenshot-window-list" id="ssWindowList" style="display:none;"></div>
+</div>
+
+<!-- ===== Shortcut hint (relocated from between script blocks) ===== -->
+<div class="shortcut-hint" id="shortcutHint">
+  <span class="hint-close" onclick="this.parentElement.classList.remove('show')">&times;</span>
+  <strong>⌨️ 快捷键</strong><br>
+  <kbd>Enter</kbd> 发送消息 / <kbd>Shift</kbd>+<kbd>Enter</kbd> 换行<br>
+  <kbd>Ctrl</kbd>+<kbd>N</kbd> 新建会话<br>
+  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> 聚焦输入<br>
+  <kbd>Ctrl</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> 历史输入<br>
+  <kbd>Ctrl</kbd>+<kbd>E</kbd> 导出会话<br>
+  <kbd>Ctrl</kbd>+<kbd>F</kbd> 消息搜索<br>
+  <kbd>Ctrl</kbd>+<kbd>1~9</kbd> 切换会话<br>
+  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> 截图分析<br>
+  <kbd>Esc</kbd> 停止生成 / 退出多选<br>
+  <kbd>Ctrl</kbd>+<kbd>/</kbd> 显示/隐藏快捷键
+</div>
+
+<!-- ===== App JS (extracted from inline scripts) ===== -->
+<script src="app.js"></script>
+
+
+<!-- Ctrl+K 聚焦输入框 / Ctrl+N 新建会话 已由 core-v10.js initShortcuts 统一处理 -->
+
+</body>
+</html>

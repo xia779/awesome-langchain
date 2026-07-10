@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f0f23">
+<link rel="manifest" href="/m/manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<title>AI 智能体</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.6/marked.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-deep:#0f0f23;--bg-surface:#1a1a2e;--bg-card:#232342;--bg-hover:#2a2a4a;
+  --text-primary:#e8e8f0;--text-secondary:#9898b8;--text-muted:#5a5a7a;
+  --accent:#3b82f6;--accent-glow:rgba(59,130,246,.25);--accent-dim:rgba(59,130,246,.1);
+  --green:#22c55e;--green-bg:rgba(34,197,94,.12);--red:#ef4444;--amber:#f59e0b;
+  --border:rgba(255,255,255,.06);--border-active:rgba(59,130,246,.3);
+  --radius:14px;--radius-sm:10px;--sidebar-w:280px;
+  --font-body:'Noto Sans SC',system-ui,-apple-system,sans-serif;
+  --font-mono:'JetBrains Mono','Fira Code',monospace;
+  --safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);
+}
+html,body{height:100%;overflow:hidden;font-family:var(--font-body);background:var(--bg-deep);color:var(--text-primary);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+body{display:flex;position:relative}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 60% at 20% 0%,rgba(59,130,246,.06),transparent 60%),radial-gradient(ellipse 60% 50% at 80% 100%,rgba(139,92,246,.04),transparent 50%);pointer-events:none;z-index:0}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+
+.sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90;opacity:0;pointer-events:none;transition:opacity .3s}
+.sidebar-overlay.open{opacity:1;pointer-events:auto}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:var(--bg-surface);border-right:1px solid var(--border);z-index:100;transform:translateX(-100%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;padding-top:var(--safe-top)}
+.sidebar.open{transform:translateX(0)}
+@media(min-width:768px){.sidebar{transform:none;position:relative;z-index:1}.sidebar-overlay{display:none}.main-area{flex:1}}
+.sidebar-header{padding:16px 18px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sidebar-header h2{font-size:15px;font-weight:500;letter-spacing:.5px;color:var(--text-secondary)}
+.btn-new{width:34px;height:34px;border-radius:10px;border:1px solid var(--border-active);background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;font-size:18px}
+.btn-new:active{transform:scale(.92)}
+.session-list{flex:1;overflow-y:auto;padding:8px}
+.session-item{padding:11px 14px;border-radius:var(--radius-sm);cursor:pointer;display:flex;align-items:center;gap:10px;transition:background .15s;position:relative;margin-bottom:2px}
+.session-item:hover,.session-item:active{background:var(--bg-hover)}
+.session-item.active{background:var(--accent-dim);border:1px solid var(--border-active)}
+.session-item .title{flex:1;font-size:13.5px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session-item .pin{font-size:10px;color:var(--amber);opacity:.7}
+.session-item .del{opacity:0;width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .15s;flex-shrink:0}
+.session-item:hover .del{opacity:1}
+.session-item .del:hover{background:rgba(239,68,68,.15);color:var(--red)}
+.session-item .time{font-size:10px;color:var(--text-muted);flex-shrink:0}
+
+.main-area{flex:1;display:flex;flex-direction:column;position:relative;z-index:1;min-width:0;padding-top:var(--safe-top);padding-bottom:var(--safe-bottom)}
+.topbar{height:52px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--border);background:rgba(15,15,35,.8);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);flex-shrink:0;z-index:10}
+.btn-menu{width:36px;height:36px;border-radius:10px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px}
+@media(min-width:768px){.btn-menu{display:none}}
+.topbar-title{flex:1;font-size:14.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.model-select{height:32px;padding:0 28px 0 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:12px;font-family:var(--font-body);cursor:pointer;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239898b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;max-width:160px}
+.btn-settings{width:36px;height:36px;border-radius:10px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:color .2s}
+.btn-settings:hover{color:var(--accent)}
+
+.chat-area{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth}
+.msg{max-width:85%;animation:msgIn .3s ease-out}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.msg-user{align-self:flex-end}
+.msg-user .bubble{background:linear-gradient(135deg,#1a6b3c,#1a5a34);border-radius:var(--radius) var(--radius) 4px var(--radius);padding:10px 14px;font-size:14px;line-height:1.65;word-break:break-word;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+.msg-ai{align-self:flex-start}
+.msg-ai .bubble{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius) var(--radius) var(--radius) 4px;padding:12px 16px;font-size:14px;line-height:1.7;word-break:break-word;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+.msg-ai .bubble p{margin:0 0 8px}.msg-ai .bubble p:last-child{margin-bottom:0}
+.msg-ai .bubble pre{background:var(--bg-deep);border:1px solid var(--border);border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0;font-family:var(--font-mono);font-size:12.5px;line-height:1.5}
+.msg-ai .bubble code{font-family:var(--font-mono);font-size:12.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px}
+.msg-ai .bubble pre code{background:none;padding:0}
+.msg-ai .bubble ul,.msg-ai .bubble ol{padding-left:20px;margin:6px 0}.msg-ai .bubble li{margin:3px 0}
+.msg-ai .bubble table{border-collapse:collapse;margin:8px 0;width:100%;font-size:13px}
+.msg-ai .bubble th,.msg-ai .bubble td{border:1px solid var(--border);padding:6px 10px;text-align:left}
+.msg-ai .bubble th{background:var(--bg-deep);font-weight:500}
+.msg-ai .bubble blockquote{border-left:3px solid var(--accent);padding-left:12px;margin:8px 0;color:var(--text-secondary)}
+.msg-ai .bubble h1,.msg-ai .bubble h2,.msg-ai .bubble h3{margin:12px 0 6px;font-weight:600}
+.msg-ai .bubble h1{font-size:18px}.msg-ai .bubble h2{font-size:16px}.msg-ai .bubble h3{font-size:14.5px}
+.msg-ai .bubble a{color:var(--accent);text-decoration:none}
+.msg-ai .bubble hr{border:none;border-top:1px solid var(--border);margin:12px 0}
+.typing-cursor{display:inline-block;width:2px;height:14px;background:var(--accent);margin-left:2px;vertical-align:text-bottom;animation:blink 1s infinite}
+@keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);gap:8px;padding:40px}
+.empty-state .icon{font-size:48px;opacity:.3;margin-bottom:8px}
+.empty-state p{font-size:13px;text-align:center;line-height:1.6}
+
+.input-area{padding:10px 14px;border-top:1px solid var(--border);background:rgba(15,15,35,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);flex-shrink:0}
+.input-row{display:flex;align-items:flex-end;gap:8px}
+.input-wrap{flex:1;position:relative}
+.msg-input{width:100%;min-height:40px;max-height:120px;padding:9px 14px;border-radius:12px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:14px;font-family:var(--font-body);line-height:1.5;resize:none;outline:none;transition:border-color .2s;-webkit-appearance:none}
+.msg-input:focus{border-color:var(--accent)}
+.msg-input::placeholder{color:var(--text-muted)}
+.btn-send{width:40px;height:40px;border-radius:12px;border:none;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .2s;flex-shrink:0}
+.btn-send:disabled{opacity:.4;cursor:default}
+.btn-send:not(:disabled):active{transform:scale(.92)}
+.btn-stop{background:var(--red)!important;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0)}}
+
+.settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;opacity:0;pointer-events:none;transition:opacity .3s}
+.settings-overlay.open{opacity:1;pointer-events:auto}
+.settings-panel{position:fixed;right:0;top:0;bottom:0;width:min(340px,90vw);background:var(--bg-surface);border-left:1px solid var(--border);z-index:201;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);padding:var(--safe-top) 0 var(--safe-bottom);display:flex;flex-direction:column}
+.settings-panel.open{transform:translateX(0)}
+.settings-header{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.settings-header h3{font-size:15px;font-weight:500}
+.settings-close{width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center}
+.settings-body{flex:1;overflow-y:auto;padding:16px 18px}
+.setting-group{margin-bottom:20px}
+.setting-group label{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:8px;font-weight:500;letter-spacing:.3px;text-transform:uppercase}
+.setting-group input[type=range]{width:100%;accent-color:var(--accent)}
+.setting-group .range-val{font-size:13px;color:var(--accent);font-weight:500;float:right}
+.setting-group textarea{width:100%;height:80px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:13px;font-family:var(--font-body);resize:vertical;outline:none}
+.setting-group textarea:focus{border-color:var(--accent)}
+.network-info{padding:12px;border-radius:8px;background:var(--bg-card);border:1px solid var(--border);font-size:12px;color:var(--text-secondary);line-height:1.7}
+.network-info .ip{color:var(--accent);font-family:var(--font-mono);font-weight:500}
+
+/* Phase 4-4: Mobile Enhancement */
+.pull-refresh{position:absolute;top:-40px;left:50%;transform:translateX(-50%);width:30px;height:30px;border:2px solid var(--accent);border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite;opacity:0;transition:opacity .2s;z-index:5}
+.pull-refresh.visible{opacity:1}
+@keyframes spin{to{transform:translateX(-50%) rotate(360deg)}}
+.input-extras{display:flex;gap:4px;align-items:flex-end}
+.btn-extra{width:36px;height:36px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s;flex-shrink:0}
+.btn-extra:active{transform:scale(.9);background:var(--accent-dim);color:var(--accent);border-color:var(--border-active)}
+.btn-extra.recording{background:rgba(239,68,68,.15);color:var(--red);border-color:var(--red);animation:pulse-red 1.2s infinite}
+@keyframes pulse-red{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.3)}50%{box-shadow:0 0 0 6px rgba(239,68,68,0)}}
+.msg-actions{position:fixed;z-index:300;background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;padding:4px;box-shadow:0 8px 32px rgba(0,0,0,.4);min-width:140px;animation:menuIn .15s ease-out}
+@keyframes menuIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.msg-actions button{display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border:none;background:transparent;color:var(--text-primary);font-size:13px;font-family:var(--font-body);cursor:pointer;border-radius:8px;text-align:left;white-space:nowrap}
+.msg-actions button:active{background:var(--bg-hover)}
+.msg-actions .divider{height:1px;background:var(--border);margin:4px 0}
+.swipe-hint{position:fixed;top:0;left:0;width:4px;height:100%;background:var(--accent);opacity:0;transition:opacity .2s;z-index:89;pointer-events:none}
+.swipe-hint.active{opacity:.6}
+.install-banner{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--bg-surface);border:1px solid var(--border-active);border-radius:12px;padding:12px 20px;display:flex;align-items:center;gap:12px;z-index:500;box-shadow:0 8px 32px rgba(0,0,0,.3);animation:slideUp .3s ease-out;max-width:90vw}
+@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.install-banner button{padding:6px 16px;border-radius:8px;border:none;font-size:12px;font-family:var(--font-body);cursor:pointer;font-weight:500}
+.install-banner .btn-install{background:var(--accent);color:#fff}
+.install-banner .btn-dismiss{background:transparent;color:var(--text-secondary)}
+.img-preview{position:relative;display:inline-block;margin:4px 0}
+.img-preview img{max-width:60px;max-height:60px;border-radius:8px;border:1px solid var(--border)}
+.img-preview .remove{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.toast-mobile{position:fixed;top:calc(var(--safe-top) + 12px);left:50%;transform:translateX(-50%);background:var(--bg-surface);border:1px solid var(--border);color:var(--text-primary);padding:8px 20px;border-radius:10px;font-size:13px;z-index:999;animation:fadeInOut 2s ease forwards;pointer-events:none}
+@keyframes fadeInOut{0%{opacity:0;transform:translateX(-50%) translateY(-10px)}10%{opacity:1;transform:translateX(-50%) translateY(0)}85%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-10px)}}
+</style>
+</head>
+<body>
+<div class="swipe-hint" id="swipeHint"></div>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h2>会话列表</h2>
+    <button class="btn-new" onclick="createSession()" title="新建会话">+</button>
+  </div>
+  <div class="session-list" id="sessionList"></div>
+</aside>
+<div class="main-area">
+  <div class="topbar">
+    <button class="btn-menu" onclick="toggleSidebar()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="topbar-title" id="topbarTitle">AI 智能体</div>
+    <select class="model-select" id="modelSelect">
+      <optgroup label="本地 Ollama">
+        <option value="ollama:qwen2.5:7b">Qwen 2.5 7B</option>
+        <option value="ollama:deepseek-r1:7b">DeepSeek R1 7B</option>
+        <option value="ollama:llama3.2:latest">Llama 3.2</option>
+      </optgroup>
+      <optgroup label="DeepSeek">
+        <option value="deepseek:deepseek-chat">DeepSeek Chat</option>
+        <option value="deepseek:deepseek-reasoner">DeepSeek Reasoner</option>
+      </optgroup>
+      <optgroup label="硅基流动">
+        <option value="silicon:deepseek-ai/DeepSeek-V3">DeepSeek V3</option>
+        <option value="silicon:deepseek-ai/DeepSeek-R1">DeepSeek R1</option>
+        <option value="silicon:deepseek-ai/DeepSeek-V4-Flash">DeepSeek V4 Flash</option>
+        <option value="silicon:Qwen/Qwen3-32B">Qwen3 32B</option>
+        <option value="silicon:Qwen/Qwen3-8B">Qwen3 8B</option>
+        <option value="silicon:Qwen/QwQ-32B">QwQ 32B</option>
+        <option value="silicon:zai-org/GLM-4.7">GLM 4.7</option>
+      </optgroup>
+      <optgroup label="通义千问">
+        <option value="qwen:qwen-plus">Qwen Plus</option>
+        <option value="qwen:qwen-turbo">Qwen Turbo</option>
+        <option value="qwen:qwen-max">Qwen Max</option>
+      </optgroup>
+    </select>
+    <button class="btn-settings" onclick="toggleSettings()" title="设置">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
+  <div class="chat-area" id="chatArea" style="position:relative">
+    <div class="pull-refresh" id="pullRefresh"></div>
+    <div class="empty-state" id="emptyState">
+      <div class="icon">&#10022;</div>
+      <p>选择一个会话或新建一个<br>开始与 AI 对话</p>
+    </div>
+  </div>
+  <div class="input-area">
+    <div id="imgPreviewArea" style="display:none;padding:0 4px 6px"></div>
+    <div class="input-row">
+      <div class="input-extras">
+        <button class="btn-extra" id="btnVoice" onclick="toggleVoice()" title="语音输入">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </button>
+        <button class="btn-extra" id="btnImage" onclick="document.getElementById('imgUpload').click()" title="上传图片">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </button>
+        <input type="file" id="imgUpload" accept="image/*" capture="environment" style="display:none" onchange="handleImageUpload(event)">
+      </div>
+      <div class="input-wrap">
+        <textarea class="msg-input" id="msgInput" placeholder="输入消息..." rows="1"></textarea>
+      </div>
+      <button class="btn-send" id="btnSend" onclick="sendMessage()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+<div class="settings-overlay" id="settingsOverlay" onclick="toggleSettings()"></div>
+<div class="settings-panel" id="settingsPanel">
+  <div class="settings-header">
+    <h3>设置</h3>
+    <button class="settings-close" onclick="toggleSettings()">&#10005;</button>
+  </div>
+  <div class="settings-body">
+    <div class="setting-group">
+      <label>温度 <span class="range-val" id="tempVal">0.7</span></label>
+      <input type="range" id="tempSlider" min="0" max="2" step="0.1" value="0.7" oninput="document.getElementById('tempVal').textContent=this.value">
+    </div>
+    <div class="setting-group">
+      <label>系统提示词</label>
+      <textarea id="systemPrompt" placeholder="你是一个 AI 助手">你是一个 helpful、honest、harmless 的 AI 助手。</textarea>
+    </div>
+    <div class="setting-group">
+      <label>局域网访问地址</label>
+      <div class="network-info" id="networkInfo">加载中...</div>
+    </div>
+  </div>
+</div>
+<script>
+let sessions=[],currentSessionId=null,isGenerating=false,currentStreamId=null;
+marked.setOptions({breaks:true,gfm:true});
+
+document.addEventListener('DOMContentLoaded',()=>{loadSessions();loadConfig();setupInput();loadNetworkInfo();
+  const s=sessionStorage.getItem('_m');if(s)document.getElementById('modelSelect').value=s;
+  document.getElementById('modelSelect').addEventListener('change',e=>sessionStorage.setItem('_m',e.target.value));
+});
+
+function setupInput(){const i=document.getElementById('msgInput');
+  i.addEventListener('input',()=>{i.style.height='auto';i.style.height=Math.min(i.scrollHeight,120)+'px'});
+  i.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}});
+}
+
+async function loadSessions(){try{const r=await fetch('/api/m/sessions');sessions=await r.json();renderSessions()}catch(e){console.error(e)}}
+
+function renderSessions(){const l=document.getElementById('sessionList');
+  if(!sessions.length){l.innerHTML='<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">暂无会话</div>';return}
+  l.innerHTML=sessions.map(s=>{const a=s.id===currentSessionId?' active':'';const p=s.pinned?'<span class="pin">\u{1F4CC}</span>':'';const t=new Date(s.timestamp).toLocaleDateString('zh-CN',{month:'numeric',day:'numeric'});
+    return `<div class="session-item${a}" onclick="openSession('${s.id}')"><span class="title">${esc(s.title)}</span>${p}<span class="time">${t}</span><button class="del" onclick="event.stopPropagation();deleteSession('${s.id}')">\u2715</button></div>`}).join('');
+}
+
+async function createSession(){try{const r=await fetch('/api/m/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const s=await r.json();await loadSessions();openSession(s.id)}catch(e){console.error(e)}}
+
+async function deleteSession(id){if(!confirm('确定删除此会话？'))return;try{await fetch('/api/m/sessions/'+id,{method:'DELETE'});if(currentSessionId===id){currentSessionId=null;document.getElementById('chatArea').innerHTML='<div class="empty-state"><div class="icon">\u2726</div><p>选择一个会话或新建一个<br>开始与 AI 对话</p></div>';document.getElementById('topbarTitle').textContent='AI 智能体'}await loadSessions()}catch(e){console.error(e)}}
+
+async function openSession(id){currentSessionId=id;renderSessions();toggleSidebar(false);try{const r=await fetch('/api/m/sessions/'+id);const d=await r.json();document.getElementById('topbarTitle').textContent=d.title||'会话';renderMessages(d.messages||[])}catch(e){console.error(e)}}
+
+function renderMessages(msgs){const a=document.getElementById('chatArea');
+  if(!msgs.length){a.innerHTML='<div class="empty-state"><div class="icon">\u2726</div><p>发送消息开始对话</p></div>';return}
+  a.innerHTML=msgs.filter(m=>m.role==='user'||m.role==='assistant').map(m=>{const c=m.role==='user'?'msg-user':'msg-ai';const ct=m.role==='user'?esc(m.content):renderMd(m.content);return `<div class="msg ${c}"><div class="bubble">${ct}</div></div>`}).join('');scrollBottom();
+}
+
+async function sendMessage(){const inp=document.getElementById('msgInput');const text=inp.value.trim();if(!text||isGenerating)return;
+  // Phase 4-4: 附加图片
+  let fullText=text;
+  if(pendingImages.length){fullText=pendingImages.map(function(img){return '!['+img.name+']('+img.dataUrl+')'}).join('\n')+'\n\n'+text;pendingImages=[];renderImagePreviews()}
+  if(!currentSessionId){const r=await fetch('/api/m/sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:text.substring(0,20)})});const s=await r.json();currentSessionId=s.id;await loadSessions();document.getElementById('topbarTitle').textContent=s.title}
+  const area=document.getElementById('chatArea');const emp=document.getElementById('emptyState');if(emp)emp.remove();
+  area.innerHTML+=`<div class="msg msg-user"><div class="bubble">${esc(text)}</div></div>`;
+  inp.value='';inp.style.height='auto';scrollBottom();
+  const aiDiv=document.createElement('div');aiDiv.className='msg msg-ai';aiDiv.innerHTML='<div class="bubble"><span class="typing-cursor"></span></div>';area.appendChild(aiDiv);scrollBottom();
+  const mv=document.getElementById('modelSelect').value;const ci=mv.indexOf(':');const provider=mv.substring(0,ci);const model=mv.substring(ci+1);
+  const temperature=parseFloat(document.getElementById('tempSlider').value);const systemPrompt=document.getElementById('systemPrompt').value;
+  setGen(true);
+  try{const resp=await fetch('/api/m/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:currentSessionId,message:fullText,provider,model,temperature,systemPrompt})});
+    const reader=resp.body.getReader();const dec=new TextDecoder();let buf='',full='';
+    while(true){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop()||'';
+      for(const line of lines){const tr=line.trim();if(!tr)continue;
+        if(tr.startsWith('event: ')){continue}
+        if(tr.startsWith('data: ')){try{const d=JSON.parse(tr.substring(6));
+          if(d.chunk){full=d.fullText||full+d.chunk;aiDiv.querySelector('.bubble').innerHTML=renderMd(full)+'<span class="typing-cursor"></span>';scrollBottom()}
+          if(d.streamId)currentStreamId=d.streamId;if(d.sessionId)currentSessionId=d.sessionId;
+          if(d.error)aiDiv.querySelector('.bubble').innerHTML='<span style="color:var(--red)">\u274C '+esc(d.error)+'</span>';
+        }catch(e){}}}
+    }
+    const cur=aiDiv.querySelector('.typing-cursor');if(cur)cur.remove();
+    if(!full)aiDiv.querySelector('.bubble').innerHTML='<span style="color:var(--text-muted)">（空回复）</span>';
+    await loadSessions();
+  }catch(err){aiDiv.querySelector('.bubble').innerHTML='<span style="color:var(--red)">\u274C '+esc(err.message)+'</span>'}finally{setGen(false);currentStreamId=null}
+}
+
+async function stopGen(){if(currentStreamId){try{await fetch('/api/m/chat/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({streamId:currentStreamId})})}catch(e){}}setGen(false)}
+
+function setGen(v){isGenerating=v;const b=document.getElementById('btnSend');
+  if(v){b.classList.add('btn-stop');b.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';b.onclick=stopGen}
+  else{b.classList.remove('btn-stop');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';b.onclick=sendMessage}
+}
+
+async function loadConfig(){try{const r=await fetch('/api/m/config');const c=await r.json();
+  if(c.temperature!=null){document.getElementById('tempSlider').value=c.temperature;document.getElementById('tempVal').textContent=c.temperature}
+  if(c.systemInstruction)document.getElementById('systemPrompt').value=c.systemInstruction;
+  if(c.currentService&&c.ollamaModel){const v=c.currentService+':'+c.ollamaModel;const s=document.getElementById('modelSelect');for(let i=0;i<s.options.length;i++)if(s.options[i].value===v){s.value=v;break}}
+}catch(e){}}
+
+async function loadNetworkInfo(){try{const r=await fetch('/api/m/network');const d=await r.json();const el=document.getElementById('networkInfo');
+  if(d.addresses&&d.addresses.length){const p=location.port||'8080';el.innerHTML=d.addresses.map(a=>`\u{1F4E1} ${esc(a.iface)}: <span class="ip">${esc(a.address)}:${p}/m</span>`).join('<br>')+'<br><br>在手机浏览器中打开上述地址即可使用'}else el.textContent='未检测到局域网 IP';
+}catch(e){document.getElementById('networkInfo').textContent='获取网络信息失败'}}
+
+function toggleSidebar(f){const s=document.getElementById('sidebar'),o=document.getElementById('sidebarOverlay');const op=f!==undefined?f:!s.classList.contains('open');s.classList.toggle('open',op);o.classList.toggle('open',op)}
+function toggleSettings(f){const p=document.getElementById('settingsPanel'),o=document.getElementById('settingsOverlay');const op=f!==undefined?f:!p.classList.contains('open');p.classList.toggle('open',op);o.classList.toggle('open',op)}
+function scrollBottom(){const a=document.getElementById('chatArea');a.scrollTop=a.scrollHeight}
+function renderMd(t){if(!t)return '';try{return marked.parse(t)}catch(e){return esc(t)}}
+function esc(s){if(!s)return '';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+// ===== Phase 4-4: Mobile Enhancement =====
+
+// --- Touch Gestures: Swipe to open sidebar ---
+let touchStartX=0,touchStartY=0,touchStartTime=0,isSwiping=false;
+document.addEventListener('touchstart',function(e){
+  touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;touchStartTime=Date.now();isSwiping=false;
+},{passive:true});
+document.addEventListener('touchmove',function(e){
+  if(isGenerating)return;
+  const dx=e.touches[0].clientX-touchStartX,dy=e.touches[0].clientY-touchStartY;
+  // Right swipe from left edge → open sidebar
+  if(touchStartX<30&&dx>40&&Math.abs(dy)<60){isSwiping=true;document.getElementById('swipeHint').classList.add('active')}
+  // Left swipe → close sidebar
+  if(document.getElementById('sidebar').classList.contains('open')&&dx<-40&&Math.abs(dy)<60){isSwiping=true}
+},{passive:true});
+document.addEventListener('touchend',function(e){
+  document.getElementById('swipeHint').classList.remove('active');
+  if(!isSwiping)return;isSwiping=false;
+  const dx=e.changedTouches[0].clientX-touchStartX;
+  if(touchStartX<30&&dx>60)toggleSidebar(true);
+  else if(document.getElementById('sidebar').classList.contains('open')&&dx<-60)toggleSidebar(false);
+},{passive:true});
+
+// --- Pull to Refresh ---
+let pullStartY=0,pulling=false;
+const chatArea=document.getElementById('chatArea');
+chatArea.addEventListener('touchstart',function(e){
+  if(chatArea.scrollTop<=0){pullStartY=e.touches[0].clientY;pulling=true}
+},{passive:true});
+chatArea.addEventListener('touchmove',function(e){
+  if(!pulling)return;
+  const dy=e.touches[0].clientY-pullStartY;
+  if(dy>60)document.getElementById('pullRefresh').classList.add('visible');
+},{passive:true});
+chatArea.addEventListener('touchend',function(){
+  if(document.getElementById('pullRefresh').classList.contains('visible')){
+    document.getElementById('pullRefresh').classList.remove('visible');
+    if(currentSessionId)openSession(currentSessionId);else loadSessions();
+    haptic(10);
+  }
+  pulling=false;
+},{passive:true});
+
+// --- Voice Input (Web Speech API) ---
+let recognition=null,isRecording=false;
+function toggleVoice(){
+  if(isRecording){stopVoice();return}
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){showToast('此浏览器不支持语音识别');return}
+  recognition=new SR();recognition.lang='zh-CN';recognition.continuous=true;recognition.interimResults=true;
+  recognition.onresult=function(e){let t='';for(let i=e.resultIndex;i<e.results.length;i++){t+=e.results[i][0].transcript}
+    document.getElementById('msgInput').value=t;document.getElementById('msgInput').dispatchEvent(new Event('input'))};
+  recognition.onerror=function(e){showToast('语音识别错误: '+e.error);stopVoice()};
+  recognition.onend=function(){stopVoice()};
+  recognition.start();isRecording=true;
+  document.getElementById('btnVoice').classList.add('recording');
+  haptic(20);showToast('正在录音...');
+}
+function stopVoice(){
+  if(recognition){try{recognition.stop()}catch(e){}}
+  isRecording=false;document.getElementById('btnVoice').classList.remove('recording');
+}
+
+// --- Image Upload ---
+let pendingImages=[];
+function handleImageUpload(e){
+  const files=e.target.files;if(!files.length)return;
+  for(let i=0;i<files.length;i++){
+    const f=files[i];if(f.size>5*1024*1024){showToast(f.name+' 超过5MB限制');continue}
+    const reader=new FileReader();
+    reader.onload=function(ev){
+      pendingImages.push({name:f.name,dataUrl:ev.target.result});
+      renderImagePreviews();
+    };reader.readAsDataURL(f);
+  }
+  e.target.value='';
+}
+function renderImagePreviews(){
+  const area=document.getElementById('imgPreviewArea');
+  if(!pendingImages.length){area.style.display='none';area.innerHTML='';return}
+  area.style.display='flex';area.style.gap='6px';area.style.flexWrap='wrap';
+  area.innerHTML=pendingImages.map(function(img,i){
+    return '<div class="img-preview"><img src="'+img.dataUrl+'" alt=""><button class="remove" onclick="removeImage('+i+')">x</button></div>';
+  }).join('');
+}
+function removeImage(i){pendingImages.splice(i,1);renderImagePreviews()}
+
+// --- Message Long-Press Actions ---
+let longPressTimer=null,longPressTarget=null;
+document.getElementById('chatArea').addEventListener('touchstart',function(e){
+  const msg=e.target.closest('.msg');if(!msg)return;
+  longPressTarget=msg;
+  longPressTimer=setTimeout(function(){showMsgActions(e.touches[0],msg);haptic(30)},500);
+},{passive:true});
+document.getElementById('chatArea').addEventListener('touchmove',function(){clearTimeout(longPressTimer)},{passive:true});
+document.getElementById('chatArea').addEventListener('touchend',function(){clearTimeout(longPressTimer)},{passive:true});
+
+function showMsgActions(touch,msg){
+  closeMsgActions();
+  const text=msg.querySelector('.bubble')?.textContent||'';
+  const menu=document.createElement('div');menu.className='msg-actions';menu.id='msgActionsMenu';
+  const x=Math.min(touch.clientX,window.innerWidth-160),y=Math.min(touch.clientY,window.innerHeight-200);
+  menu.style.left=x+'px';menu.style.top=y+'px';
+  const actions=[
+    {icon:'📋',label:'复制文本',fn:function(){copyText(text);closeMsgActions()}},
+    {icon:'🔄',label:'重新生成',fn:function(){closeMsgActions();if(msg.classList.contains('msg-ai'))regenLast()}},
+    {line:true},
+    {icon:'🗑',label:'删除消息',fn:function(){closeMsgActions();deleteMsg(msg)}},
+  ];
+  actions.forEach(function(a){
+    if(a.line){const d=document.createElement('div');d.className='divider';menu.appendChild(d);return}
+    const btn=document.createElement('button');btn.textContent=a.icon+' '+a.label;btn.onclick=a.fn;menu.appendChild(btn);
+  });
+  document.body.appendChild(menu);
+  setTimeout(function(){document.addEventListener('touchstart',closeMsgActionsOutside,{once:true})},10);
+}
+function closeMsgActions(){const m=document.getElementById('msgActionsMenu');if(m)m.remove()}
+function closeMsgActionsOutside(e){if(!e.target.closest('.msg-actions'))closeMsgActions()}
+function copyText(t){if(navigator.clipboard)navigator.clipboard.writeText(t).then(function(){showToast('已复制')});else{const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();showToast('已复制')}}
+function deleteMsg(msg){msg.style.transition='all .3s';msg.style.opacity='0';msg.style.transform='translateX(-20px)';setTimeout(function(){msg.remove()},300);showToast('消息已删除')}
+async function regenLast(){showToast('重新生成功能需要桌面端支持')}
+
+// --- Haptic Feedback ---
+function haptic(ms){try{navigator.vibrate&&navigator.vibrate(ms)}catch(e){}}
+
+// --- Toast ---
+function showToast(msg){
+  const old=document.querySelector('.toast-mobile');if(old)old.remove();
+  const t=document.createElement('div');t.className='toast-mobile';t.textContent=msg;
+  document.body.appendChild(t);setTimeout(function(){t.remove()},2200);
+}
+
+// --- PWA Install Prompt ---
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredPrompt=e;showInstallBanner()});
+function showInstallBanner(){
+  if(!deferredPrompt)return;
+  const b=document.createElement('div');b.className='install-banner';b.id='installBanner';
+  b.innerHTML='<span style="font-size:13px">安装到主屏幕，获得更好体验</span><button class="btn-install" onclick="installApp()">安装</button><button class="btn-dismiss" onclick="dismissInstall()">稍后</button>';
+  document.body.appendChild(b);
+}
+async function installApp(){
+  if(!deferredPrompt)return;deferredPrompt.prompt();
+  const r=await deferredPrompt.userChoice;if(r.outcome==='accepted')showToast('安装成功');
+  deferredPrompt=null;dismissInstall();
+}
+function dismissInstall(){const b=document.getElementById('installBanner');if(b)b.remove();deferredPrompt=null}
+
+// --- Service Worker Registration ---
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('/m/sw.js').catch(function(){});
+  });
+}
+</script>
+</body>
+</html>

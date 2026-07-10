@@ -1,0 +1,8 @@
+{
+  "id": "hello-world",
+  "name": "Hello World 示例插件",
+  "version": "1.0.0",
+  "description": "一个简单的示例插件，演示如何使用插件API。会在控制台输出日志，并在消息发送前添加前缀。",
+  "author": "AI智能体",
+  "entry": "index.js"
+}

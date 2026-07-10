@@ -1,0 +1,101 @@
+{
+  "name": "ai-agent-pro",
+  "version": "1.1.0",
+  "description": "AI智能体 - 本地多模型聚合桌面助手",
+  "main": "main.js",
+  "author": "AI Team",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder --win --x64",
+    "dist:mac": "electron-builder --mac --x64 --arm64",
+    "dist:linux": "electron-builder --linux --x64 --arm64",
+    "dist:arm": "electron-builder --linux --armv7l",
+    "dist:arm64": "electron-builder --linux --arm64",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "adm-zip": "^0.5.17",
+    "archiver": "^8.0.0",
+    "better-sqlite3": "^12.11.1",
+    "cors": "^2.8.6",
+    "docx": "^9.7.1",
+    "express": "^4.22.2",
+    "ffmpeg-static": "^5.2.0",
+    "highlight.js": "^11.11.1",
+    "mammoth": "^1.12.0",
+    "marked": "^15.0.6",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^6.1.200",
+    "pptxgenjs": "^4.0.1",
+    "sharp": "^0.33.5",
+    "tesseract.js": "^6.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "build": {
+    "appId": "com.yourcompany.ai-agent",
+    "productName": "AI智能体",
+    "directories": {
+      "output": "dist"
+    },
+    "npmRebuild": true,
+    "buildDependenciesFromSource": false,
+    "nodeGypRebuild": false,
+    "extraResources": [
+      {
+        "from": "modules",
+        "to": "modules"
+      }
+    ],
+    "win": {
+      "icon": "icon.ico",
+      "target": "nsis"
+    },
+    "mac": {
+      "icon": "icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "icon.png",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64",
+            "armv7l"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

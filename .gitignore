@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.exe
+*.exe.blockmap
+builder-debug.yml
+builder-effective-config.yaml
+
+# User data (sessions, knowledge, config - runtime generated)
+ai-data/
+
+# Legacy database (migrated to JSON-based storage)
+chroma/
+
+# Logs
+*.log
+dev-log.txt
+
+# OS and IDE
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# GPU cache
+NVIDIA Corporation/
+
+# Environment and secrets
+.env
+.env.local
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# Electron
+gpu_cache
+GPUCache/
+Code Cache/
+n*.backup
+
+# Backup files
+*.backup
+
+*.bak

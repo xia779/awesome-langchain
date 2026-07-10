@@ -1,0 +1,18 @@
+{
+  "name": "AI 智能体",
+  "short_name": "AI智能体",
+  "description": "局域网 AI 智能体对话助手",
+  "start_url": "/m",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f0f23",
+  "theme_color": "#0f0f23",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230f0f23'/><text x='50' y='68' text-anchor='middle' font-size='50' fill='%233b82f6'>AI</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
