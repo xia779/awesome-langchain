@@ -501,7 +501,7 @@
       opacity: 0;
       transition: opacity 0.2s ease, visibility 0.2s;
     }
-    .search-results-panel.active {
+    .search-results-panel.active, .image-preview-overlay.active {
       visibility: visible;
       opacity: 1;
     }
@@ -899,9 +899,6 @@
     /* 🔧 细窄圆角深色滚动条 */
     #chatContainer::-webkit-scrollbar {
       width: 4px;
-    }
-    #chatContainer::-webkit-scrollbar-track {
-      background: transparent;
     }
     #chatContainer::-webkit-scrollbar-thumb {
       background: rgba(128,128,128,0.3);
@@ -1339,7 +1336,7 @@
       font-size: 13px;
       line-height: 1.6;
     }
-    .copy-code-btn {
+    .copy-code-btn, .fold-code-btn {
       position: absolute;
       top: 8px; right: 8px;
       background: rgba(128,128,128,0.15);
@@ -1352,23 +1349,9 @@
       opacity: 0;
       transition: var(--transition);
     }
-    .msg.ai pre:hover .copy-code-btn { opacity: 1; }
-    .copy-code-btn:hover { background: rgba(128,128,128,0.3); color: var(--text); }
-    .fold-code-btn {
-      position: absolute;
-      top: 8px; right: 56px;
-      background: rgba(128,128,128,0.15);
-      border: 1px solid rgba(128,128,128,0.2);
-      color: var(--text-secondary);
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      cursor: pointer;
-      opacity: 0;
-      transition: var(--transition);
-    }
-    .msg.ai pre:hover .fold-code-btn { opacity: 1; }
-    .fold-code-btn:hover { background: rgba(128,128,128,0.3); color: var(--text); }
+    .fold-code-btn { right: 56px; }
+    .msg.ai pre:hover .copy-code-btn, .msg.ai pre:hover .fold-code-btn { opacity: 1; }
+    .copy-code-btn:hover, .fold-code-btn:hover { background: rgba(128,128,128,0.3); color: var(--text); }
     .msg.ai pre.collapsed code,
     .msg.ai pre.collapsed .hljs { display: none; }
     .msg.ai pre.collapsed::after {
@@ -1402,7 +1385,7 @@
       color: var(--text);
       white-space: nowrap;
     }
-    .artifact-tabs { display: flex; gap: 4px; }
+    .artifact-tabs, .artifact-actions { display: flex; gap: 4px; }
     .artifact-tab {
       padding: 3px 10px;
       border: 1px solid var(--border);
@@ -1415,7 +1398,6 @@
     }
     .artifact-tab:hover { background: var(--bg-secondary); color: var(--text); }
     .artifact-tab.active { background: var(--primary); color: var(--white); border-color: var(--primary); }
-    .artifact-actions { display: flex; gap: 4px; }
     .artifact-action-btn {
       padding: 3px 8px;
       border: 1px solid var(--border);
@@ -1624,12 +1606,6 @@
       word-break: break-word;
     }
 
-    /* 🔧 P5: AI消息生成中状态 */
-    .msg.ai.generating {
-      border-left: 2px solid var(--primary);
-      box-shadow: 0 0 0 1px rgba(59,130,246,0.1);
-    }
-
     /* ===== Agent思考过程折叠面板 ===== */
     .agent-think-panel {
       margin-top: 12px;
@@ -1665,39 +1641,6 @@
       padding: 10px 14px;
       overflow-y: auto;
     }
-    .agent-step-item {
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 12px;
-    }
-    .agent-step-item:last-child { border-bottom: none; }
-    .agent-step-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 4px;
-    }
-    .agent-step-num {
-      background: var(--primary-light);
-      color: var(--primary);
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-      font-size: 11px;
-    }
-    .agent-step-action {
-      color: var(--text);
-      font-weight: 500;
-    }
-    .agent-step-detail {
-      color: var(--text-secondary);
-      line-height: 1.5;
-      word-break: break-all;
-      max-height: 80px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
     /* ===== 浮动聊天输入框 ===== */
     #input-area {
       position: absolute;
@@ -2373,7 +2316,7 @@
       transform: translateY(-10px);
       transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
     }
-    .msg-search-box.active {
+    .msg-search-box.active, .search-preview-panel.active, .search-history-dropdown.active, .apps-menu-panel.active {
       visibility: visible;
       opacity: 1;
       transform: translateY(0);
@@ -2435,11 +2378,6 @@
       transform: translateY(-8px);
       transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
     }
-    .search-preview-panel.active {
-      visibility: visible;
-      opacity: 1;
-      transform: translateY(0);
-    }
     .search-preview-item {
       padding: 8px 12px;
       cursor: pointer;
@@ -2456,7 +2394,7 @@
     .search-preview-item .preview-role { font-size: 11px; color: var(--text-secondary); margin-right: 6px; }
     .search-preview-item .preview-text { color: var(--text); }
     .search-preview-item .preview-text .match { color: var(--primary); font-weight: 600; background: rgba(59,130,246,0.15); padding: 0 2px; border-radius: 2px; }
-    .search-preview-empty { padding: 16px; text-align: center; color: var(--text-secondary); font-size: 13px; }
+    .search-preview-empty, .search-history-empty { padding: 16px; text-align: center; color: var(--text-secondary); font-size: 13px; }
 
     /* ===== 搜索历史下拉 ===== */
     .search-history-dropdown {
@@ -2476,11 +2414,6 @@
       opacity: 0;
       transform: translateY(-8px);
       transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
-    }
-    .search-history-dropdown.active {
-      visibility: visible;
-      opacity: 1;
-      transform: translateY(0);
     }
     .search-history-header {
       display: flex;
@@ -2527,7 +2460,6 @@
     }
     .search-history-item:hover .history-delete { opacity: 1; }
     .search-history-item .history-delete:hover { color: var(--danger); background: rgba(239,68,68,0.08); }
-    .search-history-empty { padding: 16px; text-align: center; color: var(--text-secondary); font-size: 13px; }
 
     /* ===== 消息分组折叠 ===== */
     .msg-fold-btn {
@@ -2600,23 +2532,23 @@
       opacity: 0;
       transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
     }
-    .prompt-panel.active {
+    .prompt-panel.active, .role-panel.active {
       visibility: visible;
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
-    .prompt-panel-header {
+    .prompt-panel-header, .role-panel-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
       border-bottom: 1px solid var(--border);
     }
-    .prompt-panel-header h4 { margin: 0; color: var(--text); font-size: 14px; }
-    .prompt-panel-close {
+    .prompt-panel-header h4, .role-panel-header h4 { margin: 0; color: var(--text); font-size: 14px; }
+    .prompt-panel-close, .role-panel-close {
       background: none; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer;
     }
-    .prompt-panel-close:hover { color: var(--danger); }
+    .prompt-panel-close:hover, .role-panel-close:hover { color: var(--danger); }
     .prompt-list {
       overflow-y: auto;
       padding: 8px;
@@ -2663,23 +2595,6 @@
       opacity: 0;
       transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
     }
-    .role-panel.active {
-      visibility: visible;
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-    .role-panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    .role-panel-header h4 { margin: 0; color: var(--text); font-size: 14px; }
-    .role-panel-close {
-      background: none; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer;
-    }
-    .role-panel-close:hover { color: var(--danger); }
     .role-list {
       overflow-y: auto;
       padding: 8px;
@@ -2736,10 +2651,6 @@
       visibility: hidden;
       opacity: 0;
       transition: opacity 0.25s ease, visibility 0.25s;
-    }
-    .image-preview-overlay.active {
-      visibility: visible;
-      opacity: 1;
     }
     .image-preview-overlay .preview-wrapper {
       position: relative;
@@ -2904,9 +2815,6 @@
         transform: translateX(-100%);
         transition: transform 0.3s ease;
       }
-      #sidebar.visible {
-        transform: translateX(0);
-      }
       #main-container {
         margin-left: 0;
       }
@@ -3069,8 +2977,6 @@
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
     }
-    .app-spinner.spinner-sm .spinner-ring { width: 14px; height: 14px; border-width: 2px; }
-    .app-spinner.spinner-lg .spinner-ring { width: 28px; height: 28px; border-width: 3px; }
     .app-spinner.spinner-white { color: var(--white); }
     .app-spinner.spinner-white .spinner-ring {
       border-color: rgba(255,255,255,0.25);
@@ -3132,11 +3038,6 @@
       z-index: 200;
       overflow: hidden;
       transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
-    }
-    .apps-menu-panel.active {
-      visibility: visible;
-      opacity: 1;
-      transform: translateY(0);
     }
     .apps-menu-header {
       display: flex;
@@ -3713,27 +3614,7 @@
     }
     body.light-theme .hint-close { color: #64748b; }
 
-    /* Agent 思考面板 */
-    body.light-theme .agent-think-block {
-      background: #f8fafc;
-      border-color: #e2e8f0;
-      color: #475569;
-    }
-    body.light-theme .agent-think-header { color: #64748b; }
     body.light-theme .agent-think-content { color: #475569; }
-
-    /* Agent 步骤 */
-    body.light-theme .agent-step {
-      background: #f8fafc;
-      border-color: #e2e8f0;
-    }
-    body.light-theme .agent-step-title { color: #1e293b; }
-    body.light-theme .agent-step-status { color: #64748b; }
-    body.light-theme .agent-tool-result {
-      background: #ffffff;
-      border-color: #e2e8f0;
-      color: #1e293b;
-    }
 
     /* 消息搜索框 */
     body.light-theme .msg-search-box {
@@ -3876,6 +3757,5 @@ button:focus-visible, [role="button"]:focus-visible {
    GPU 加速提示：为无限动画添加 will-change
    ================================================================ */
 .typing-cursor::after { will-change: opacity; }
-#voiceBtn.recording { will-change: box-shadow; }
-#webSearchBtn.active { will-change: box-shadow; }
+#voiceBtn.recording, #webSearchBtn.active { will-change: box-shadow; }
 .app-spinner .spinner-ring { will-change: transform; }
