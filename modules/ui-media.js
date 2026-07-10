@@ -250,7 +250,7 @@ function addTTSButton(aiMsgDiv) {
       var contentClone = aiMsgDiv.cloneNode(true);
       var timestamps = contentClone.querySelectorAll('.msg-timestamp');
       for (var t = 0; t < timestamps.length; t++) timestamps[t].remove();
-      var actions = contentClone.querySelectorAll('.msg-actions');
+      var actions = contentClone.querySelectorAll('.msg-actions-inline, .msg-actions');
       for (var a = 0; a < actions.length; a++) actions[a].remove();
       var text = contentClone.textContent.replace(/```[\s\S]*?```/g, '（代码）').replace(/\s+/g, ' ').trim();
       wrapper.appendChild(btnClone);

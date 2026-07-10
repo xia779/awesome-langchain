@@ -324,7 +324,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   // 🔧 渲染搜索结果卡片（在 AI 回复之前显示）
   if (searchItems.length > 0) {
     var srPanel = document.createElement('div');
-    srPanel.className = 'search-results-panel';
+    srPanel.className = 'web-search-results';
     var srHeader = document.createElement('div');
     srHeader.className = 'search-panel-header';
     srHeader.innerHTML = '<span class="material-icons-outlined">travel_explore</span> 找到 ' + searchItems.length + ' 条相关结果';
