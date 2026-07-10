@@ -31,20 +31,18 @@ function init(_Core) {
     CONFIG,
   };
 
-  // 注册命令
-  setTimeout(function() {
-    if (Core.custom && Core.custom.registerCommand) {
-      Core.custom.registerCommand('/export', function(args) {
-        return handleExportCommand(args);
-      }, '高级导出 — /export md|html|txt|json|all|batch');
-      Core.custom.registerCommand('/sync', function(args) {
-        return handleSyncCommand(args);
-      }, '数据同步 — /sync push|pull|status|config');
-      Core.custom.registerCommand('/backup', function(args) {
-        return handleBackupCommand(args);
-      }, '备份管理 — /backup create|list|restore|auto');
-    }
-  }, 100);
+  // 命令注册（已声明 custom 依赖）
+  if (Core.custom && Core.custom.registerCommand) {
+    Core.custom.registerCommand('/export', function(args) {
+      return handleExportCommand(args);
+    }, '高级导出 — /export md|html|txt|json|all|batch');
+    Core.custom.registerCommand('/sync', function(args) {
+      return handleSyncCommand(args);
+    }, '数据同步 — /sync push|pull|status|config');
+    Core.custom.registerCommand('/backup', function(args) {
+      return handleBackupCommand(args);
+    }, '备份管理 — /backup create|list|restore|auto');
+  }
 
   // 启动自动备份（每30分钟检查一次）
   startAutoBackup();

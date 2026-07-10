@@ -378,14 +378,12 @@ module.exports = {
       state.autoInject = !!Core.config.projectContextAutoInject;
     }
 
-    // 注册 /pctx 命令（避免和 context-panel.js 的 /context 冲突）
-    setTimeout(function() {
-      if (Core.custom && Core.custom.registerCommand) {
-        Core.custom.registerCommand('/pctx', function(args) {
-          return handleContextCommand(args);
-        });
-      }
-    }, 100);
+    // 命令注册（已声明 custom 依赖）
+    if (Core.custom && Core.custom.registerCommand) {
+      Core.custom.registerCommand('/pctx', function(args) {
+        return handleContextCommand(args);
+      });
+    }
 
     console.log('✅ 项目上下文协议模块已加载');
   }

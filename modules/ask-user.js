@@ -324,14 +324,12 @@ module.exports = {
       handleCommand: handleAskCommand
     };
 
-    // 注册 /ask 命令
-    setTimeout(function() {
-      if (Core.custom && Core.custom.registerCommand) {
-        Core.custom.registerCommand('/ask', function(args) {
-          return handleAskCommand(args);
-        });
-      }
-    }, 100);
+    // 命令注册（已声明 custom 依赖）
+    if (Core.custom && Core.custom.registerCommand) {
+      Core.custom.registerCommand('/ask', function(args) {
+        return handleAskCommand(args);
+      });
+    }
 
     console.log('✅ 交互式问答模块已加载');
   }

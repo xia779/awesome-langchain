@@ -41,14 +41,12 @@ function init(_Core) {
   // 启动定期健康检查
   startHealthMonitor();
 
-  // 注册 /health 命令
-  setTimeout(function() {
-    if (Core.custom && Core.custom.registerCommand) {
-      Core.custom.registerCommand('/health', function(args) {
-        return handleHealthCommand(args);
-      }, '连接健康检查 — 检测 Ollama 和云端服务状态');
-    }
-  }, 100);
+  // 命令注册（已声明 custom 依赖）
+  if (Core.custom && Core.custom.registerCommand) {
+    Core.custom.registerCommand('/health', function(args) {
+      return handleHealthCommand(args);
+    }, '连接健康检查 — 检测 Ollama 和云端服务状态');
+  }
 
   // 初始检查一次
   setTimeout(function() { checkAllHealth(); }, 3000);

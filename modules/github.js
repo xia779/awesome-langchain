@@ -605,14 +605,12 @@ module.exports = {
       handleCommand: handleGithubCommand
     };
 
-    // 注册 /github 命令
-    setTimeout(function() {
-      if (Core.custom && Core.custom.registerCommand) {
-        Core.custom.registerCommand('/github', function(args) {
-          return handleGithubCommand(args);
-        });
-      }
-    }, 100);
+    // 命令注册（已声明 custom 依赖）
+    if (Core.custom && Core.custom.registerCommand) {
+      Core.custom.registerCommand('/github', function(args) {
+        return handleGithubCommand(args);
+      });
+    }
 
     // 延迟检测环境
     setTimeout(function() {

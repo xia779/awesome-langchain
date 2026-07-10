@@ -19,10 +19,8 @@ function init(_Core) {
 
   // 注册命令
   if (Core.custom && Core.custom.registerCommand) {
-    setTimeout(function() {
-      Core.custom.registerCommand('/context', handleContextCommand, '上下文面板：/context [toggle|show|hide|refresh]');
-      Core.custom.registerCommand('/ctx', handleContextCommand, '上下文面板（同 /context）');
-    }, 100);
+    Core.custom.registerCommand('/context', handleContextCommand, '上下文面板：/context [toggle|show|hide|refresh]');
+    Core.custom.registerCommand('/ctx', handleContextCommand, '上下文面板（同 /context）');
   }
 
   // 挂载到 Core

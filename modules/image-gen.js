@@ -626,6 +626,8 @@ function registerCommands() {
 }
 
 module.exports = {
+  name: 'image-gen',
+  dependencies: ['custom'],
   init: function(_Core) {
     Core = _Core;
     if (!Core.config.imageGenProvider) Core.config.imageGenProvider = 'silicon';
@@ -645,8 +647,8 @@ module.exports = {
       buildWorkflow: _buildTxt2ImgWorkflow,
     };
 
-    // 延迟注册命令（custom.js 在 image-gen.js 之后加载）
-    setTimeout(function() { registerCommands(); }, 100);
+    // 命令注册（已声明 custom 依赖，无需 setTimeout）
+    registerCommands();
 
     // 启动时检查 ComfyUI 状态
     checkComfyUI().then(function(status) {

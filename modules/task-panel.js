@@ -358,14 +358,12 @@ module.exports = {
       handleCommand: handleTaskCommand
     };
 
-    // 注册 /task 命令
-    setTimeout(function() {
-      if (Core.custom && Core.custom.registerCommand) {
-        Core.custom.registerCommand('/task', function(args) {
-          return handleTaskCommand(args);
-        });
-      }
-    }, 100);
+    // 命令注册（已声明 custom 依赖）
+    if (Core.custom && Core.custom.registerCommand) {
+      Core.custom.registerCommand('/task', function(args) {
+        return handleTaskCommand(args);
+      });
+    }
 
     console.log('✅ 子任务面板模块已加载');
   }

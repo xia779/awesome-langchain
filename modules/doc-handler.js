@@ -1037,6 +1037,8 @@ function registerCommands() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 module.exports = {
+  name: 'doc-handler',
+  dependencies: ['custom'],
   init: function(_Core) {
     Core = _Core;
 
@@ -1060,8 +1062,8 @@ module.exports = {
       getOutputDir: getOutputDir,
     };
 
-    // 延迟注册命令（custom.js 在后面加载）
-    setTimeout(function() { registerCommands(); }, 150);
+    // 命令注册（已声明 custom 依赖，无需 setTimeout）
+    registerCommands();
 
     console.log('✅ 文档处理套件已加载（PDF/DOCX/XLSX/PPTX）');
   },

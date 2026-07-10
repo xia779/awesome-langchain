@@ -371,46 +371,48 @@ function executeCode(code, language) {
 }
 
 // ----- 5e: /plan 和 /orchestrate 命令 -----
-setTimeout(function() {
-  if (Core.custom && Core.custom.registerCommand) {
-    Core.custom.registerCommand('/plan', function(args) {
-      if (!args || !args.trim()) return '❌ 请提供任务描述: /plan <复杂任务>';
-      planAndExecute(args.trim()).then(function(result) {
-        if (Core.session && Core.session.addMessage) {
-          Core.session.addMessage(result, 'ai');
-        }
-      });
-      return '⏳ 正在规划和执行任务...';
-    }, '多步规划执行 — 将复杂任务分解为子步骤并逐步执行');
+function registerCommands() {
+  if (!Core.custom || !Core.custom.registerCommand) return;
 
-    Core.custom.registerCommand('/orchestrate', function(args) {
-      if (!args || !args.trim()) return '❌ 请提供任务描述: /orchestrate <任务> | <子任务1> | <子任务2>';
-      var parts = args.split('|').map(function(s) { return s.trim(); }).filter(Boolean);
-      if (parts.length < 2) return '❌ 格式: /orchestrate <总任务> | <子任务1> | <子任务2> | ...';
-      var mainTask = parts[0];
-      var subtasks = parts.slice(1);
-      orchestrateSubtasks(mainTask, subtasks).then(function(result) {
-        if (Core.session && Core.session.addMessage) {
-          Core.session.addMessage(result, 'ai');
-        }
-      });
-      return '⏳ 正在编排 ' + subtasks.length + ' 个子任务...';
-    }, '子任务编排 — 并行执行多个子任务并合并结果');
-
-    Core.custom.registerCommand('/exec', function(args) {
-      if (!args || !args.trim()) return '❌ 请提供代码: /exec <javascript代码>';
-      var result = executeCode(args.trim());
-      if (result.success) {
-        var output = result.output ? '控制台输出:\n' + result.output + '\n\n' : '';
-        return '**执行结果：**\n```\n' + output + '返回值: ' + result.result + '\n```';
+  Core.custom.registerCommand('/plan', function(args) {
+    if (!args || !args.trim()) return '❌ 请提供任务描述: /plan <复杂任务>';
+    planAndExecute(args.trim()).then(function(result) {
+      if (Core.session && Core.session.addMessage) {
+        Core.session.addMessage(result, 'ai');
       }
-      return '❌ 执行错误: ' + result.error;
-    }, '代码沙盒执行 — 在安全沙箱中执行 JavaScript 代码');
-  }
-}, 200);
+    });
+    return '⏳ 正在规划和执行任务...';
+  }, '多步规划执行 — 将复杂任务分解为子步骤并逐步执行');
+
+  Core.custom.registerCommand('/orchestrate', function(args) {
+    if (!args || !args.trim()) return '❌ 请提供任务描述: /orchestrate <任务> | <子任务1> | <子任务2>';
+    var parts = args.split('|').map(function(s) { return s.trim(); }).filter(Boolean);
+    if (parts.length < 2) return '❌ 格式: /orchestrate <总任务> | <子任务1> | <子任务2> | ...';
+    var mainTask = parts[0];
+    var subtasks = parts.slice(1);
+    orchestrateSubtasks(mainTask, subtasks).then(function(result) {
+      if (Core.session && Core.session.addMessage) {
+        Core.session.addMessage(result, 'ai');
+      }
+    });
+    return '⏳ 正在编排 ' + subtasks.length + ' 个子任务...';
+  }, '子任务编排 — 并行执行多个子任务并合并结果');
+
+  Core.custom.registerCommand('/exec', function(args) {
+    if (!args || !args.trim()) return '❌ 请提供代码: /exec <javascript代码>';
+    var result = executeCode(args.trim());
+    if (result.success) {
+      var output = result.output ? '控制台输出:\n' + result.output + '\n\n' : '';
+      return '**执行结果：**\n```\n' + output + '返回值: ' + result.result + '\n```';
+    }
+    return '❌ 执行错误: ' + result.error;
+  }, '代码沙盒执行 — 在安全沙箱中执行 JavaScript 代码');
+}
 
 // ===== 模块导出 =====
 module.exports = {
+  name: 'agent',
+  dependencies: ['custom'],
   init(_Core) {
     Core = _Core;
     Core.agent = {
@@ -426,6 +428,7 @@ module.exports = {
       parseReActOutput,    // ReAct 解析（备用）
       MAX_STEPS,
     };
+    registerCommands();
     console.log('✅ Agent 模块已加载（委托模式，统一使用 api.js Agent 引擎）');
   }
 };

@@ -85,6 +85,13 @@ function init(_Core) {
   if (fs.existsSync(localMarketplace)) {
     try { marketplaceRegistry = JSON.parse(fs.readFileSync(localMarketplace, 'utf8')); } catch(e) {}
   }
+
+  // 注册命令
+  registerPluginCommands();
+
+  // 启动自动更新检查
+  setTimeout(function() { startAutoUpdateCheck(); }, 5000);
+
   console.log('✅ 插件系统已加载');
 }
 
@@ -955,7 +962,7 @@ function validatePlugin(pluginId) {
 }
 
 // ----- 5e: 扩展 /plugin 命令 -----
-setTimeout(function() {
+function registerPluginCommands() {
   if (Core.custom && Core.custom.registerCommand) {
     Core.custom.registerCommand('/plugin', function(args) {
       var parts = (args || '').trim().split(/\s+/);
@@ -1033,9 +1040,6 @@ setTimeout(function() {
         '/plugin perms [ID] — 查看权限';
     }, '插件生态管理 — create/validate/update/deps/perms');
   }
-}, 200);
+}
 
-// 启动自动更新检查
-setTimeout(function() { startAutoUpdateCheck(); }, 5000);
-
-module.exports = { init };
+module.exports = { name: 'plugins', dependencies: ['custom'], init };

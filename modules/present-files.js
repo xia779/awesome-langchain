@@ -372,14 +372,12 @@ module.exports = {
       getFileIcon: getFileIcon
     };
 
-    // 注册命令
-    setTimeout(function() {
-      if (Core.custom && Core.custom.registerCommand) {
-        Core.custom.registerCommand('/filecard', function(args) {
-          return handleFilePresentCommand(args);
-        });
-      }
-    }, 100);
+    // 命令注册（已声明 custom 依赖）
+    if (Core.custom && Core.custom.registerCommand) {
+      Core.custom.registerCommand('/filecard', function(args) {
+        return handleFilePresentCommand(args);
+      });
+    }
 
     // 启动观察器
     setTimeout(startObserver, 800);

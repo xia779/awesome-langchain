@@ -502,14 +502,12 @@ module.exports = {
       handleCommand: handleArtifactCommand
     };
 
-    // 注册 /artifact 命令
-    setTimeout(function() {
-      if (Core.custom && Core.custom.registerCommand) {
-        Core.custom.registerCommand('/artifact', function(args) {
-          return handleArtifactCommand(args);
-        });
-      }
-    }, 100);
+    // 命令注册（已声明 custom 依赖）
+    if (Core.custom && Core.custom.registerCommand) {
+      Core.custom.registerCommand('/artifact', function(args) {
+        return handleArtifactCommand(args);
+      });
+    }
 
     // 启动观察器
     setTimeout(startObserver, 500);

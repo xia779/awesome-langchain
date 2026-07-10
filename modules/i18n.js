@@ -160,10 +160,10 @@ let currentLang = 'zh';
 
 function init(_Core) {
   Core = _Core;
-  
+
   // 从配置加载语言设置
   currentLang = Core.config.language || 'zh';
-  
+
   // 暴露键盘导航 API 供其他模块使用
   Core.KEYBOARD_NAV = KEYBOARD_NAV;
 
@@ -174,7 +174,10 @@ function init(_Core) {
     getAvailableLanguages, // 获取可用语言列表
     refreshUI,   // 刷新 UI 文本
   };
-  
+
+  // 注册命令
+  registerCommands();
+
   // 启动时刷新 UI
   setTimeout(() => refreshUI(), 1000);
 
@@ -422,7 +425,7 @@ function setFontSize(scale) {
 }
 
 // ----- 注册命令 -----
-setTimeout(function() {
+function registerCommands() {
   if (Core.custom && Core.custom.registerCommand) {
     Core.custom.registerCommand('/lang', function(args) {
       var lang = (args || '').trim();
@@ -467,7 +470,7 @@ setTimeout(function() {
 
   // 初始化无障碍
   setupAccessibility();
-}, 300);
+}
 
 // 更新可用语言列表
 var _origGetAvailable = getAvailableLanguages;
@@ -480,4 +483,4 @@ getAvailableLanguages = function() {
   ];
 };
 
-module.exports = { init };
+module.exports = { name: 'i18n', dependencies: ['custom'], init };

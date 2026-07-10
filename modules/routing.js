@@ -324,7 +324,7 @@ function listMasterRoles() {
 
 module.exports = {
   name: 'routing',
-  dependencies: [],
+  dependencies: ['custom'],
   init: function(_Core) {
     Core = _Core;
     Core.routing = {
@@ -347,13 +347,11 @@ module.exports = {
         } else {
           // custom.js 尚未初始化，延迟注册
           var pending = cmd;
-          setTimeout(function() {
-            if (Core.custom && Core.custom.registerCommand) {
-              Core.custom.registerCommand(cmd, desc || '', handler, false);
-            } else {
-              console.warn('[routing] register failed: Core.custom unavailable for ' + pending);
-            }
-          }, 500);
+          if (Core.custom && Core.custom.registerCommand) {
+            Core.custom.registerCommand(cmd, desc || '', handler, false);
+          } else {
+            console.warn('[routing] register failed: Core.custom unavailable for ' + pending);
+          }
         }
       },
     };

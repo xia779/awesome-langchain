@@ -1185,3 +1185,5 @@ function init(_Core) {
 }
 
 exports.init = init;
+exports.name = 'workflow';
+exports.dependencies = ['custom'];

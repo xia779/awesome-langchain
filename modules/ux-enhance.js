@@ -795,3 +795,5 @@ function init(_Core) {
 }
 
 exports.init = init;
+exports.name = 'ux-enhance';
+exports.dependencies = ['custom'];

@@ -22,19 +22,17 @@ function init(_Core) {
     togglePanel, TYPES, onNotification,
   };
 
-  setTimeout(function() {
-    if (Core.custom && Core.custom.registerCommand) {
-      Core.custom.registerCommand('/notifications', function(args) {
-        return handleNotificationsCommand(args);
-      }, '通知中心 — 查看/管理所有通知');
-      Core.custom.registerCommand('/bell', function() {
-        return handleNotificationsCommand('list');
-      }, '通知铃铛 — 查看未读通知');
-    }
-    createNotificationPanel();
-    addBellButton();
-    hookIntoEvents();
-  }, 200);
+  if (Core.custom && Core.custom.registerCommand) {
+    Core.custom.registerCommand('/notifications', function(args) {
+      return handleNotificationsCommand(args);
+    }, '通知中心 — 查看/管理所有通知');
+    Core.custom.registerCommand('/bell', function() {
+      return handleNotificationsCommand('list');
+    }, '通知铃铛 — 查看未读通知');
+  }
+  createNotificationPanel();
+  addBellButton();
+  hookIntoEvents();
 
   loadNotifications();
   console.log('✅ 统一通知中心已加载');

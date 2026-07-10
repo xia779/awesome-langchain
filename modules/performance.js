@@ -105,13 +105,13 @@ function init(_Core) {
   };
 
   setupPerformanceOptimizations();
+  setupTTSDelegation();
+  startMemoryCleanup();
   setupCrashRecovery();
   setupPerfMonitoring();
 
-  // 延迟注册命令（custom.js 在 performance.js 之后加载）
-  setTimeout(function() {
-    registerCommands();
-  }, 100);
+  // 命令注册（已声明 custom 依赖，无需 setTimeout）
+  registerCommands();
 
   console.log('\u26a1 \u6027\u80fd\u4f18\u5316\u6a21\u5757\u5df2\u52a0\u8f7d\uff08Phase 8\uff09');
 }
@@ -1218,12 +1218,4 @@ function startMemoryCleanup() {
   }, PERF_CONFIG.gcInterval);
 }
 
-// 在 setupPerformanceOptimizations 中调用
-var _origSetup = setupPerformanceOptimizations;
-setupPerformanceOptimizations = function() {
-  _origSetup();
-  setupTTSDelegation();
-  startMemoryCleanup();
-};
-
-module.exports = { init: init };
+module.exports = { name: 'performance', dependencies: ['custom'], init: init };

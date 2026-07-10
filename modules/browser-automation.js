@@ -807,14 +807,12 @@ module.exports = {
       getHistory: function() { return sessionHistory.slice(); }
     };
 
-    // 注册 /browser 命令
-    setTimeout(function() {
-      if (Core.custom && Core.custom.registerCommand) {
-        Core.custom.registerCommand('/browser', function(args) {
-          return handleBrowserCommand(args);
-        });
-      }
-    }, 100);
+    // 命令注册（已声明 custom 依赖）
+    if (Core.custom && Core.custom.registerCommand) {
+      Core.custom.registerCommand('/browser', function(args) {
+        return handleBrowserCommand(args);
+      });
+    }
 
   }
 };

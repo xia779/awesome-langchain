@@ -11,18 +11,16 @@ function init(_Core) {
     getSystemHealth,
   };
 
-  // 注册 /dashboard 命令
-  setTimeout(function() {
-    if (Core.custom && Core.custom.registerCommand) {
-      Core.custom.registerCommand('/dashboard', function(args) {
-        return renderDashboard(args);
-      }, '系统总览仪表盘 — 一屏查看所有系统状态');
+  // 命令注册（已声明 custom 依赖）
+  if (Core.custom && Core.custom.registerCommand) {
+    Core.custom.registerCommand('/dashboard', function(args) {
+      return renderDashboard(args);
+    }, '系统总览仪表盘 — 一屏查看所有系统状态');
 
-      Core.custom.registerCommand('/sys', function(args) {
-        return renderDashboard(args);
-      }, '系统总览（/dashboard 别名）');
-    }
-  }, 100);
+    Core.custom.registerCommand('/sys', function(args) {
+      return renderDashboard(args);
+    }, '系统总览（/dashboard 别名）');
+  }
 
   console.log('✅ 系统总览仪表盘已加载');
 }

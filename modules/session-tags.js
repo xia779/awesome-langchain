@@ -42,10 +42,8 @@ function init(_Core) {
 
   // 注册命令
   if (Core.custom && Core.custom.registerCommand) {
-    setTimeout(function() {
-      Core.custom.registerCommand('/tag', handleTagCommand, '标签管理：/tag list|add|remove|color|filter|batch|rename|delete|stats|export|import');
-      Core.custom.registerCommand('/tags', handleTagCommand, '标签管理（同 /tag）');
-    }, 100);
+    Core.custom.registerCommand('/tag', handleTagCommand, '标签管理：/tag list|add|remove|color|filter|batch|rename|delete|stats|export|import');
+    Core.custom.registerCommand('/tags', handleTagCommand, '标签管理（同 /tag）');
   }
 
   // 挂载到 Core
@@ -716,4 +714,4 @@ function handleTagCommand(input) {
   }
 }
 
-module.exports = { init };
+module.exports = { name: 'session-tags', dependencies: ['custom'], init };

@@ -19,9 +19,7 @@ function init(_Core) {
 
   // 注册命令
   if (Core.custom && Core.custom.registerCommand) {
-    setTimeout(function() {
-      Core.custom.registerCommand('/polish', handlePolishCommand, '微交互：/polish [reactions|shortcuts|status|scroll]');
-    }, 100);
+    Core.custom.registerCommand('/polish', handlePolishCommand, '微交互：/polish [reactions|shortcuts|status|scroll]');
   }
 
   // 挂载 API
@@ -642,4 +640,4 @@ function handlePolishCommand(input) {
   }
 }
 
-module.exports = { init };
+module.exports = { name: 'ux-polish', dependencies: ['custom'], init };
