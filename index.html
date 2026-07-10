@@ -50,7 +50,7 @@
 
 <!-- ===== 汉堡菜单 ===== -->
 <div id="menuToggle" title="切换侧边栏">☰</div>
-<button id="shortcutHintBtn" class="icon-btn top-bar-btn" title="快捷键 (Ctrl+/)"><span class="material-icons-outlined" style="font-size:18px;">keyboard</span></button>
+<button id="shortcutHintBtn" class="icon-btn top-bar-btn" title="快捷键 (Ctrl+/)"><span class="material-icons-outlined" style="font-size:18px;vertical-align:middle;">keyboard</span></button>
 
 <!-- ===== 侧边栏 ===== -->
 <div id="sidebar">
@@ -107,7 +107,7 @@
   
   <!-- 🔧 滚动到底部按钮（居中悬浮于输入框上方） -->
   <button id="scrollToBottomBtn" class="scroll-to-bottom-btn" title="滚动到底部">
-    <span class="material-icons-outlined" style="font-size:20px;">keyboard_arrow_down</span>
+    <span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">keyboard_arrow_down</span>
   </button>
 
 <!-- ===== 方向A1：消息搜索框 ===== -->
@@ -174,9 +174,9 @@
     <!-- 输入行：模型选择 + 文本框 + 发送 -->
     <div class="input-row">
       <div class="model-tag" id="modelTag" title="切换模型">
-        <span class="material-icons-outlined" style="font-size:14px;">smart_toy</span>
+        <span class="material-icons-outlined" style="font-size:14px;vertical-align:middle;">smart_toy</span>
         <span id="modelTagName">DeepSeek V4</span>
-        <span class="material-icons-outlined" style="font-size:14px; opacity:0.5;">expand_more</span>
+        <span class="material-icons-outlined" style="font-size:14px;vertical-align:middle;opacity:0.5;">expand_more</span>
         <select id="modelSelect" title="选择模型">
           <option value="deepseek:deepseek-v4-flash">DeepSeek V4</option>
           <option value="deepseek:deepseek-chat">DeepSeek V3</option>
@@ -201,7 +201,7 @@
         </select>
       </div>
       <textarea id="input" placeholder="输入消息，Shift+Enter换行..." rows="1"></textarea>
-      <button id="send" title="发送" onclick="if(window.Core&&Core.api&&Core.api.sendMessage)Core.api.sendMessage()"><span class="material-icons-outlined" style="font-size:20px;">arrow_upward</span></button>
+      <button id="send" title="发送" onclick="if(window.Core&&Core.api&&Core.api.sendMessage)Core.api.sendMessage()"><span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">arrow_upward</span></button>
     </div>
     <div id="status">✅ 已就绪</div>
   </div>
@@ -312,9 +312,9 @@
         <label class="auto-route-label"><input type="checkbox" id="autoRouteCheckbox" /> 自动路由模型（根据联网状态切换）</label>
         <label class="auto-route-label"><input type="checkbox" id="notificationCheckbox" /> 新消息系统通知（窗口不在前台时）</label>
         <label class="auto-route-label"><input type="checkbox" id="autoKnowledgeCheckbox" /> 自动存入知识库（每轮对话结束后）</label>
-        <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-          <label style="font-size:12px; color:var(--text-secondary);">向量后端:</label>
-          <select id="vectorBackendSelect" style="padding:4px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; background:var(--bg-secondary,#1e293b); color:var(--text,#e2e8f0);">
+        <div class="flex-row-center" style="margin-top:8px;">
+          <label class="settings-hint-text">向量后端:</label>
+          <select id="vectorBackendSelect" class="select-compact">
             <option value="json">JSON + Ollama（默认）</option>
           </select>
           <span id="vectorBackendStatus" style="font-size:11px; color:var(--text-secondary);"></span>
@@ -411,133 +411,133 @@
     </summary>
     <div class="settings-group-body">
       <div class="api-group">
-        <label style="font-weight:600; color:var(--primary);">模型管理</label>
-        <div style="display:flex; gap:8px; margin-top:8px;">
-          <input id="modelDownloadInput" placeholder="输入模型名，如 qwen2.5:3b" style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px;" />
-          <button id="modelDownloadBtn" style="padding:8px 18px; background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:500;">下载</button>
+        <label class="settings-group-title">模型管理</label>
+        <div class="flex-row-center" style="margin-top:8px;">
+          <input id="modelDownloadInput" placeholder="输入模型名，如 qwen2.5:3b" class="input-sm" />
+          <button id="modelDownloadBtn" class="btn-primary-sm" style="padding:8px 18px;">下载</button>
         </div>
         <div id="downloadProgressContainer">
           <div style="background:#e2e8f0; border-radius:5px; height:10px; overflow:hidden;">
             <div id="downloadProgressBar" style="width:0%; height:100%; background:var(--primary); transition:width 0.3s;"></div>
           </div>
-          <div id="downloadProgressText" style="font-size:12px; color:var(--text-secondary); margin-top:6px;">准备下载...</div>
+          <div id="downloadProgressText" class="settings-hint-text" style="margin-top:6px;">准备下载...</div>
         </div>
         <div id="modelListContainer" style="margin-top:12px; max-height:240px; overflow-y:auto;"></div>
       </div>
       <div class="api-group" id="knowledgeGroup">
         <label>知识库管理</label>
-        <div style="margin-bottom:8px; font-size:12px; color:var(--text-secondary);">支持的格式：.txt .md .pdf .docx .xlsx .csv</div>
+        <div class="description-text">支持的格式：.txt .md .pdf .docx .xlsx .csv</div>
         <div class="btn-group">
           <button id="knowledgeUploadBtn" class="btn-primary" style="flex:1;">上传文档</button>
           <button id="knowledgeRefreshBtn" class="btn-primary" style="background:#2a2a2a; flex:1;">刷新列表</button>
         </div>
         <input type="file" id="knowledgeFileInput" accept=".txt,.md,.pdf,.docx,.doc,.xlsx,.xls,.csv" style="display:none;" />
         <div id="knowledgeDocList" style="margin-top:12px; max-height:200px; overflow-y:auto;">
-          <div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:16px 0;">暂无文档，请上传</div>
+          <div class="empty-state-text">暂无文档，请上传</div>
         </div>
         <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:12px;">
-          <label style="font-size:12px;">测试知识库检索</label>
-          <div style="display:flex; gap:8px; margin-top:6px;">
-            <input id="knowledgeTestQuery" placeholder="输入问题测试检索..." style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px; background:var(--bg); color:var(--text);" />
-            <button id="knowledgeTestBtn" style="padding:8px 16px; background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:13px;">检索</button>
+          <label class="settings-hint-text">测试知识库检索</label>
+          <div class="flex-row-center" style="margin-top:6px;">
+            <input id="knowledgeTestQuery" placeholder="输入问题测试检索..." class="input-sm" />
+            <button id="knowledgeTestBtn" class="btn-primary-sm" style="padding:8px 16px;">检索</button>
           </div>
-          <div id="knowledgeTestResults" style="margin-top:8px; font-size:12px; color:var(--text-secondary); max-height:150px; overflow-y:auto;"></div>
+          <div id="knowledgeTestResults" class="settings-hint-text" style="margin-top:8px; max-height:150px; overflow-y:auto;"></div>
         </div>
       </div>
       <div class="api-group" id="favoritesGroup">
         <label>收藏夹</label>
-        <div style="margin-bottom:8px; font-size:12px; color:var(--text-secondary);">已收藏的消息</div>
-        <button id="favoritesRefreshBtn" class="btn-primary" style="width:100%; margin-bottom:8px;">刷新收藏列表</button>
+        <div class="description-text">已收藏的消息</div>
+        <button id="favoritesRefreshBtn" class="btn-primary btn-full">刷新收藏列表</button>
         <div id="favoritesList" style="max-height:250px; overflow-y:auto;">
-          <div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:16px 0;">暂无收藏消息</div>
+          <div class="empty-state-text">暂无收藏消息</div>
         </div>
       </div>
       <div class="api-group" id="pluginsGroup">
         <label>插件管理</label>
-        <div style="margin-bottom:8px; font-size:12px; color:var(--text-secondary);">将插件目录放入 <code>E:\my-ai-data\plugins\</code></div>
-        <button id="pluginsRefreshBtn" class="btn-primary" style="width:100%; margin-bottom:8px;">刷新插件列表</button>
+        <div class="description-text">将插件目录放入 <code>E:\my-ai-data\plugins\</code></div>
+        <button id="pluginsRefreshBtn" class="btn-primary btn-full">刷新插件列表</button>
         <div id="pluginsList" style="max-height:250px; overflow-y:auto;">
-          <div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:16px 0;">暂无插件</div>
+          <div class="empty-state-text">暂无插件</div>
         </div>
       </div>
 
       <div class="api-group" id="imageGenGroup">
-        <label style="font-weight:600; color:var(--primary);">图像生成</label>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="font-size:12px; color:var(--text-secondary); min-width:60px;">引擎:</label>
-            <select id="imageGenProviderSelect" style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;">
+        <label class="settings-group-title">图像生成</label>
+        <div class="flex-col-gap8">
+          <div class="flex-row-center">
+            <label class="settings-field-label">引擎:</label>
+            <select id="imageGenProviderSelect" class="select-compact">
               <option value="silicon">Silicon Flow（国内推荐）</option>
               <option value="openai">OpenAI DALL-E</option>
               <option value="comfyui">ComfyUI（本地）</option>
             </select>
           </div>
           <div id="siliconFlowKeyGroup">
-            <label style="font-size:12px; color:var(--text-secondary);">Silicon Flow API Key:</label>
-            <input id="siliconFlowKey" type="password" placeholder="sk-..." style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; margin-top:4px;" />
+            <label class="settings-hint-text">Silicon Flow API Key:</label>
+            <input id="siliconFlowKey" type="password" placeholder="sk-..." class="input-compact" />
           </div>
           <div id="openaiImageKeyGroup" style="display:none;">
-            <label style="font-size:12px; color:var(--text-secondary);">OpenAI API Key:</label>
-            <input id="openaiImageKey" type="password" placeholder="sk-..." style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; margin-top:4px;" />
+            <label class="settings-hint-text">OpenAI API Key:</label>
+            <input id="openaiImageKey" type="password" placeholder="sk-..." class="input-compact" />
           </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="font-size:12px; color:var(--text-secondary); min-width:60px;">尺寸:</label>
-            <select id="imageGenSizeSelect" style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;">
+          <div class="flex-row-center">
+            <label class="settings-field-label">尺寸:</label>
+            <select id="imageGenSizeSelect" class="select-compact">
               <option value="1024x1024">1024×1024（方形）</option>
               <option value="1024x1792">1024×1792（竖版）</option>
               <option value="1792x1024">1792×1024（横版）</option>
             </select>
           </div>
-          <div style="font-size:11px; color:var(--text-secondary); padding:4px 0;">
+          <div class="settings-usage-text">
             使用方式: 在聊天中输入 <code>/draw 描述文字</code> 即可生成图片
           </div>
         </div>
       </div>
       <div class="api-group" id="videoGenGroup">
-        <label style="font-weight:600; color:var(--primary);">视频生成</label>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="font-size:12px; color:var(--text-secondary); min-width:60px;">模型:</label>
-            <select id="videoGenModelSelect" style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;">
+        <label class="settings-group-title">视频生成</label>
+        <div class="flex-col-gap8">
+          <div class="flex-row-center">
+            <label class="settings-field-label">模型:</label>
+            <select id="videoGenModelSelect" class="select-compact">
               <option value="Wan-AI/Wan2.1-T2V-14B">Wan 2.1 (14B, 高质量)</option>
               <option value="Wan-AI/Wan2.1-T2V-480P">Wan 2.1 (480P, 快速)</option>
               <option value="THUDM/CogVideoX-5b">CogVideoX (5B)</option>
             </select>
           </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <label style="font-size:12px; color:var(--text-secondary); min-width:60px;">分辨率:</label>
-            <select id="videoGenSizeSelect" style="flex:1; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;">
+          <div class="flex-row-center">
+            <label class="settings-field-label">分辨率:</label>
+            <select id="videoGenSizeSelect" class="select-compact">
               <option value="1280x720">1280×720 (720P)</option>
               <option value="832x480">832×480 (480P)</option>
               <option value="480x832">480×832 (竖版)</option>
             </select>
           </div>
-          <div style="font-size:11px; color:var(--text-secondary); padding:4px 0;">
+          <div class="settings-usage-text">
             使用方式: 在聊天中输入 <code>/video 描述文字</code> 即可生成视频。使用图片生成的同一 API Key（Silicon Flow）。生成通常需要 1-3 分钟。
           </div>
         </div>
       </div>
       <div class="api-group" id="marketplaceGroup">
-        <label style="font-weight:600; color:var(--primary);">插件市场</label>
-        <div style="margin-bottom:8px; font-size:12px; color:var(--text-secondary);">浏览并一键安装技能插件</div>
-        <div style="display:flex; gap:8px; margin-bottom:8px;">
-          <input id="marketplaceUrlInput" placeholder="注册表 URL（可选）..." style="flex:1; padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px;" />
-          <button id="marketplaceRefreshBtn" style="padding:6px 12px; background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:12px;">刷新</button>
+        <label class="settings-group-title">插件市场</label>
+        <div class="description-text">浏览并一键安装技能插件</div>
+        <div class="flex-row-center" style="margin-bottom:8px;">
+          <input id="marketplaceUrlInput" placeholder="注册表 URL（可选）..." class="input-sm" style="padding:6px 10px;font-size:12px;" />
+          <button id="marketplaceRefreshBtn" class="btn-primary-sm" style="padding:6px 12px;font-size:12px;">刷新</button>
         </div>
         <div id="marketplaceList" style="max-height:300px; overflow-y:auto;">
-          <div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:16px 0;">加载中...</div>
+          <div class="empty-state-text">加载中...</div>
         </div>
       </div>
             <div class="api-group" id="skillsGroup">
-        <label style="font-weight:600; color:var(--primary);">技能管理</label>
-        <div style="margin-bottom:8px; font-size:12px; color:var(--text-secondary);">技能文件存放于 <code>E:\my-ai-data\skills\</code>，每个技能一个目录（含 skill.json + prompt.md）</div>
-        <div style="display:flex; gap:8px; margin-bottom:8px;">
-          <input id="skillInstallInput" placeholder="粘贴技能目录路径安装..." style="flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:13px;" />
-          <button id="skillInstallBtn" style="padding:8px 14px; background:var(--primary); color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:500;">安装</button>
+        <label class="settings-group-title">技能管理</label>
+        <div class="description-text">技能文件存放于 <code>E:\my-ai-data\skills\</code>，每个技能一个目录（含 skill.json + prompt.md）</div>
+        <div class="flex-row-center" style="margin-bottom:8px;">
+          <input id="skillInstallInput" placeholder="粘贴技能目录路径安装..." class="input-sm" />
+          <button id="skillInstallBtn" class="btn-primary-sm" style="padding:8px 14px;">安装</button>
         </div>
-        <button id="skillsRefreshBtn" class="btn-primary" style="width:100%; margin-bottom:8px;">刷新技能列表</button>
+        <button id="skillsRefreshBtn" class="btn-primary btn-full">刷新技能列表</button>
         <div id="skillsList" style="max-height:280px; overflow-y:auto;">
-          <div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:16px 0;">正在加载...</div>
+          <div class="empty-state-text">正在加载...</div>
         </div>
       </div>
     </div>
@@ -552,53 +552,53 @@
     <div class="settings-group-body">
 
       <!-- 主题选择 -->
-      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
-        <label style="font-weight:600;font-size:13px;">
-          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">palette</span>
+      <div class="setting-row">
+        <label class="settings-section-label">
+          <span class="material-icons-outlined material-icons-inline">palette</span>
           UI 主题
         </label>
         <div id="themeList" style="width:100%;display:flex;flex-wrap:wrap;gap:6px;"></div>
-        <div style="display:flex;gap:6px;">
-          <input type="text" id="newThemeName" placeholder="新主题名称" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
-          <button id="createThemeBtn" style="padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;">创建</button>
+        <div style="display:flex;gap:6px;width:100%;">
+          <input type="text" id="newThemeName" placeholder="新主题名称" class="input-sm">
+          <button id="createThemeBtn" class="btn-primary-sm">创建</button>
         </div>
       </div>
 
       <!-- 快捷键配置 -->
-      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
-        <label style="font-weight:600;font-size:13px;">
-          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">keyboard</span>
+      <div class="setting-row-spaced">
+        <label class="settings-section-label">
+          <span class="material-icons-outlined material-icons-inline">keyboard</span>
           快捷键配置
         </label>
         <div id="keybindList" style="width:100%;max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
-        <button id="resetKeybindsBtn" style="padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);cursor:pointer;font-size:13px;">恢复默认</button>
+        <button id="resetKeybindsBtn" class="btn-outline-sm">恢复默认</button>
       </div>
 
       <!-- 工具栏布局 -->
-      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
-        <label style="font-weight:600;font-size:13px;">
-          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">tune</span>
+      <div class="setting-row-spaced">
+        <label class="settings-section-label">
+          <span class="material-icons-outlined material-icons-inline">tune</span>
           工具栏按钮
         </label>
         <div id="toolbarList" style="width:100%;display:flex;flex-wrap:wrap;gap:6px;"></div>
       </div>
 
       <!-- 启动钩子 -->
-      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
-        <label style="font-weight:600;font-size:13px;">
-          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">bolt</span>
+      <div class="setting-row-spaced">
+        <label class="settings-section-label">
+          <span class="material-icons-outlined material-icons-inline">bolt</span>
           启动钩子 / 事件脚本
         </label>
         <div id="hookList" style="width:100%;max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
-        <div style="display:flex;gap:4px;width:100%;flex-wrap:wrap;">
-          <input type="text" id="newHookName" placeholder="钩子名称" style="width:100px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
-          <select id="newHookEvent" style="width:110px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+        <div class="flex-row-wrap">
+          <input type="text" id="newHookName" placeholder="钩子名称" style="width:100px;" class="input-sm">
+          <select id="newHookEvent" style="width:110px;" class="input-sm">
             <option value="onInit">启动时</option>
             <option value="configChanged">配置变更</option>
             <option value="typingEnd">AI回复完成</option>
           </select>
-          <input type="text" id="newHookScript" placeholder="JS脚本 (可用 Core 变量)" style="flex:1;min-width:100px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
-          <button id="addHookBtn" style="padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;">添加</button>
+          <input type="text" id="newHookScript" placeholder="JS脚本 (可用 Core 变量)" class="input-sm">
+          <button id="addHookBtn" class="btn-primary-sm">添加</button>
         </div>
       </div>
 
@@ -614,52 +614,52 @@
     <div class="settings-group-body">
 
       <!-- 会话模板管理 -->
-      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
-        <label style="font-weight:600;font-size:13px;">
-          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">dashboard_customize</span>
+      <div class="setting-row">
+        <label class="settings-section-label">
+          <span class="material-icons-outlined material-icons-inline">dashboard_customize</span>
           会话模板
         </label>
-        <div id="templateList" style="width:100%;max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+        <div id="templateList" class="scrollable-list"></div>
         <div style="display:flex;gap:6px;width:100%;">
-          <input type="text" id="newTemplateName" placeholder="模板名称" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
-          <button id="saveTemplateBtn" style="padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;">保存当前</button>
+          <input type="text" id="newTemplateName" placeholder="模板名称" class="input-sm">
+          <button id="saveTemplateBtn" class="btn-primary-sm">保存当前</button>
         </div>
       </div>
 
       <!-- 自动回复规则 -->
-      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
-        <label style="font-weight:600;font-size:13px;">
-          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">rule</span>
+      <div class="setting-row-spaced">
+        <label class="settings-section-label">
+          <span class="material-icons-outlined material-icons-inline">rule</span>
           自动回复规则
         </label>
-        <div id="ruleList" style="width:100%;max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
-        <div style="display:flex;gap:4px;width:100%;flex-wrap:wrap;">
-          <input type="text" id="newRuleName" placeholder="名称" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
-          <input type="text" id="newRuleKeywords" placeholder="关键词(逗号分隔)" style="flex:1;min-width:100px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
-          <input type="text" id="newRuleResponse" placeholder="自动回复" style="flex:1;min-width:100px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
-          <button id="addRuleBtn" style="padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;">添加</button>
+        <div id="ruleList" class="scrollable-list"></div>
+        <div class="flex-row-wrap">
+          <input type="text" id="newRuleName" placeholder="名称" style="width:80px;" class="input-sm">
+          <input type="text" id="newRuleKeywords" placeholder="关键词(逗号分隔)" class="input-sm">
+          <input type="text" id="newRuleResponse" placeholder="自动回复" class="input-sm">
+          <button id="addRuleBtn" class="btn-primary-sm">添加</button>
         </div>
       </div>
 
       <!-- 定时任务 -->
-      <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-top:12px;">
-        <label style="font-weight:600;font-size:13px;">
-          <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">schedule</span>
+      <div class="setting-row-spaced">
+        <label class="settings-section-label">
+          <span class="material-icons-outlined material-icons-inline">schedule</span>
           定时任务
         </label>
-        <div id="scheduleList" style="width:100%;max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
-        <div style="display:flex;gap:4px;width:100%;flex-wrap:wrap;">
-          <input type="text" id="newTaskName" placeholder="任务名称" style="width:90px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
-          <select id="newTaskScheduleType" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
+        <div id="scheduleList" class="scrollable-list"></div>
+        <div class="flex-row-wrap">
+          <input type="text" id="newTaskName" placeholder="任务名称" style="width:90px;" class="input-sm">
+          <select id="newTaskScheduleType" style="width:80px;" class="input-sm">
             <option value="once">一次性</option>
             <option value="interval">周期</option>
             <option value="daily">每天</option>
             <option value="weekly">每周</option>
             <option value="cron">Cron</option>
           </select>
-          <input type="text" id="newTaskTime" placeholder="如 5m / 2h / 09:00 / cron表达式" style="width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
-          <input type="text" id="newTaskAction" placeholder="提醒内容" style="flex:1;min-width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;">
-          <button id="addTaskBtn" style="padding:6px 14px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:13px;">添加</button>
+          <input type="text" id="newTaskTime" placeholder="如 5m / 2h / 09:00 / cron表达式" style="width:140px;" class="input-sm">
+          <input type="text" id="newTaskAction" placeholder="提醒内容" class="input-sm">
+          <button id="addTaskBtn" class="btn-primary-sm">添加</button>
         </div>
       </div>
 
@@ -677,25 +677,25 @@
       <div class="api-group" id="permissionsGroup">
         <label>🔒 权限控制</label>
         <div style="margin-bottom:12px;">
-          <label style="font-size:12px; display:block; margin-bottom:6px;">权限模式</label>
-          <select id="permissionModeSelect" style="width:100%; padding:8px 12px; background:var(--bg-tertiary,#1a1a2e); border:1px solid var(--border,#334155); border-radius:8px; color:var(--text,#e2e8f0); font-size:13px;">
+          <label class="settings-hint-text" style="display:block; margin-bottom:6px;">权限模式</label>
+          <select id="permissionModeSelect" class="select-full">
             <option value="full">全权模式 — Agent 可自主执行所有操作</option>
             <option value="ask">询问模式 — 敏感操作需用户确认</option>
           </select>
         </div>
         <div style="margin-bottom:12px;">
-          <label style="font-size:12px; display:block; margin-bottom:6px;">允许访问的目录</label>
+          <label class="settings-hint-text" style="display:block; margin-bottom:6px;">允许访问的目录</label>
           <div id="allowedDirsList" style="max-height:120px; overflow-y:auto; margin-bottom:8px; font-size:12px; color:var(--text-secondary,#94a3b8);">加载中...</div>
-          <div style="display:flex; gap:8px;">
-            <input type="text" id="newAllowedDirInput" placeholder="输入目录路径，如 D:\projects" style="flex:1; padding:6px 10px; background:var(--bg-tertiary,#1a1a2e); border:1px solid var(--border,#334155); border-radius:6px; color:var(--text,#e2e8f0); font-size:12px;" />
-            <button id="addAllowedDirBtn" class="btn-primary" style="padding:6px 14px; font-size:12px;">添加</button>
+          <div class="flex-row-center">
+            <input type="text" id="newAllowedDirInput" placeholder="输入目录路径，如 D:\projects" class="input-compact" style="margin-top:0;" />
+            <button id="addAllowedDirBtn" class="btn-primary-sm" style="padding:6px 14px; font-size:12px;">添加</button>
           </div>
         </div>
         <div style="margin-bottom:8px;">
-          <label style="font-size:12px; display:block; margin-bottom:6px;">审计日志</label>
+          <label class="settings-hint-text" style="display:block; margin-bottom:6px;">审计日志</label>
           <div id="auditLogStats" style="font-size:11px; color:var(--text-secondary,#94a3b8); margin-bottom:4px;">加载中...</div>
-          <button id="viewAuditLogBtn" style="padding:4px 12px; font-size:11px; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); border-radius:6px; color:#3b82f6; cursor:pointer;">查看最近操作</button>
-          <button id="clearAuditLogBtn" style="padding:4px 12px; font-size:11px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); border-radius:6px; color:#ef4444; cursor:pointer; margin-left:8px;">清空日志</button>
+          <button id="viewAuditLogBtn" class="btn-ghost-primary">查看最近操作</button>
+          <button id="clearAuditLogBtn" class="btn-ghost-danger">清空日志</button>
         </div>
       </div>
       <div class="api-group" style="border-bottom: none;">
@@ -708,7 +708,7 @@
   </details>
 
   <button class="save-settings" id="saveSettingsBtn">
-    <span class="material-icons-outlined" style="font-size:16px;vertical-align:middle;margin-right:4px;">save</span>保存设置
+    <span class="material-icons-outlined material-icons-inline">save</span>保存设置
   </button>
 </div>
 
