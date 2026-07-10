@@ -996,7 +996,7 @@ module.exports = {
           div.style.backgroundColor = Core.config.chatBubbleUser;
         }
         if (window.marked) {
-          div.innerHTML = marked.parse(content);
+          div.innerHTML = Core.renderMarkdown(content);
         } else {
           div.textContent = content;
         }

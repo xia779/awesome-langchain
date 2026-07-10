@@ -327,7 +327,7 @@ function createMessageElement(msg, index) {
   var content = msg.content || '';
   try {
     if (window.marked && window.marked.parse) {
-      content = window.marked.parse(content);
+      content = Core.renderMarkdown(content);
     }
   } catch (e) {}
   div.innerHTML = '<div class="msg-container">'
@@ -1059,7 +1059,7 @@ function optimizeStreamingUpdate(aiDiv, fullText, isNewChunk) {
 
     // 只对增量部分做 parse（如果增长不多，用 append 模式）
     try {
-      var html = typeof marked !== 'undefined' ? marked.parse(latestText) : escapeHtmlSimple(latestText);
+      var html = typeof marked !== 'undefined' ? Core.renderMarkdown(latestText) : escapeHtmlSimple(latestText);
       aiDiv.innerHTML = html + '<span class="typing-cursor"></span>';
     } catch (e) {
       aiDiv.innerHTML = escapeHtmlSimple(latestText) + '<span class="typing-cursor"></span>';
@@ -1079,7 +1079,7 @@ function endStreamingOptimization(aiDiv, finalText) {
   // 最终完整 parse
   if (aiDiv && finalText) {
     try {
-      var html = typeof marked !== 'undefined' ? marked.parse(finalText) : escapeHtmlSimple(finalText);
+      var html = typeof marked !== 'undefined' ? Core.renderMarkdown(finalText) : escapeHtmlSimple(finalText);
       aiDiv.innerHTML = html;
     } catch (e) {
       aiDiv.innerHTML = escapeHtmlSimple(finalText);

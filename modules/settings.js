@@ -253,7 +253,7 @@ async function initKnowledgePanel() {
         if (resultsDiv) resultsDiv.innerHTML = html;
       } catch (err) {
         if (resultsDiv) Core.hideSpinner(resultsDiv);
-        if (resultsDiv) resultsDiv.innerHTML = '<div style="color:#ef4444;">检索失败: ' + err.message + '</div>';
+        if (resultsDiv) resultsDiv.innerHTML = '<div style="color:#ef4444;">检索失败: ' + Core.sanitizeHtml(err.message) + '</div>';
       }
     });
     testQuery.addEventListener('keydown', (e) => { if (e.key === 'Enter') testBtn.click(); });
@@ -329,7 +329,7 @@ function renderKnowledgeDocList() {
       });
     });
   } catch (err) {
-    container.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:16px 0;">加载文档列表失败: ' + err.message + '</div>';
+    container.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:16px 0;">加载文档列表失败: ' + Core.sanitizeHtml(err.message) + '</div>';
   }
 }
 
@@ -381,7 +381,7 @@ async function refreshModelList() {
       });
     }
   } catch (err) {
-    container.innerHTML = `<div style="color:#ef4444;">加载模型列表失败: ${err.message}</div>`;
+    container.innerHTML = `<div style="color:#ef4444;">加载模型列表失败: ${Core.sanitizeHtml(err.message)}</div>`;
   }
 }
 
@@ -511,7 +511,7 @@ function renderPluginsList() {
       });
     });
   } catch (err) {
-    container.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:16px 0;">加载插件列表失败: ' + err.message + '</div>';
+    container.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:16px 0;">加载插件列表失败: ' + Core.sanitizeHtml(err.message) + '</div>';
   }
 }
 
@@ -599,7 +599,7 @@ async function renderMarketplaceList(url) {
       });
     });
   } catch (err) {
-    container.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:16px 0;">加载市场失败: ' + err.message + '</div>';
+    container.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:16px 0;">加载市场失败: ' + Core.sanitizeHtml(err.message) + '</div>';
   }
 }
 function initFavoritesPanel() {
@@ -706,7 +706,7 @@ function renderSkillsList() {
       });
     });
   } catch (err) {
-    container.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:16px 0;">加载技能列表失败: ' + err.message + '</div>';
+    container.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:16px 0;">加载技能列表失败: ' + Core.sanitizeHtml(err.message) + '</div>';
   }
 }
 

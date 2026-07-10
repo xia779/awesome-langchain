@@ -493,7 +493,7 @@ async function sendToAgent(task, isDeepThink) {
   const contentDiv = document.createElement('div');
   contentDiv.className = 'agent-content';
   if (window.marked && finalAnswer) {
-    contentDiv.innerHTML = marked.parse(finalAnswer);
+    contentDiv.innerHTML = Core.renderMarkdown(finalAnswer);
   } else {
     contentDiv.textContent = finalAnswer || 'Agent未能完成任务';
   }

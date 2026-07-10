@@ -130,7 +130,7 @@ function renderJsx(code, iframe) {
     '  var root = ReactDOM.createRoot(document.getElementById("root"));\n' +
     '  var comps = [App, Component, App.default, Component.default];\n' +
     '  for (var c of comps) { if (typeof c === "function") { root.render(React.createElement(c)); break; } }\n' +
-    '} catch(e) { document.getElementById("root").innerHTML = "<pre style=\\"color:#f87171\\">" + e.message + "</pre>"; }\n' +
+    '} catch(e) { var p=document.createElement("pre");p.style.color="#f87171";p.textContent=e.message;var r=document.getElementById("root");r.innerHTML="";r.appendChild(p); }\n' +
     '<\/script></body></html>';
 
   var blob = new Blob([jsxHtml], { type: 'text/html' });
@@ -150,7 +150,12 @@ function renderJsx(code, iframe) {
  */
 function renderMermaid(code, container) {
   var id = 'mermaid-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
-  container.innerHTML = '<div id="' + id + '" class="mermaid-preview">' + code + '</div>';
+  var div = document.createElement('div');
+  div.id = id;
+  div.className = 'mermaid-preview';
+  div.textContent = code;
+  container.innerHTML = '';
+  container.appendChild(div);
 
   if (window.mermaid) {
     try {
@@ -169,16 +174,26 @@ function renderMermaid(code, container) {
             }
           }
         }).catch(function(err) {
-          container.innerHTML = '<div class="artifact-error">Mermaid 渲染失败: ' + err.message + '</div>' +
-            '<pre class="artifact-fallback"><code>' + code + '</code></pre>';
+          container.innerHTML = '<div class="artifact-error">Mermaid 渲染失败: ' + Core.sanitizeHtml(err.message) + '</div>';
+          var pre = document.createElement('pre');
+          pre.className = 'artifact-fallback';
+          var codeEl = document.createElement('code');
+          codeEl.textContent = code;
+          pre.appendChild(codeEl);
+          container.appendChild(pre);
         });
       }
     } catch (e) {
-      container.innerHTML = '<div class="artifact-error">Mermaid 渲染错误: ' + e.message + '</div>';
+      container.innerHTML = '<div class="artifact-error">Mermaid 渲染错误: ' + Core.sanitizeHtml(e.message) + '</div>';
     }
   } else {
-    container.innerHTML = '<div class="artifact-error">Mermaid.js 未加载，无法渲染图表</div>' +
-      '<pre class="artifact-fallback"><code>' + code + '</code></pre>';
+    container.innerHTML = '<div class="artifact-error">Mermaid.js 未加载，无法渲染图表</div>';
+    var pre = document.createElement('pre');
+    pre.className = 'artifact-fallback';
+    var codeEl = document.createElement('code');
+    codeEl.textContent = code;
+    pre.appendChild(codeEl);
+    container.appendChild(pre);
   }
 }
 
@@ -203,7 +218,7 @@ function renderSvg(code, container) {
       container.innerHTML = '<div class="artifact-error">无效的 SVG 内容</div>';
     }
   } catch (e) {
-    container.innerHTML = '<div class="artifact-error">SVG 解析失败: ' + e.message + '</div>';
+    container.innerHTML = '<div class="artifact-error">SVG 解析失败: ' + Core.sanitizeHtml(e.message) + '</div>';
   }
 }
 

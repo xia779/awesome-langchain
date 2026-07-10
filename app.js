@@ -1026,7 +1026,14 @@ window.escapeHtml = function(str) {
       windows.forEach(function(win) {
         var item = document.createElement('div');
         item.className = 'screenshot-window-item';
-        item.innerHTML = '<img src="' + (win.thumbnail || '') + '" alt=""><div class="win-name">' + (win.name || '未知窗口') + '</div>';
+        var img = document.createElement('img');
+        img.src = win.thumbnail || '';
+        img.alt = '';
+        var nameDiv = document.createElement('div');
+        nameDiv.className = 'win-name';
+        nameDiv.textContent = win.name || '未知窗口';
+        item.appendChild(img);
+        item.appendChild(nameDiv);
         item.onclick = function() {
           // 捕获这个窗口
           captureWindowById(win.id, win.name);

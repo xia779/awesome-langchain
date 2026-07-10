@@ -214,7 +214,7 @@ function showHelp() {
     // 内联渲染回退
     const div = document.createElement('div');
     div.className = 'msg ai';
-    if (window.marked) div.innerHTML = marked.parse(helpText);
+    if (window.marked) div.innerHTML = Core.renderMarkdown(helpText);
     else div.textContent = helpText;
     Core.dom.chatContainer.appendChild(div);
     Core.dom.chatContainer.scrollTop = Core.dom.chatContainer.scrollHeight;
@@ -319,7 +319,7 @@ function showStats() {
   } else {
     const div = document.createElement('div');
     div.className = 'msg ai';
-    if (window.marked) div.innerHTML = marked.parse(text);
+    if (window.marked) div.innerHTML = Core.renderMarkdown(text);
     else div.textContent = text;
     Core.dom.chatContainer.appendChild(div);
     Core.dom.chatContainer.scrollTop = Core.dom.chatContainer.scrollHeight;

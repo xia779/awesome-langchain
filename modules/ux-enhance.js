@@ -563,9 +563,21 @@ function _updatePaletteResults(query) {
     item.style.cssText = 'padding:10px 18px;cursor:pointer;display:flex;align-items:center;gap:10px;';
     item.dataset.idx = idx;
     var icon = r.cmd.type === 'command' ? '⚡' : (r.cmd.type === 'session' ? '💬' : '▶');
-    item.innerHTML = '<span style="font-size:16px;">' + icon + '</span>' +
-      '<div style="flex:1;"><div style="font-size:14px;color:var(--text-primary,#eee);">' + r.cmd.name + '</div>' +
-      '<div style="font-size:12px;color:#888;">' + r.cmd.desc + '</div></div>';
+    var iconSpan = document.createElement('span');
+    iconSpan.style.cssText = 'font-size:16px;';
+    iconSpan.textContent = icon;
+    var wrapDiv = document.createElement('div');
+    wrapDiv.style.cssText = 'flex:1;';
+    var nameDiv = document.createElement('div');
+    nameDiv.style.cssText = 'font-size:14px;color:var(--text-primary,#eee);';
+    nameDiv.textContent = r.cmd.name || '';
+    var descDiv = document.createElement('div');
+    descDiv.style.cssText = 'font-size:12px;color:#888;';
+    descDiv.textContent = r.cmd.desc || '';
+    wrapDiv.appendChild(nameDiv);
+    wrapDiv.appendChild(descDiv);
+    item.appendChild(iconSpan);
+    item.appendChild(wrapDiv);
     item.addEventListener('click', function() { _closePalette(); r.cmd.action(); });
     item.addEventListener('mouseenter', function() {
       _paletteResults.querySelectorAll('.palette-item').forEach(function(el) { el.classList.remove('selected'); });

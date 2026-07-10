@@ -983,7 +983,7 @@ function renderSingleMessage(msg, index, container) {
     div.innerHTML = thinkingHtml + mainHtml;
   } else if (msg.content) {
     try {
-      div.innerHTML = marked.parse(msg.content);
+      div.innerHTML = Core.renderMarkdown(msg.content);
     } catch (e) {
       div.innerHTML = parseMarkdownWithCodeBlocks(msg.content);
     }

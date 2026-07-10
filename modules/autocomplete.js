@@ -168,9 +168,18 @@ function _showSuggestions(items) {
     var div = document.createElement('div');
     div.className = 'ac-item' + (idx === _selectedIdx ? ' selected' : '');
     var icon = item.type === 'command' ? '⚡' : (item.type === 'session' ? '💬' : '💡');
-    div.innerHTML = '<span class="ac-icon">' + icon + '</span>' +
-      '<span class="ac-name">' + item.name + '</span>' +
-      '<span class="ac-desc">' + (item.desc || '') + '</span>';
+    var iconSpan = document.createElement('span');
+    iconSpan.className = 'ac-icon';
+    iconSpan.textContent = icon;
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'ac-name';
+    nameSpan.textContent = item.name || '';
+    var descSpan = document.createElement('span');
+    descSpan.className = 'ac-desc';
+    descSpan.textContent = item.desc || '';
+    div.appendChild(iconSpan);
+    div.appendChild(nameSpan);
+    div.appendChild(descSpan);
     div.addEventListener('click', function() { _acceptSuggestion(idx); });
     div.addEventListener('mouseenter', function() {
       _suggestEl.querySelectorAll('.ac-item').forEach(function(el) { el.classList.remove('selected'); });

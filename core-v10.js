@@ -580,6 +580,32 @@ Core.hideSpinner = function(container) {
   spinners.forEach(function(s) { s.remove(); });
 };
 
+// ===== XSS 防护：HTML 消毒 =====
+Core.sanitizeHtml = function(html) {
+  if (!html || typeof html !== 'string') return '';
+  if (window.DOMPurify) return DOMPurify.sanitize(html, {
+    ADD_TAGS: ['iframe'],
+    ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'sandbox'],
+    ALLOW_DATA_ATTR: true
+  });
+  // Fallback: 移除最危险的标签
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
+    .replace(/\bon\w+\s*=\s*[^\s>]+/gi, '')
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+    .replace(/<object[\s\S]*?<\/object>/gi, '')
+    .replace(/<embed[\s\S]*?>/gi, '');
+};
+// 安全渲染 Markdown：marked.parse() + DOMPurify
+Core.renderMarkdown = function(text) {
+  if (!text) return '';
+  if (window.marked) {
+    return Core.sanitizeHtml(marked.parse(text));
+  }
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+};
+
 // ===== 启动入口 =====
 (function main() {
 

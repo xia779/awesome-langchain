@@ -387,7 +387,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
           _streamRafId = requestAnimationFrame(function() {
             _streamRafId = 0;
             if (window.marked) {
-              aiDiv.innerHTML = marked.parse(_pendingFullText);
+              aiDiv.innerHTML = Core.renderMarkdown(_pendingFullText);
               var cursor = document.createElement('span');
               cursor.className = 'typing-cursor';
               aiDiv.appendChild(cursor);
@@ -400,7 +400,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       })(), signal);
       // 最终渲染
       if (window.marked) {
-        aiDiv.innerHTML = marked.parse(reply);
+        aiDiv.innerHTML = Core.renderMarkdown(reply);
       } else {
         aiDiv.textContent = reply;
       }
@@ -425,7 +425,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
         await typewriterEffect(aiDiv, reply);
         // 打字完成后渲染 Markdown
         if (window.marked) {
-          aiDiv.innerHTML = marked.parse(reply);
+          aiDiv.innerHTML = Core.renderMarkdown(reply);
         } else {
           aiDiv.textContent = reply;
         }
@@ -433,7 +433,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
         console.warn('打字机效果出错，直接显示:', typewriterErr);
         // 如果打字机效果失败，直接显示内容
         if (window.marked) {
-          aiDiv.innerHTML = marked.parse(reply);
+          aiDiv.innerHTML = Core.renderMarkdown(reply);
         } else {
           aiDiv.textContent = reply;
         }
