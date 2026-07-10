@@ -621,6 +621,13 @@ Core.renderMarkdown = function(text) {
         + '&subfolder=' + (subfolder || '')
         + '&type=' + (type || 'output');
     });
+    // 将过期的 SiliconFlow S3 CDN 图片替换为占位符，避免控制台 500 报错
+    html = html.replace(
+      /<img\s+src="https?:\/\/s3\.siliconflow\.cn\/[^"]*"[^>]*>/gi,
+      '<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;'
+        + 'background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:6px;'
+        + 'color:#f87171;font-size:12px;">\u{1f5bc}\ufe0f 图片链接已过期</span>'
+    );
     _mdCache.set(text, html);
     if (_mdCache.size > _MD_CACHE_MAX) {
       // 删除最早的 1/3 条目

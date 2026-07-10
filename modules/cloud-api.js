@@ -282,7 +282,7 @@ async function handleToolCalls(toolCalls, messages, apiKey, baseURL, model, temp
     body: JSON.stringify({
       model: model,
       messages: messages,
-      temperature: temperature || 0.7,
+      temperature: parseFloat(temperature) || 0.7,
       max_tokens: 16384,
       stream: false
     })
@@ -319,7 +319,7 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
       const requestBody = {
         model: actualModel || 'gpt-3.5-turbo',
         messages: messages,
-        temperature: temperature || 0.7,
+        temperature: parseFloat(temperature) || 0.7,
         max_tokens: 16384,
         stream: false
       };
@@ -400,7 +400,7 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
   const requestBody = {
     model: actualModel || 'gpt-3.5-turbo',
     messages: messages,
-    temperature: temperature || 0.7,
+    temperature: parseFloat(temperature) || 0.7,
     max_tokens: 16384,
     stream: true
   };
@@ -547,7 +547,7 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
     const followUpBody = {
       model: actualModel || 'gpt-3.5-turbo',
       messages: messages,
-      temperature: temperature || 0.7,
+      temperature: parseFloat(temperature) || 0.7,
       max_tokens: 16384,
       stream: true
     };

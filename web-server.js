@@ -92,7 +92,7 @@ async function callCloudAPIStream(config, provider, model, messages, temperature
   const resp = await fetch(baseURL + '/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-    body: JSON.stringify({ model: actualModel, messages, temperature: temperature || 0.7, stream: true }),
+    body: JSON.stringify({ model: actualModel, messages, temperature: parseFloat(temperature) || 0.7, stream: true }),
     signal,
   });
   if (!resp.ok) {
@@ -133,7 +133,7 @@ async function callOllamaStream(model, messages, temperature, onChunk, signal) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: model || 'qwen2.5:7b', messages, stream: true,
-      options: { temperature: temperature || 0.7 },
+      options: { temperature: parseFloat(temperature) || 0.7 },
     }),
     signal,
   });
@@ -265,7 +265,7 @@ function setupMobileRoutes(expressApp, dataRoot) {
     const config = loadConfig(dataRoot);
     const prov = provider || config.currentService || 'ollama';
     const mdl = model || config.ollamaModel || 'qwen2.5:7b';
-    const temp = temperature != null ? temperature : (config.temperature || 0.7);
+    const temp = parseFloat(temperature) || (parseFloat(config.temperature) || 0.7);
 
     // SSE 响应头
     res.writeHead(200, {

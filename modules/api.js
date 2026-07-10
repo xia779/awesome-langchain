@@ -175,7 +175,7 @@ async function runBackgroundTask(childSessionId, text, masterSessionId, roleName
     }
 
     // 调用 API（直接传 messagesOverride 绕过当前会话历史）
-    var result = await callAPI(text, systemMsg, childSession.temperature || 0.7, model, provider, bgHistory);
+    var result = await callAPI(text, systemMsg, parseFloat(childSession.temperature) || 0.7, model, provider, bgHistory);
 
     var aiReply = '';
     if (result && result.message) aiReply = result.message.content || '';
@@ -375,7 +375,7 @@ async function callAPI(prompt, systemMsg, temperature, model, provider, messages
     model: fullModel,
     messages: chatMessages,
     stream: false,
-    options: { temperature, num_predict: -1 }
+    options: { temperature: parseFloat(temperature) || 0.7, num_predict: -1 }
   };
   if (tools.length > 0) bodyObj.tools = tools;
 
@@ -528,7 +528,7 @@ async function callAPIStream(prompt, systemMsg, temperature, model, provider, on
       model: fullModel,
       messages: chatMessages,
       stream: true,
-      options: { temperature, num_predict: -1 }
+      options: { temperature: parseFloat(temperature) || 0.7, num_predict: -1 }
     })
   };
   if (signal) fetchOpts.signal = signal;
