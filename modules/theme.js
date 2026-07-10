@@ -30,10 +30,21 @@ function applyTheme() {
   Core.emit('themeApplied', c);
 }
 
+function toggle() {
+  const c = Core.config;
+  const current = c.chatBackground || '#141425';
+  // 简单深浅切换：深色 ↔ 浅色
+  c.chatBackground = current === '#141425' ? '#f0f0f0' : '#141425';
+  if (Core.saveConfig) Core.saveConfig();
+  applyTheme();
+}
+
 module.exports = {
   init(_Core) {
     Core = _Core;
     applyTheme();
     Core.on('configChanged', applyTheme);
-  }
+  },
+  toggle,
+  applyTheme
 };

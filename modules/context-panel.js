@@ -321,10 +321,10 @@ function collectPerformanceInfo() {
   }
 
   // 错误恢复状态
-  if (Core.errorRecovery && Core.errorRecovery.getCircuit) {
+  if (Core.recovery && Core.recovery.getCircuit) {
     try {
-      result.ollamaCircuit = Core.errorRecovery.getCircuit('ollama');
-      result.cloudCircuit = Core.errorRecovery.getCircuit('cloud');
+      result.ollamaCircuit = Core.recovery.getCircuit('ollama');
+      result.cloudCircuit = Core.recovery.getCircuit('cloud');
     } catch(e) {}
   }
 
