@@ -32,14 +32,6 @@ function loadSettingsToUI() {
     if (notification) notification.checked = c.notification !== false; // 默认开启
     const autoKnowledge = document.getElementById('autoKnowledgeCheckbox');
     if (autoKnowledge) autoKnowledge.checked = c.autoKnowledgeMemory || false;
-    const vectorBackend = document.getElementById('vectorBackendSelect');
-    if (vectorBackend) vectorBackend.value = c.vectorBackend || 'json';
-    // 向量后端状态显示
-    var vbStatus = document.getElementById('vectorBackendStatus');
-    if (vbStatus) {
-      vbStatus.textContent = '📂 JSON 模式';
-      vbStatus.style.color = '';
-    }
     const lang = document.getElementById('languageSelect');
     if (lang) lang.value = c.language || 'zh-CN';
     safeSet('searchEngineSelect', c.searchEngine || 'bocha');
@@ -116,7 +108,6 @@ function saveSettings() {
       autoRoute: (document.getElementById('autoRouteCheckbox') || {}).checked || false,
       notification: (document.getElementById('notificationCheckbox') || {}).checked !== false,
       autoKnowledgeMemory: (document.getElementById('autoKnowledgeCheckbox') || {}).checked || false,
-      vectorBackend: (document.getElementById('vectorBackendSelect') || {}).value || 'json',
       imageGenProvider: (document.getElementById('imageGenProviderSelect') || {}).value || 'silicon',
       imageGenSize: (document.getElementById('imageGenSizeSelect') || {}).value || '1024x1024',
       siliconFlowKey: safeKey('siliconFlowKey'),

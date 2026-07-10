@@ -600,7 +600,7 @@ function getStats() {
     chunksWithoutEmbeddings: allChunks.length - withEmbeddings,
     embeddingModel: embeddingAvailable ? EMBEDDING_MODEL : null,
     embeddingAvailable: !!embeddingAvailable,
-    vectorBackend: vectorBackend,
+    vectorBackend: (Core && Core.config && Core.config.vectorBackend) || 'json',
     searchMode: searchMode,
   };
 }

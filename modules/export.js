@@ -161,8 +161,8 @@ function exportCurrentSessionAsHtml() {
   });
 
   var htmlContent = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>' + title + '</title>';
-  htmlContent += '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">';
-  htmlContent += '<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>';
+  htmlContent += '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">';
+  htmlContent += '<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>';
   htmlContent += '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:800px;margin:0 auto;padding:24px;background:#f8fafc;color:#1e293b;}h1{color:#1e293b;border-bottom:2px solid #e2e8f0;padding-bottom:12px;}.meta{color:#64748b;font-size:13px;margin-bottom:24px;}</style>';
   htmlContent += '</head><body>';
   htmlContent += '<h1>' + title + '</h1>';

@@ -183,6 +183,7 @@ function syncCodeHighlighter(isDark) {
   var newHref = isDark
     ? 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css'
     : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css';
+  if (hljsLink.href !== newHref) hljsLink.href = newHref;
 }
 
 // ===== 方向B2：字体大小调节 =====

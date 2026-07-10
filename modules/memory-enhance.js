@@ -653,7 +653,7 @@ function handleCommand(args) {
 
 module.exports = {
   name: 'memory-enhance',
-  dependencies: ['routing'],
+  dependencies: ['routing', 'memory'],
   init(_Core) {
     Core = _Core;
     // 扩展数据库
