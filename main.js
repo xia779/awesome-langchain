@@ -544,7 +544,6 @@ function createWindow() {
       nodeIntegration: true,
       contextIsolation: false,
       sandbox: false,
-      preload: path.join(__dirname, 'preload.js'), // 空文件，覆盖旧缓存
       allowRunningInsecureContent: false,
       webSecurity: true
     },
