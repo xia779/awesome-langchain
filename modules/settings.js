@@ -1504,7 +1504,7 @@ module.exports = {
     // ===== 启动时应用保存的主题模式和自定义颜色 =====
     _loadColorInputs(); // 先将 config 颜色值写入 DOM 输入框
     _applyThemeMode(Core.config.themeMode || 'dark', true); // skipCSS: customizer.init 已设置 CSS 变量
-    _applyCustomColors(); // 再应用自定义颜色覆盖
+    _applyCustomColors(true); // skipSave: 启动时只应用 CSS，不触发 saveConfig/configChanged 级联
 
     // ===== 技能管理 =====
     initSkillsPanel();

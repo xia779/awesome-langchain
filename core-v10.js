@@ -380,7 +380,7 @@ const Core = {
       console.error('❌ JSON 保存失败:', e.message);
     }
     
-    this.emit('configChanged', this.config);
+    this.emit('configChanged', newConfig, this.config);
   },
 
   loadModules() {

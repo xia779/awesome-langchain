@@ -125,3 +125,60 @@ test('extractJSONFromText - 非 JSON 返回 null', function() {
   assert.equal(extract(''), null);
   helper.cleanTestData();
 });
+
+test('evaluateAnswer - 空回答', function() {
+  var Core = helper.createMockCore();
+  agentLoopMod.init(Core);
+  var eval_ = Core.agentLoop.evaluateAnswer;
+  assert.equal(eval_('').pass, false);
+  assert.equal(eval_(null).pass, false);
+});
+
+test('evaluateAnswer - 过短回答', function() {
+  var Core = helper.createMockCore();
+  agentLoopMod.init(Core);
+  var eval_ = Core.agentLoop.evaluateAnswer;
+  assert.equal(eval_('短').pass, false);
+  assert.equal(eval_('这是一段足够长的正常回答内容').pass, true);
+});
+
+test('evaluateAnswer - 仅道歉', function() {
+  var Core = helper.createMockCore();
+  agentLoopMod.init(Core);
+  var eval_ = Core.agentLoop.evaluateAnswer;
+  assert.equal(eval_('抱歉').pass, false);
+  assert.equal(eval_('对不起。').pass, false);
+  assert.equal(eval_('I cannot.').pass, false);
+});
+
+test('evaluateAnswer - JSON 残留', function() {
+  var Core = helper.createMockCore();
+  agentLoopMod.init(Core);
+  var eval_ = Core.agentLoop.evaluateAnswer;
+  assert.equal(eval_('{"action": "read_file", "params": {}}').pass, false);
+  assert.equal(eval_('这是一段正常的回答，包含 "action": "read_file" 这样的残留').pass, false);
+});
+
+test('evaluateAnswer - 纯错误信息', function() {
+  var Core = helper.createMockCore();
+  agentLoopMod.init(Core);
+  var eval_ = Core.agentLoop.evaluateAnswer;
+  assert.equal(eval_('❌ Agent 执行出错').pass, false);
+  assert.equal(eval_('❌ Agent 执行出错，建议重试').pass, true);
+});
+
+test('evaluateAnswer - 格式化兜底文案', function() {
+  var Core = helper.createMockCore();
+  agentLoopMod.init(Core);
+  var eval_ = Core.agentLoop.evaluateAnswer;
+  assert.equal(eval_('抱歉，AI 返回的格式不正确，无法解析结果。请重试。').pass, false);
+});
+
+test('evaluateAnswer - 正常回答通过', function() {
+  var Core = helper.createMockCore();
+  agentLoopMod.init(Core);
+  var eval_ = Core.agentLoop.evaluateAnswer;
+  var result = eval_('这是一个高质量的回答，包含了详细的信息和分析。');
+  assert.equal(result.pass, true);
+  assert.equal(result.reason, '');
+});

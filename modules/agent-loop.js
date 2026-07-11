@@ -68,6 +68,8 @@ const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主�
   参数: {"question": "问题文本", "options": [{"label":"选项A","description":"说明"}], "multiSelect": false}
 - parallel_execute: 并行执行多个工具（适用于互不依赖的子任务）
   参数: {"tasks": [{"action": "工具名", "params": {...}}, ...]}
+- handoff_to_agent: 将子任务委派给专业代理执行（适合需要专业领域知识的子任务）
+  参数: {"target": "code|research|writer|math|translate", "task": "任务描述", "context": "可选背景信息"}
 - complete: 任务完成，给出最终回答
   参数: {"answer": "最终回答内容（必须是中文）"}
 
@@ -184,8 +186,16 @@ function cleanFinalAnswer(text) {
 }
 
 
+// ===== 工具结果规范化：统一 ToolResult 格式 =====
+// 所有工具返回可能不一致（string/object/null/Error），此函数确保下游处理安全
+function normalizeToolResult(result) {
+  if (result == null) return '';
+  if (typeof result === 'string') return result;
+  if (result instanceof Error) return '❌ ' + result.message;
+  try { return JSON.stringify(result, null, 2); } catch (e) { return String(result); }
+}
 // ===== Agent 工具执行（MCP + toolsRegistry 统一调度）=====
-async function executeAgentAction(action, params) {
+async function _executeAgentActionRaw(action, params) {
   // 优先级 1：通过 toolsRegistry 执行（tools.js，含路径白名单 + 安全检查）
   if (Core.toolsRegistry && typeof Core.toolsRegistry.executeTool === 'function') {
     // 将 Agent 的参数名映射到 toolsRegistry 的参数名
@@ -234,6 +244,11 @@ async function executeAgentAction(action, params) {
     case 'web_search':
       if (!Core.webSearch) return '联网搜索功能未启用';
       try { return await Core.webSearch(params.query || ''); } catch (e) { return '搜索失败: ' + e.message; }
+    case 'handoff_to_agent':
+      if (Core.handoff && Core.handoff.executeHandoff) {
+        return await Core.handoff.executeHandoff(params.target, params.task, params.context || '');
+      }
+      return '❌ Handoff 模块未加载';
     case 'read_file':
       try { return fs.readFileSync(params.path, 'utf8'); } catch (e) { return '读取失败: ' + e.message; }
     case 'write_file':
@@ -244,6 +259,39 @@ async function executeAgentAction(action, params) {
 }
 
 
+// 规范化包装器：确保所有调用者（顺序路径 + parallel_execute）都收到字符串结果
+async function executeAgentAction(action, params) {
+  // Guardrails Layer 3: 工具执行守卫
+  if (Core.guardrails) {
+    var toolCheck = Core.guardrails.checkToolExecution(action, params);
+    if (!toolCheck.safe) {
+      return '🛡️ 工具执行被安全策略阻止: ' + toolCheck.reason;
+    }
+    if (toolCheck.warning) console.warn(toolCheck.warning);
+  }
+  try {
+    var raw = await _executeAgentActionRaw(action, params);
+    return normalizeToolResult(raw);
+  } catch (e) {
+    return '❌ 工具 "' + action + '" 执行异常: ' + e.message;
+  }
+}
+
+// ===== Agent 回答质量评估（Evaluator-Optimizer 模式）=====
+function evaluateAnswer(answer) {
+  if (!answer || typeof answer !== 'string') return { pass: false, reason: '回答为空' };
+  var trimmed = answer.trim();
+  if (trimmed.length < 10) return { pass: false, reason: '回答太短（' + trimmed.length + '字符）' };
+  var apologyOnly = /^(抱歉|对不起|很遗憾|不好意思|sorry|I'?m sorry|I cannot|I can'?t)[。，.!！]?$/i.test(trimmed);
+  if (apologyOnly) return { pass: false, reason: '仅包含道歉，无实质内容' };
+  var jsonRemnants = /"action"\s*:\s*"(?!complete)/.test(trimmed) || /"params"\s*:\s*\{/.test(trimmed);
+  if (jsonRemnants) return { pass: false, reason: '包含未清理的工具调用 JSON 残留' };
+  var pureError = /^❌\s*Agent\s*执行出错/.test(trimmed) && !/建议/.test(trimmed);
+  if (pureError) return { pass: false, reason: '仅包含错误信息，无解决建议' };
+  var fallbackOnly = trimmed === '抱歉，AI 返回的格式不正确，无法解析结果。请重试。';
+  if (fallbackOnly) return { pass: false, reason: '格式化失败的兆底文案' };
+  return { pass: true, reason: '' };
+}
 // ===== Agent 智能体循环 =====
 async function sendToAgent(task, isDeepThink) {
   const maxSteps = isDeepThink ? 20 : 12;
@@ -293,6 +341,61 @@ async function sendToAgent(task, isDeepThink) {
   Core.dom.chatContainer.appendChild(agentDiv);
   Core.dom.chatContainer.scrollTop = Core.dom.chatContainer.scrollHeight;
 
+  // ===== 状态机路径（优先）或传统循环路径（兜底）=====
+  if (Core.workflow && Core.workflow.stateMachine) {
+    // 状态机回调：更新 UI DOM
+    var _currentStepRow = null;
+    var _timerInterval = null;
+    var _smConfig = {
+      isDeepThink: isDeepThink,
+      cancelCheck: function() { return _agentCancelled; },
+      onStepStart: function(s, phase, actionName) {
+        statusSpan.className = 'typing-cursor';
+        if (phase === 'THINK') {
+          statusSpan.textContent = '🤔 步骤 ' + s + '/' + maxSteps + '：思考中...';
+        } else if (phase === 'ACT' && actionName) {
+          statusSpan.textContent = '🛠️ 执行: ' + actionName + '...';
+          _currentStepRow = document.createElement('div');
+          _currentStepRow.className = 'agent-step-live';
+          _currentStepRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:5px 10px;margin:3px 0;font-size:12px;color:var(--text-secondary);border-left:3px solid var(--primary);border-radius:4px;background:rgba(59,130,246,0.05);';
+          _currentStepRow.innerHTML = '<div><span style="color:var(--primary);font-weight:600;">步骤 ' + s + '</span> <span style="font-weight:500;color:var(--text);">' + actionName + '</span> <span class="typing-cursor" style="font-size:10px;">⏳</span></div><span class="agent-step-timer" style="font-size:10px;color:var(--text-secondary);opacity:0.7;"></span>';
+          var timerSpan = _currentStepRow.querySelector('.agent-step-timer');
+          _timerInterval = setInterval(function() {
+            var elapsed = ((Date.now() - (_stepStartTimes[s] || Date.now())) / 1000).toFixed(1);
+            if (timerSpan) timerSpan.textContent = elapsed + 's';
+          }, 200);
+          stepsContainer.appendChild(_currentStepRow);
+          Core.dom.chatContainer.scrollTop = Core.dom.chatContainer.scrollHeight;
+        }
+      },
+      onStepComplete: function(s, actionName, success) {
+        if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
+        if (_currentStepRow) {
+          var stepElapsed = ((Date.now() - (_stepStartTimes[s] || Date.now())) / 1000).toFixed(1);
+          if (success) {
+            _currentStepRow.style.borderLeftColor = '#22c55e';
+            _currentStepRow.innerHTML = '<div><span style="color:var(--primary);font-weight:600;">步骤 ' + s + '</span> <span style="font-weight:500;color:var(--text);">' + actionName + '</span> ✅</div><span style="font-size:10px;color:#22c55e;opacity:0.8;">' + stepElapsed + 's</span>';
+          }
+        }
+      },
+      onToolError: function(s, actionName, errText) {
+        if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
+        if (_currentStepRow) {
+          _currentStepRow.style.borderLeftColor = '#ef4444';
+          _currentStepRow.innerHTML = '<div><span style="color:#ef4444;font-weight:600;">步骤 ' + s + '</span> <span style="font-weight:500;color:var(--text);">' + actionName + '</span> ❌ <span style="font-size:10px;color:#ef4444;">自动纠错中</span></div><span style="font-size:10px;color:#ef4444;opacity:0.8;">' + ((Date.now() - (_stepStartTimes[s] || Date.now())) / 1000).toFixed(1) + 's</span>';
+        }
+      },
+      onStateChange: function(from, to) {
+        console.log('[Agent] State: ' + from + ' → ' + (to || 'END'));
+      }
+    };
+    var machine = Core.workflow.stateMachine.createMachine(task, _smConfig);
+    var smResult = await Core.workflow.stateMachine.runMachine(machine);
+    finalAnswer = smResult.reply;
+    stepsLog = smResult.stepsLog;
+    step = smResult.steps;
+  } else {
+  // ===== 传统循环路径（兜底）=====
   while (step < maxSteps) {
     step++;
     if (_agentCancelled) { console.log('⏹ Agent 已被用户取消'); break; }
@@ -365,7 +468,7 @@ async function sendToAgent(task, isDeepThink) {
 
         var formattedAnswer = Core.askUser.formatAnswer(askResult);
         context += '\n[步骤' + step + '] 向用户提问: ' + (action.params.question || '') + '\n用户回答: ' + formattedAnswer;
-        stepsLog.push({ step: step, action: 'ask_user', params: action.params, result: formattedAnswer });
+        stepsLog.push({ step: step, action: 'ask_user', params: action.params, result: formattedAnswer, time: Date.now() - (_stepStartTimes[step] || Date.now()), success: true });
 
         // 更新步骤行状态
         var askRow = document.createElement('div');
@@ -391,7 +494,7 @@ async function sendToAgent(task, isDeepThink) {
         combinedResult += (parallelResults[idx] || '无结果').substring(0, 400) + '\n';
       });
       context += '\n[步骤' + step + '] 并行执行 ' + tasks.length + ' 个子任务\n' + combinedResult.substring(0, 600);
-      stepsLog.push({ step: step, action: 'parallel_execute', params: action.params, result: combinedResult.substring(0, 500) });
+      stepsLog.push({ step: step, action: 'parallel_execute', params: action.params, result: combinedResult.substring(0, 500), time: Date.now() - (_stepStartTimes[step] || Date.now()), success: true });
       continue;
     }
 
@@ -437,7 +540,7 @@ async function sendToAgent(task, isDeepThink) {
 
     const stepRecord = `[步骤${step}] 执行 ${action.action}: ${JSON.stringify(action.params || {})}\n结果: ${resultForContext.substring(0, 300)}${resultForContext.length > 300 ? '...' : ''}`;
     context += '\n' + stepRecord;
-    stepsLog.push({ step: step, action: action.action, params: action.params, result: toolResultStr.substring(0, 500) });
+    stepsLog.push({ step: step, action: action.action, params: action.params, result: toolResultStr.substring(0, 500), time: Date.now() - (_stepStartTimes[step] || Date.now()), success: !isToolError });
 
     // 更新步骤行：完成状态（含耗时）— 仅非错误时更新为绿色
     clearInterval(_timerInterval);
@@ -447,6 +550,7 @@ async function sendToAgent(task, isDeepThink) {
       stepRow.innerHTML = '<div><span style="color:var(--primary);font-weight:600;">步骤 ' + step + '</span> <span style="font-weight:500;color:var(--text);">' + action.action + '</span> ✅</div><span style="font-size:10px;color:#22c55e;opacity:0.8;">' + stepElapsed + 's</span>';
     }
   }
+  } // end else: legacy loop path
 
   if (_agentCancelled && !finalAnswer) {
     finalAnswer = '⏹ 任务已被取消。已执行 ' + step + ' 步。';
@@ -458,6 +562,28 @@ async function sendToAgent(task, isDeepThink) {
   // 最终回答清理：从可能的JSON残留中提取纯文本回答
   finalAnswer = cleanFinalAnswer(finalAnswer);
 
+  // ===== Evaluator-Optimizer: retry once if answer quality is poor =====
+  var _evalResult = evaluateAnswer(finalAnswer);
+  if (!_evalResult.pass && step < maxSteps - 1 && !_agentCancelled) {
+    console.log("[self-eval] quality issue: " + _evalResult.reason + ", retrying once");
+    var _retryPrompt = "task: " + task + "\n\nhistory: " + (context || "(none)") + "\n\n[system-eval] your previous answer failed quality check: " + _evalResult.reason + ". please give a high-quality final answer using the complete action. do NOT output tool call JSON.";
+    try {
+      var _retryData = await Core.api.callAPI(_retryPrompt, AGENT_SYSTEM_PROMPT, 0.7, null, "ollama");
+      var _retryReply = (_retryData.message && _retryData.message.content) || _retryData.response || "";
+      var _retryAction = extractJSONFromText(_retryReply);
+      if (_retryAction && _retryAction.action === "complete") {
+        var _retryAnswer = (_retryAction.params && (_retryAction.params.answer || _retryAction.params.result || _retryAction.params.content)) || _retryReply;
+        var _cleaned = cleanFinalAnswer(_retryAnswer);
+        if (evaluateAnswer(_cleaned).pass) {
+          finalAnswer = _cleaned;
+          console.log("[self-eval] retry succeeded, answer quality improved");
+        }
+      }
+    } catch (e) {
+      console.warn("[self-eval] retry failed: " + e.message);
+    }
+  }
+
 
   // 🔧 渲染：保留实时步骤面板，折叠为思考过程，追加最终回答
   statusRow.remove(); // 移除状态行（含取消按钮）
@@ -467,12 +593,44 @@ async function sendToAgent(task, isDeepThink) {
     panelWrapper.className = 'agent-think-panel';
     var panelToggle = document.createElement('div');
     panelToggle.className = 'agent-think-toggle';
-    var totalTime = 0;
-    for (var si = 1; si <= stepsLog.length; si++) { if (_stepStartTimes[si]) totalTime += Date.now() - _stepStartTimes[si]; }
+    // 统计成功/失败/总时间
+    var successCount = 0, failCount = 0, totalTime = 0;
+    for (var si = 0; si < stepsLog.length; si++) {
+      if (stepsLog[si].success) successCount++; else failCount++;
+      if (stepsLog[si].time) totalTime += stepsLog[si].time;
+    }
     var totalTimeStr = (totalTime / 1000).toFixed(1);
-    panelToggle.innerHTML = '<span class="agent-think-arrow">▶</span> 🧠 查看思考过程 (' + stepsLog.length + '步，共' + totalTimeStr + 's)';
-    panelToggle.style.cssText = 'padding:6px 12px;cursor:pointer;border-radius:6px;background:linear-gradient(135deg,#f1f5f9,#e2e8f0);font-size:13px;font-weight:500;user-select:none;';
-    panelToggle.onclick = function() {
+    var statsHtml = '<span class="agent-think-arrow">▶</span> 🧠 执行追踪 (' + stepsLog.length + '步';
+    if (successCount > 0) statsHtml += ' <span style="color:#22c55e;">✓' + successCount + '</span>';
+    if (failCount > 0) statsHtml += ' <span style="color:#ef4444;">✗' + failCount + '</span>';
+    statsHtml += '，' + totalTimeStr + 's)';
+    panelToggle.innerHTML = statsHtml;
+    panelToggle.style.cssText = 'padding:6px 12px;cursor:pointer;border-radius:6px;background:linear-gradient(135deg,#f1f5f9,#e2e8f0);font-size:13px;font-weight:500;user-select:none;display:flex;align-items:center;justify-content:space-between;';
+    // 复制追踪按钮
+    var copyTraceBtn = document.createElement('button');
+    copyTraceBtn.className = 'agent-trace-copy-btn';
+    copyTraceBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:middle;">content_copy</span>';
+    copyTraceBtn.title = '复制执行追踪';
+    copyTraceBtn.style.cssText = 'background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;color:var(--text-secondary);font-size:12px;';
+    copyTraceBtn.onclick = function(e) {
+      e.stopPropagation();
+      var traceText = '=== Agent 执行追踪 ===\n任务: ' + task + '\n步骤: ' + stepsLog.length + ' | 成功: ' + successCount + ' | 失败: ' + failCount + ' | 耗时: ' + totalTimeStr + 's\n\n';
+      for (var ti = 0; ti < stepsLog.length; ti++) {
+        var s = stepsLog[ti];
+        traceText += '--- 步骤 ' + s.step + ': ' + s.action + ' ' + (s.success ? '✓' : '✗') + ' (' + ((s.time || 0) / 1000).toFixed(1) + 's) ---\n';
+        traceText += '参数: ' + JSON.stringify(s.params || {}) + '\n';
+        traceText += '结果: ' + (s.result || '(空)').substring(0, 300) + '\n\n';
+      }
+      traceText += '最终回答: ' + (finalAnswer || '').substring(0, 200) + '\n';
+      navigator.clipboard.writeText(traceText).then(function() {
+        copyTraceBtn.title = '已复制!';
+        copyTraceBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:middle;color:#22c55e;">check</span>';
+        setTimeout(function() { copyTraceBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:middle;">content_copy</span>'; copyTraceBtn.title = '复制执行追踪'; }, 2000);
+      });
+    };
+    panelToggle.appendChild(copyTraceBtn);
+    panelToggle.onclick = function(e) {
+      if (e.target.closest('.agent-trace-copy-btn')) return; // 不触发展开
       var content = this.nextElementSibling;
       var arrow = this.querySelector('.agent-think-arrow');
       if (content.classList.toggle('expanded')) {
@@ -483,6 +641,39 @@ async function sendToAgent(task, isDeepThink) {
         arrow.textContent = '▶';
       }
     };
+    // 重建步骤内容为可展开详情
+    stepsContainer.innerHTML = '';
+    for (var di = 0; di < stepsLog.length; di++) {
+      var sData = stepsLog[di];
+      var stepItem = document.createElement('div');
+      stepItem.className = 'agent-trace-step';
+      var statusIcon = sData.success ? '✅' : '❌';
+      var timeStr = ((sData.time || 0) / 1000).toFixed(1);
+      var headerRow = document.createElement('div');
+      headerRow.className = 'agent-trace-step-header';
+      headerRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;border-radius:4px;font-size:12px;user-select:none;';
+      headerRow.innerHTML = '<span style="color:' + (sData.success ? '#22c55e' : '#ef4444') + ';font-weight:600;">' + statusIcon + ' 步骤' + sData.step + '</span> <span style="font-weight:500;color:var(--text);">' + sData.action + '</span> <span style="font-size:10px;color:var(--text-secondary);margin-left:auto;">' + timeStr + 's</span> <span class="agent-trace-expand-icon" style="font-size:10px;color:var(--text-secondary);">▶</span>';
+      var detailRow = document.createElement('div');
+      detailRow.className = 'agent-trace-step-detail';
+      detailRow.style.cssText = 'display:none;padding:4px 8px 6px 28px;font-size:11px;color:var(--text-secondary);line-height:1.5;';
+      var paramsStr = JSON.stringify(sData.params || {}, null, 2);
+      var resultStr = (sData.result || '(空)').substring(0, 300);
+      detailRow.innerHTML = '<div style="margin-bottom:4px;"><span style="font-weight:600;color:var(--text);">参数:</span><pre style="margin:2px 0;padding:4px 6px;background:rgba(0,0,0,0.04);border-radius:3px;font-size:10px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto;">' + paramsStr + '</pre></div>' +
+        '<div><span style="font-weight:600;color:var(--text);">结果:</span><pre style="margin:2px 0;padding:4px 6px;background:rgba(0,0,0,0.04);border-radius:3px;font-size:10px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto;">' + resultStr + '</pre></div>';
+      headerRow.onclick = (function(hdr, dtl) {
+        return function() {
+          var visible = dtl.style.display !== 'none';
+          dtl.style.display = visible ? 'none' : 'block';
+          hdr.querySelector('.agent-trace-expand-icon').textContent = visible ? '▶' : '▼';
+          // 重新计算父 maxHeight
+          var pc = hdr.closest('.agent-think-content');
+          if (pc && pc.classList.contains('expanded')) pc.style.maxHeight = pc.scrollHeight + 'px';
+        };
+      })(headerRow, detailRow);
+      stepItem.appendChild(headerRow);
+      stepItem.appendChild(detailRow);
+      stepsContainer.appendChild(stepItem);
+    }
     var panelContent = document.createElement('div');
     panelContent.className = 'agent-think-content';
     panelContent.style.cssText = 'max-height:0;overflow:hidden;transition:max-height 0.3s ease;';
@@ -564,6 +755,7 @@ module.exports = {
       executeAgentAction: executeAgentAction,
       extractJSONFromText: extractJSONFromText,
       cleanFinalAnswer: cleanFinalAnswer,
+      evaluateAnswer: evaluateAnswer,
       AGENT_SYSTEM_PROMPT: AGENT_SYSTEM_PROMPT
     };
     console.log('✅ Agent 循环模块已加载');

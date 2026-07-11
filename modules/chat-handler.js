@@ -515,6 +515,19 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       pre.appendChild(foldBtn);
     });
 
+    // Guardrails Layer 2: 输出守卫 — 数据泄露检测
+    if (reply && Core.guardrails) {
+      var outputCheck = Core.guardrails.checkOutput(reply);
+      if (!outputCheck.safe && outputCheck.cleaned) {
+        console.warn(outputCheck.reason);
+        reply = outputCheck.cleaned;
+        // 更新已显示的 DOM（如果 aiDiv 还在作用域内）
+        if (typeof aiDiv !== 'undefined' && aiDiv && window.marked) {
+          aiDiv.innerHTML = Core.renderMarkdown(reply);
+        }
+      }
+    }
+
     if (reply) {
       sessionData.messages.push({ role: 'assistant', content: reply, timestamp: Date.now() });
       if (Core.session.saveSessionForService) {

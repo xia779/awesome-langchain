@@ -666,6 +666,16 @@ async function sendMessage() {
     const input = Core.dom.input;
     let text = input.value.trim();
 
+    // Guardrails Layer 1: 输入守卫 — Prompt Injection 检测
+    if (Core.guardrails && text) {
+      var inputCheck = Core.guardrails.checkInput(text);
+      if (!inputCheck.safe) {
+        Core.dom.status.textContent = '🛡️ ' + inputCheck.reason;
+        if (Core.showNotification) Core.showNotification(inputCheck.reason, 'warning');
+        return;
+      }
+    }
+
     // 🔧 多模态：收集所有待发送图片（旧 single + 新 multiple）
     var allImages = [];
     var pendingImage = Core.pendingImage;
@@ -822,8 +832,17 @@ async function sendMessage() {
       try {
         const agentResult = await Core.agentLoop.sendToAgent(agentTask, isDeepThinkActive);
         if (agentResult.success) {
+          var agentReply = agentResult.reply;
+          // Guardrails Layer 2: Agent 回复输出守卫
+          if (Core.guardrails && agentReply) {
+            var agentOutputCheck = Core.guardrails.checkOutput(agentReply);
+            if (!agentOutputCheck.safe && agentOutputCheck.cleaned) {
+              console.warn('[Agent] ' + agentOutputCheck.reason);
+              agentReply = agentOutputCheck.cleaned;
+            }
+          }
           Core.session.addMessage(agentTask, 'user');
-          Core.session.addMessage(agentResult.reply, 'ai');
+          Core.session.addMessage(agentReply, 'ai');
         }
       } catch (err) {
         console.error('Agent模式错误:', err);

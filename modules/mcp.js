@@ -290,6 +290,7 @@ function initMcp(_Core) {
     listServers: listServers,
     addServer: addServer,
     removeServer: removeServer,
+    _rpc: sendRpc,
   };
 
 }

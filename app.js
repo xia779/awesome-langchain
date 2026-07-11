@@ -779,6 +779,13 @@ try {
           overlay.style.display = 'none'; overlay.classList.add('hidden');
           document.body.classList.add('logged-in');
           if (Core.session && typeof Core.session.loadSessions === 'function') Core.session.loadSessions();
+          // 登录后立即渲染：侧边栏 + 当前会话消息，避免空白界面的视觉闪烁
+          if (Core.session && typeof Core.session.renderChatList === 'function') Core.session.renderChatList();
+          if (Core.session && typeof Core.session.getCurrentId === 'function') {
+            var _cid = Core.session.getCurrentId();
+            if (_cid && Core.session.renderMessages) Core.session.renderMessages(_cid);
+            if (_cid && Core.session.highlightChatItem) Core.session.highlightChatItem(_cid);
+          }
           if (Core.dom && Core.dom.currentUserDisplay) Core.dom.currentUserDisplay.textContent = '&#128100; ' + username;
           if (Core.dom && Core.dom.status) Core.dom.status.textContent = '&#9989; 已就绪';
         } else { showError(result.error); }

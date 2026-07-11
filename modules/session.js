@@ -1763,6 +1763,7 @@ function init(core) {
     renderMessages: renderMessages,
     renderSingleMessage: renderSingleMessage,
     renderChatList: renderChatList,
+    highlightChatItem: highlightChatItem,
     saveSession: saveSession,
     deleteSession: deleteSessionWithChildren,
     renameSession: renameSession,

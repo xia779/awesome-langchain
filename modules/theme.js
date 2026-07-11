@@ -1,6 +1,25 @@
 // modules/theme.js
 let Core = null;
 
+// 只有这些 config 键影响消息气泡/背景视觉，变更时才需要 renderMessages
+var THEME_VISUAL_KEYS = {
+  chatBackground: 1, chatBubbleUser: 1, chatBubbleAI: 1,
+  sidebarColor: 1, panelColor: 1, accentColor: 1, textColor: 1,
+  activeTheme: 1, themeMode: 1, appName: 1,
+  sidebarBg: 1, panel: 1, primary: 1, text: 1
+};
+
+// 检查 configChanged 传入的变更是否涉及主题视觉
+function _isThemeRelatedChange(changedConfig) {
+  if (!changedConfig || typeof changedConfig !== 'object') return true;
+  var keys = Object.keys(changedConfig);
+  if (keys.length === 0) return false; // saveConfig({}) 空对象 — 不涉及视觉
+  for (var i = 0; i < keys.length; i++) {
+    if (THEME_VISUAL_KEYS[keys[i]]) return true;
+  }
+  return false;
+}
+
 function applyTheme() {
   const c = Core.config;
   if (c.appName) {
@@ -20,14 +39,12 @@ function applyTheme() {
     container.style.background = '#141425';
     container.style.backgroundImage = 'none';
   }
-  // renderMessages 由 configChanged 防抖处理器触发，此处不再直接调用
   Core.emit('themeApplied', c);
 }
 
 function toggle() {
   const c = Core.config;
   const current = c.chatBackground || '#141425';
-  // 简单深浅切换：深色 ↔ 浅色
   c.chatBackground = current === '#141425' ? '#f0f0f0' : '#141425';
   if (Core.saveConfig) Core.saveConfig();
   applyTheme();
@@ -37,10 +54,14 @@ module.exports = {
   init(_Core) {
     Core = _Core;
     applyTheme();
-    // 防抖：快速配置变更（如颜色拖动）只在停止 200ms 后重建一次 DOM
+    // 防抖 + 选择性渲染：只在主题视觉键变更时才重建消息 DOM
+    // 非视觉键（searchEngine/favorites/language/temperature/disabledPlugins 等）不触发 renderMessages
     var _renderTimer = 0;
-    Core.on('configChanged', function() {
+    Core.on('configChanged', function(changedConfig) {
+      // 背景/标题始终轻量更新（不涉及 DOM 重建）
       applyTheme();
+      // 仅当变更涉及主题视觉键时才防抖触发 renderMessages
+      if (!_isThemeRelatedChange(changedConfig)) return;
       if (_renderTimer) clearTimeout(_renderTimer);
       _renderTimer = setTimeout(function() {
         _renderTimer = 0;

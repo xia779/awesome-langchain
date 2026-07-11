@@ -389,7 +389,7 @@ module.exports = {
     
     if (!Core.config.searchEngine || Core.config.searchEngine === '') {
       Core.config.searchEngine = 'bing';
-      Core.saveConfig({ searchEngine: 'bing' });
+      // 启动时不触发 saveConfig — 避免 configChanged 级联，下次 saveConfig 时自然持久化
     }
     
     var btn = Core.dom.webSearchBtn || document.getElementById('webSearchBtn');
