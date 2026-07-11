@@ -73,5 +73,7 @@ module.exports = {
     });
   },
   toggle,
-  applyTheme
+  applyTheme,
+  _isThemeRelatedChange: _isThemeRelatedChange,
+  THEME_VISUAL_KEYS: THEME_VISUAL_KEYS,
 };
