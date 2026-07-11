@@ -150,8 +150,8 @@ function applyTheme(themeId) {
   }
   customStyleEl.textContent = theme.customCSS || '';
 
-  // Save active theme
-  if (Core && Core.saveConfig) {
+  // Save active theme (skip if unchanged to avoid redundant configChanged)
+  if (Core && Core.saveConfig && Core.config.activeTheme !== themeId) {
     Core.saveConfig({ activeTheme: themeId });
   }
 

@@ -1291,7 +1291,7 @@ function renderFavoritesList() {
   }
 
 // ===== 主题模式切换 =====
-function _applyThemeMode(mode) {
+function _applyThemeMode(mode, _skipCSS) {
   var root = document.documentElement;
   var body = document.body;
 
@@ -1303,19 +1303,22 @@ function _applyThemeMode(mode) {
   if (mode === 'light') {
     body.classList.add('light-theme');
     body.classList.remove('dark-theme');
-    // Apply light theme CSS variables
-    if (Core.customizer && Core.customizer.themes && Core.customizer.themes.apply) {
-      Core.customizer.themes.apply('light-default');
-    } else {
-      _setLightThemeVars(root);
+    if (!_skipCSS) {
+      if (Core.customizer && Core.customizer.themes && Core.customizer.themes.apply) {
+        Core.customizer.themes.apply('light-default');
+      } else {
+        _setLightThemeVars(root);
+      }
     }
   } else {
     body.classList.remove('light-theme');
     body.classList.add('dark-theme');
-    if (Core.customizer && Core.customizer.themes && Core.customizer.themes.apply) {
-      Core.customizer.themes.apply('dark-default');
-    } else {
-      _setDarkThemeVars(root);
+    if (!_skipCSS) {
+      if (Core.customizer && Core.customizer.themes && Core.customizer.themes.apply) {
+        Core.customizer.themes.apply('dark-default');
+      } else {
+        _setDarkThemeVars(root);
+      }
     }
   }
 
@@ -1500,8 +1503,8 @@ module.exports = {
 
     // ===== 启动时应用保存的主题模式和自定义颜色 =====
     _loadColorInputs(); // 先将 config 颜色值写入 DOM 输入框
-    _applyThemeMode(Core.config.themeMode || 'dark');
-    _applyCustomColors(); // 再应用（优先取 DOM 实时值 → config 回退）
+    _applyThemeMode(Core.config.themeMode || 'dark', true); // skipCSS: customizer.init 已设置 CSS 变量
+    _applyCustomColors(); // 再应用自定义颜色覆盖
 
     // ===== 技能管理 =====
     initSkillsPanel();
