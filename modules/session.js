@@ -789,9 +789,25 @@ function renderMessages(id, ensureMsgIndex) {
     }
   }
   
-  // ===== 原子化渲染：禁止入场动画 → 一次性替换 DOM → 恢复动画 =====
+  // ===== 原子化渲染：多层防闪屏保护 =====
+  // Layer 1: 禁止入场动画（防止消息逐条淡入）
   container.classList.add('batch-render');
+  // Layer 2: CSS containment — 告诉浏览器跳过子元素渲染，避免中间帧空白
+  container.style.contentVisibility = 'hidden';
+  // Layer 3: 合成层提升 — 让 DOM 替换在 GPU 层完成，减少主线程布局抖动
+  container.style.willChange = 'transform';
+
+  // 预设滚动到底部（在 content-visibility:hidden 下不触发绘制，但布局值已就位）
+  container.scrollTop = container.scrollHeight;
+
   container.replaceChildren(fragment);
+
+  // 立即解除 containment（同步，不产生额外绘制帧）
+  container.style.contentVisibility = '';
+  container.style.willChange = '';
+
+  // 确保滚动位置正确（布局已更新，scrollHeight 现在反映新内容）
+  container.scrollTop = container.scrollHeight;
 
   // 批量添加代码按钮（单次 setTimeout 替代逐条 setTimeout 100ms）
   var allMsgDivs = container.querySelectorAll('.msg');
@@ -809,8 +825,6 @@ function renderMessages(id, ensureMsgIndex) {
       container.classList.remove('batch-render');
     });
   });
-
-  scrollToBottom();
 }
 
 // ===== 创建"加载更多"按钮 =====

@@ -876,6 +876,7 @@
       flex-direction: column;
       gap: 16px;
       background: var(--bg);
+      contain: layout style;
     }
 
     /* 🔧 细窄圆角深色滚动条 */

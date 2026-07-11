@@ -1175,7 +1175,7 @@ function renderFavoritesList() {
 
   function renderThemeList() {
     var container = document.getElementById('themeList');
-    if (!container || !Core.customizer) return;
+    if (!container || !Core.customizer || !Core.customizer.themes) return;
     container.innerHTML = '';
     var list = Core.customizer.themes.list();
     var activeId = Core.customizer.themes.getActive();
@@ -1196,7 +1196,7 @@ function renderFavoritesList() {
 
   function renderKeybindList() {
     var container = document.getElementById('keybindList');
-    if (!container || !Core.customizer) return;
+    if (!container || !Core.customizer || !Core.customizer.keybindings) return;
     container.innerHTML = '';
     var list = Core.customizer.keybindings.list();
     list.forEach(function(kb) {
@@ -1262,7 +1262,7 @@ function renderFavoritesList() {
 
   function renderHookList() {
     var container = document.getElementById('hookList');
-    if (!container || !Core.customizer) return;
+    if (!container || !Core.customizer || !Core.customizer.hooks) return;
     container.innerHTML = '';
     var list = Core.customizer.hooks.list();
     if (list.length === 0) {
@@ -1399,7 +1399,7 @@ function _applyCustomColors(skipSave) {
 
 module.exports = {
   name: 'settings',
-  dependencies: ['knowledge'],
+  dependencies: ['knowledge', 'customizer'],
 
   init(_Core) {
 
