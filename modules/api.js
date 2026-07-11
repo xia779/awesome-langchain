@@ -375,7 +375,7 @@ async function callAPI(prompt, systemMsg, temperature, model, provider, messages
     model: fullModel,
     messages: chatMessages,
     stream: false,
-    options: { temperature: parseFloat(temperature) || 0.7, num_predict: -1 }
+    options: { temperature: (function() { var t = Number(temperature); return (isFinite(t) && t >= 0 && t <= 2) ? Math.round(t * 100) / 100 : 0.7; })(), num_predict: -1 }
   };
   if (tools.length > 0) bodyObj.tools = tools;
 
@@ -528,7 +528,7 @@ async function callAPIStream(prompt, systemMsg, temperature, model, provider, on
       model: fullModel,
       messages: chatMessages,
       stream: true,
-      options: { temperature: parseFloat(temperature) || 0.7, num_predict: -1 }
+      options: { temperature: (function() { var t = Number(temperature); return (isFinite(t) && t >= 0 && t <= 2) ? Math.round(t * 100) / 100 : 0.7; })(), num_predict: -1 }
     })
   };
   if (signal) fetchOpts.signal = signal;

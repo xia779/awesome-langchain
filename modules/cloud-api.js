@@ -282,7 +282,7 @@ async function handleToolCalls(toolCalls, messages, apiKey, baseURL, model, temp
     body: JSON.stringify({
       model: model,
       messages: messages,
-      temperature: parseFloat(temperature) || 0.7,
+      temperature: (function() { var t = Number(temperature); return (isFinite(t) && t >= 0 && t <= 2) ? Math.round(t * 100) / 100 : 0.7; })(),
       max_tokens: 16384,
       stream: false
     })
@@ -318,11 +318,14 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
         }
       }
 
-      // 🔧 F12: Function Calling — 构建请求体，支持 tools 参数
+      // 🔧 F12: Function Calling — 构建请求体，确保 temperature 为有效浮点数
+      var _temp = Number(temperature);
+      if (!isFinite(_temp) || _temp < 0 || _temp > 2) _temp = 0.7;
+      _temp = Math.round(_temp * 100) / 100;
       const requestBody = {
         model: actualModel || 'gpt-3.5-turbo',
         messages: messages,
-        temperature: parseFloat(temperature) || 0.7,
+        temperature: _temp,
         max_tokens: 16384,
         stream: false
       };
@@ -401,13 +404,18 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
       throw new Error('豆包需要配置 Endpoint ID（格式 ep-xxx），请在设置面板 → 豆包 中填写从火山引擎 Ark 控制台创建的 Endpoint ID');
     }
   }
-  const requestBody = {
+  // 确保 temperature 始终为有效浮点数（DashScope 等 API 严格要求 Float 类型）
+  var _temp = Number(temperature);
+  if (!isFinite(_temp) || _temp < 0 || _temp > 2) _temp = 0.7;
+  _temp = Math.round(_temp * 100) / 100; // 精度控制在2位小数，避免浮点误差
+  var requestBody = {
     model: actualModel || 'gpt-3.5-turbo',
     messages: messages,
-    temperature: parseFloat(temperature) || 0.7,
+    temperature: _temp,
     max_tokens: 16384,
     stream: true
   };
+  console.log('[cloud-api] stream request:', JSON.stringify({ model: requestBody.model, temperature: requestBody.temperature, tempType: typeof requestBody.temperature }));
 
   const supportsTools = FUNCTION_CALLING_PROVIDERS.includes(provider);
   const toolsPayload = supportsTools ? buildToolsPayload() : null;
@@ -548,10 +556,13 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
     }
     // 发起后续流式请求获取最终回复
     console.log('🔄 Function Calling (stream): 请求最终回复...');
+    var _fuTemp = Number(temperature);
+    if (!isFinite(_fuTemp) || _fuTemp < 0 || _fuTemp > 2) _fuTemp = 0.7;
+    _fuTemp = Math.round(_fuTemp * 100) / 100;
     const followUpBody = {
       model: actualModel || 'gpt-3.5-turbo',
       messages: messages,
-      temperature: parseFloat(temperature) || 0.7,
+      temperature: _fuTemp,
       max_tokens: 16384,
       stream: true
     };
