@@ -145,7 +145,7 @@ function saveSettings() {
     }
     
     Core.saveConfig(newConfig);
-    Core.emit('configChanged');
+    // saveConfig 内部已触发 configChanged，无需重复 emit
     const status = document.getElementById('status');
     if (status) status.textContent = '✅ 设置已保存';
     // 保存后自动关闭设置面板
@@ -1364,7 +1364,7 @@ function _loadColorInputs() {
   });
 }
 
-function _applyCustomColors() {
+function _applyCustomColors(skipSave) {
   var root = document.documentElement;
   var c = Core.config || {};
   // 优先读 DOM 输入框（用户正在拖动色盘时取实时值），否则回退到 config
@@ -1383,13 +1383,15 @@ function _applyCustomColors() {
   root.style.setProperty('--primary', accentVal);
   root.style.setProperty('--text', textVal);
 
-  // 批量写入 config（单次 saveConfig，避免 4 次连续写文件）
-  Core.saveConfig({
-    sidebarColor: sidebarVal,
-    panelColor: panelVal,
-    accentColor: accentVal,
-    textColor: textVal,
-  });
+  // skipSave=true 时只更新 CSS（颜色拖动期间的实时预览），不触发 saveConfig/configChanged 级联
+  if (!skipSave) {
+    Core.saveConfig({
+      sidebarColor: sidebarVal,
+      panelColor: panelVal,
+      accentColor: accentVal,
+      textColor: textVal,
+    });
+  }
 }
 
 module.exports = {
@@ -1476,12 +1478,13 @@ module.exports = {
       });
     }
 
-    // ===== 自定义颜色实时预览 =====
+    // ===== 自定义颜色：input 仅更新 CSS（实时预览），change 持久化到 config =====
     var colorPickers = ['sidebarColorInput', 'panelColorInput', 'accentColorInput', 'textColorInput'];
     colorPickers.forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
-        el.addEventListener('input', function() { _applyCustomColors(); });
+        el.addEventListener('input', function() { _applyCustomColors(true); });   // 实时预览，不触发 saveConfig
+        el.addEventListener('change', function() { _applyCustomColors(false); }); // 松手后持久化
       }
     });
 

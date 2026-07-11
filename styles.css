@@ -2728,8 +2728,8 @@
 
     /* ===== UI 优化：动画与过渡 ===== */
     
-    /* 主题切换平滑过渡 */
-    body, #sidebar, #main-container, .msg, .chat-item, .role-item,
+    /* 主题切换平滑过渡（.msg 不参与，避免所有气泡同时 0.4s 渐变引起闪屏） */
+    body, #sidebar, #main-container, .chat-item, .role-item,
     .search-box, #input, .icon-btn {
       transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
     }

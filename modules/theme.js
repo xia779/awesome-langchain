@@ -20,13 +20,7 @@ function applyTheme() {
     container.style.background = '#141425';
     container.style.backgroundImage = 'none';
   }
-  // 重新渲染当前会话以更新气泡颜色
-  if (Core.session) {
-    const currentId = Core.session.getCurrentId();
-    if (currentId) {
-      Core.session.renderMessages(currentId);
-    }
-  }
+  // renderMessages 由 configChanged 防抖处理器触发，此处不再直接调用
   Core.emit('themeApplied', c);
 }
 
@@ -43,7 +37,19 @@ module.exports = {
   init(_Core) {
     Core = _Core;
     applyTheme();
-    Core.on('configChanged', applyTheme);
+    // 防抖：快速配置变更（如颜色拖动）只在停止 200ms 后重建一次 DOM
+    var _renderTimer = 0;
+    Core.on('configChanged', function() {
+      applyTheme();
+      if (_renderTimer) clearTimeout(_renderTimer);
+      _renderTimer = setTimeout(function() {
+        _renderTimer = 0;
+        if (Core.session) {
+          var currentId = Core.session.getCurrentId();
+          if (currentId) Core.session.renderMessages(currentId);
+        }
+      }, 200);
+    });
   },
   toggle,
   applyTheme

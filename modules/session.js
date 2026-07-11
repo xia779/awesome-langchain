@@ -1567,7 +1567,7 @@ function init(core) {
     console.log('✅ chatContainer 事件委托已初始化');
   })();
 
-  Core.on('configChanged', function() { if (currentSessionId) renderMessages(currentSessionId); });
+  // configChanged 由 theme.js 防抖处理器统一触发 renderMessages，此处不再重复监听
   
   // 绑定事件
   if (Core.dom && Core.dom.newChatBtn) {
