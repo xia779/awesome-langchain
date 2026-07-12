@@ -73,15 +73,6 @@ function injectPolishStyles() {
     '.skeleton-line:nth-child(2) { width: 60%; animation-delay: 0.2s; }',
     '.skeleton-line:nth-child(3) { width: 70%; animation-delay: 0.4s; }',
 
-    // 消息入场动画
-    '@keyframes msg-fade-in {',
-    '  from { opacity: 0; transform: translateY(8px); }',
-    '  to { opacity: 1; transform: translateY(0); }',
-    '}',
-    '.msg-polish-enter {',
-    '  animation: msg-fade-in 0.3s ease-out;',
-    '}',
-
     // 复制闪烁
     '@keyframes copy-flash {',
     '  0% { background: transparent; }',
@@ -116,7 +107,7 @@ function injectPolishStyles() {
     '.cheatsheet-overlay {',
     '  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999;',
     '  display: flex; align-items: center; justify-content: center;',
-    '  animation: msg-fade-in 0.2s ease-out;',
+    '  animation: messageIn 0.2s ease-out;',
     '}',
     '.cheatsheet-panel {',
     '  background: var(--bg-secondary,#1e1e2e); border: 1px solid var(--border-color,#444);',

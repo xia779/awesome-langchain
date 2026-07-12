@@ -15,7 +15,7 @@
       --radius-sm: 12px;
       --sidebar-width: 260px;
       --settings-width: 420px;
-      --transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+      --transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
       /* 扩展色彩变量 */
       --white: #ffffff;
       --danger: #ef4444;
@@ -1334,7 +1334,7 @@
       font-size: 12px;
       cursor: pointer;
       opacity: 0;
-      transition: var(--transition);
+      transition: var(--transition), opacity 0.2s ease;
     }
     .fold-code-btn { right: 56px; }
     .msg.ai pre:hover .copy-code-btn, .msg.ai pre:hover .fold-code-btn { opacity: 1; }

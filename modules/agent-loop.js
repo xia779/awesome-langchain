@@ -358,8 +358,25 @@ async function sendToAgent(task, isDeepThink) {
           _currentStepRow = document.createElement('div');
           _currentStepRow.className = 'agent-step-live';
           _currentStepRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:5px 10px;margin:3px 0;font-size:12px;color:var(--text-secondary);border-left:3px solid var(--primary);border-radius:4px;background:rgba(59,130,246,0.05);';
-          _currentStepRow.innerHTML = '<div><span style="color:var(--primary);font-weight:600;">步骤 ' + s + '</span> <span style="font-weight:500;color:var(--text);">' + actionName + '</span> <span class="typing-cursor" style="font-size:10px;">⏳</span></div><span class="agent-step-timer" style="font-size:10px;color:var(--text-secondary);opacity:0.7;"></span>';
-          var timerSpan = _currentStepRow.querySelector('.agent-step-timer');
+          var _smLeft = document.createElement('div');
+          var _smStepLabel = document.createElement('span');
+          _smStepLabel.style.cssText = 'color:var(--primary);font-weight:600;';
+          _smStepLabel.textContent = '\u6B65\u9AA4 ' + s;
+          var _smActionLabel = document.createElement('span');
+          _smActionLabel.style.cssText = 'font-weight:500;color:var(--text);margin-left:4px;';
+          _smActionLabel.textContent = actionName;
+          var _smStatusIcon = document.createElement('span');
+          _smStatusIcon.style.fontSize = '10px';
+          _smStatusIcon.className = 'typing-cursor';
+          _smStatusIcon.textContent = '\u23F3';
+          _smLeft.appendChild(_smStepLabel);
+          _smLeft.appendChild(_smActionLabel);
+          _smLeft.appendChild(_smStatusIcon);
+          var _smTimer = document.createElement('span');
+          _smTimer.style.cssText = 'font-size:10px;color:var(--text-secondary);opacity:0.7;';
+          _currentStepRow.appendChild(_smLeft);
+          _currentStepRow.appendChild(_smTimer);
+          var timerSpan = _smTimer;
           _timerInterval = setInterval(function() {
             var elapsed = ((Date.now() - (_stepStartTimes[s] || Date.now())) / 1000).toFixed(1);
             if (timerSpan) timerSpan.textContent = elapsed + 's';
@@ -374,7 +391,10 @@ async function sendToAgent(task, isDeepThink) {
           var stepElapsed = ((Date.now() - (_stepStartTimes[s] || Date.now())) / 1000).toFixed(1);
           if (success) {
             _currentStepRow.style.borderLeftColor = '#22c55e';
-            _currentStepRow.innerHTML = '<div><span style="color:var(--primary);font-weight:600;">步骤 ' + s + '</span> <span style="font-weight:500;color:var(--text);">' + actionName + '</span> ✅</div><span style="font-size:10px;color:#22c55e;opacity:0.8;">' + stepElapsed + 's</span>';
+            _smStatusIcon.className = '';
+            _smStatusIcon.textContent = '\u2705';
+            _smTimer.textContent = stepElapsed + 's';
+            _smTimer.style.color = '#22c55e';
           }
         }
       },
@@ -382,7 +402,14 @@ async function sendToAgent(task, isDeepThink) {
         if (_timerInterval) { clearInterval(_timerInterval); _timerInterval = null; }
         if (_currentStepRow) {
           _currentStepRow.style.borderLeftColor = '#ef4444';
-          _currentStepRow.innerHTML = '<div><span style="color:#ef4444;font-weight:600;">步骤 ' + s + '</span> <span style="font-weight:500;color:var(--text);">' + actionName + '</span> ❌ <span style="font-size:10px;color:#ef4444;">自动纠错中</span></div><span style="font-size:10px;color:#ef4444;opacity:0.8;">' + ((Date.now() - (_stepStartTimes[s] || Date.now())) / 1000).toFixed(1) + 's</span>';
+          _smStatusIcon.className = '';
+          _smStatusIcon.textContent = '\u274C';
+          var _smErrHint = document.createElement('span');
+          _smErrHint.style.cssText = 'font-size:10px;color:#ef4444;margin-left:4px;';
+          _smErrHint.textContent = '\u81EA\u52A8\u7EA0\u9519\u4E2D';
+          _smLeft.appendChild(_smErrHint);
+          _smTimer.textContent = ((Date.now() - (_stepStartTimes[s] || Date.now())) / 1000).toFixed(1) + 's';
+          _smTimer.style.color = '#ef4444';
         }
       },
       onStateChange: function(from, to) {
@@ -503,8 +530,25 @@ async function sendToAgent(task, isDeepThink) {
     var stepRow = document.createElement('div');
     stepRow.className = 'agent-step-live';
     stepRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:5px 10px;margin:3px 0;font-size:12px;color:var(--text-secondary);border-left:3px solid var(--primary);border-radius:4px;background:rgba(59,130,246,0.05);';
-    stepRow.innerHTML = '<div><span style="color:var(--primary);font-weight:600;">步骤 ' + step + '</span> <span style="font-weight:500;color:var(--text);">' + action.action + '</span> <span class="typing-cursor" style="font-size:10px;">⏳</span></div><span class="agent-step-timer" style="font-size:10px;color:var(--text-secondary);opacity:0.7;"></span>';
-    var timerSpan = stepRow.querySelector('.agent-step-timer');
+    var _lpLeft = document.createElement('div');
+    var _lpStepLabel = document.createElement('span');
+    _lpStepLabel.style.cssText = 'color:var(--primary);font-weight:600;';
+    _lpStepLabel.textContent = '\u6B65\u9AA4 ' + step;
+    var _lpActionLabel = document.createElement('span');
+    _lpActionLabel.style.cssText = 'font-weight:500;color:var(--text);margin-left:4px;';
+    _lpActionLabel.textContent = action.action;
+    var _lpStatusIcon = document.createElement('span');
+    _lpStatusIcon.style.fontSize = '10px';
+    _lpStatusIcon.className = 'typing-cursor';
+    _lpStatusIcon.textContent = '\u23F3';
+    _lpLeft.appendChild(_lpStepLabel);
+    _lpLeft.appendChild(_lpActionLabel);
+    _lpLeft.appendChild(_lpStatusIcon);
+    var _lpTimer = document.createElement('span');
+    _lpTimer.style.cssText = 'font-size:10px;color:var(--text-secondary);opacity:0.7;';
+    stepRow.appendChild(_lpLeft);
+    stepRow.appendChild(_lpTimer);
+    var timerSpan = _lpTimer;
     var _timerInterval = setInterval(function() {
       var elapsed = ((Date.now() - _stepStartTimes[step]) / 1000).toFixed(1);
       if (timerSpan) timerSpan.textContent = elapsed + 's';
@@ -535,7 +579,14 @@ async function sendToAgent(task, isDeepThink) {
       resultForContext = toolResultStr + correctionHint;
       // 更新步骤行为红色错误状态
       stepRow.style.borderLeftColor = '#ef4444';
-      stepRow.innerHTML = '<div><span style="color:#ef4444;font-weight:600;">步骤 ' + step + '</span> <span style="font-weight:500;color:var(--text);">' + action.action + '</span> ❌ <span style="font-size:10px;color:#ef4444;">自动纠错中</span></div><span style="font-size:10px;color:#ef4444;opacity:0.8;">' + ((Date.now() - _stepStartTimes[step]) / 1000).toFixed(1) + 's</span>';
+      _lpStatusIcon.className = '';
+      _lpStatusIcon.textContent = '\u274C';
+      var _lpErrHint = document.createElement('span');
+      _lpErrHint.style.cssText = 'font-size:10px;color:#ef4444;margin-left:4px;';
+      _lpErrHint.textContent = '\u81EA\u52A8\u7EA0\u9519\u4E2D';
+      _lpLeft.appendChild(_lpErrHint);
+      _lpTimer.textContent = ((Date.now() - _stepStartTimes[step]) / 1000).toFixed(1) + 's';
+      _lpTimer.style.color = '#ef4444';
     }
 
     const stepRecord = `[步骤${step}] 执行 ${action.action}: ${JSON.stringify(action.params || {})}\n结果: ${resultForContext.substring(0, 300)}${resultForContext.length > 300 ? '...' : ''}`;
@@ -547,7 +598,10 @@ async function sendToAgent(task, isDeepThink) {
     var stepElapsed = ((Date.now() - _stepStartTimes[step]) / 1000).toFixed(1);
     if (!isToolError) {
       stepRow.style.borderLeftColor = '#22c55e';
-      stepRow.innerHTML = '<div><span style="color:var(--primary);font-weight:600;">步骤 ' + step + '</span> <span style="font-weight:500;color:var(--text);">' + action.action + '</span> ✅</div><span style="font-size:10px;color:#22c55e;opacity:0.8;">' + stepElapsed + 's</span>';
+      _lpStatusIcon.className = '';
+      _lpStatusIcon.textContent = '\u2705';
+      _lpTimer.textContent = stepElapsed + 's';
+      _lpTimer.style.color = '#22c55e';
     }
   }
   } // end else: legacy loop path
@@ -641,8 +695,8 @@ async function sendToAgent(task, isDeepThink) {
         arrow.textContent = '▶';
       }
     };
-    // 重建步骤内容为可展开详情
-    stepsContainer.innerHTML = '';
+    // 重建步骤内容为可展开详情 — 使用 DocumentFragment 原子替换
+    var _traceFrag = document.createDocumentFragment();
     for (var di = 0; di < stepsLog.length; di++) {
       var sData = stepsLog[di];
       var stepItem = document.createElement('div');
@@ -672,8 +726,9 @@ async function sendToAgent(task, isDeepThink) {
       })(headerRow, detailRow);
       stepItem.appendChild(headerRow);
       stepItem.appendChild(detailRow);
-      stepsContainer.appendChild(stepItem);
+      _traceFrag.appendChild(stepItem);
     }
+    stepsContainer.replaceChildren(_traceFrag);
     var panelContent = document.createElement('div');
     panelContent.className = 'agent-think-content';
     panelContent.style.cssText = 'max-height:0;overflow:hidden;transition:max-height 0.3s ease;';
@@ -681,9 +736,8 @@ async function sendToAgent(task, isDeepThink) {
     panelContent.appendChild(stepsContainer);
     panelWrapper.appendChild(panelToggle);
     panelWrapper.appendChild(panelContent);
-    // 清除 agentDiv 并重新组装
-    agentDiv.innerHTML = '';
-    agentDiv.appendChild(panelWrapper);
+    // 原子交换：单次 replaceChildren 替代 innerHTML 清空 + appendChild，消除中间空容器闪烁
+    agentDiv.replaceChildren(panelWrapper);
   } else {
     agentDiv.removeChild(stepsContainer);
   }

@@ -69,7 +69,7 @@ module.exports = {
           var currentId = Core.session.getCurrentId();
           if (currentId) Core.session.renderMessages(currentId);
         }
-      }, 200);
+      }, 50);
     });
   },
   toggle,

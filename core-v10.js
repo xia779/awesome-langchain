@@ -2121,16 +2121,20 @@ Core.renderMarkdown = function(text) {
     if (!chatContainer || !scrollBtn) return;
 
     var _scrollRafId = 0;
+    var _scrollBtnVisible = false;
     chatContainer.addEventListener('scroll', function() {
       if (_scrollRafId) return;
       _scrollRafId = requestAnimationFrame(function() {
         _scrollRafId = 0;
-        var isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 100;
-        if (isNearBottom) {
+        var distFromBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight;
+        // 滞后阈值：隐藏 < 80px，显示 > 120px，防止边界处反复切换闪烁
+        if (distFromBottom < 80 && _scrollBtnVisible) {
+          _scrollBtnVisible = false;
           scrollBtn.style.opacity = '0';
           scrollBtn.style.pointerEvents = 'none';
           scrollBtn.style.transform = 'translateX(-50%) translateY(10px)';
-        } else {
+        } else if (distFromBottom > 120 && !_scrollBtnVisible) {
+          _scrollBtnVisible = true;
           scrollBtn.style.pointerEvents = 'auto';
           scrollBtn.style.opacity = '1';
           scrollBtn.style.transform = 'translateX(-50%) translateY(0)';
