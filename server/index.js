@@ -134,19 +134,46 @@ Core.on('configChanged', function(delta) {
   router.broadcast(PROTOCOL.EVENT_CONFIG, { delta: delta });
 });
 
-// ===== HTTP + WebSocket server =====
-var server = http.createServer(function(req, res) {
+// ===== Static file serving =====
+var WEB_DIR = path.join(__dirname, 'web');
+var MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.gif': 'image/gif',
+  '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webp': 'image/webp',
+  '.map': 'application/json', '.txt': 'text/plain; charset=utf-8',
+};
+
+function serveStatic(req, res) {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', uptime: process.uptime(), clients: router.getClients().size }));
-  } else if (req.url === '/api/models') {
+    return;
+  }
+  if (req.url === '/api/models') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ models: Core.config.availableModels || [] }));
-  } else {
-    res.writeHead(404);
-    res.end('AI Agent Pro Server');
+    return;
   }
-});
+  var urlPath = req.url.split('?')[0];
+  if (urlPath === '/') urlPath = '/index.html';
+  var safePath = path.normalize(urlPath).replace(/^(\.\.[\/\\])+/, '');
+  var filePath = path.join(WEB_DIR, safePath);
+  if (!filePath.startsWith(WEB_DIR)) {
+    res.writeHead(403); res.end('Forbidden'); return;
+  }
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    filePath = path.join(WEB_DIR, 'index.html');
+  }
+  var ext = path.extname(filePath).toLowerCase();
+  var mime = MIME_TYPES[ext] || 'application/octet-stream';
+  res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
+  fs.createReadStream(filePath).pipe(res);
+}
+
+// ===== HTTP + WebSocket server =====
+var fs = require('fs');
+var server = http.createServer(serveStatic);
 
 var wss = new WebSocketServer({ server: server });
 wss.on('connection', function(ws, req) {
@@ -158,6 +185,7 @@ server.listen(PORT, HOST, function() {
   console.log('  AI Agent Pro Server v' + PROTOCOL.VERSION);
   console.log('  HTTP:  http://' + HOST + ':' + PORT);
   console.log('  WS:    ws://' + HOST + ':' + PORT);
+  console.log('  Web:   http://' + HOST + ':' + PORT + '/');
   console.log('  Data:  ' + Core.DATA_ROOT);
   console.log('  Time:  ' + new Date().toISOString());
   console.log('');
