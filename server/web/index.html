@@ -654,13 +654,15 @@ function renderSessions(){
   var list=sessions;
   if(q)list=list.filter(function(s){return(s.name||'').toLowerCase().indexOf(q)>=0});
   if(filter!=='all'){var now=new Date();var today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-    if(filter==='today')list=list.filter(function(s){return s.updatedAt&&new Date(s.updatedAt)>=today});
-    else if(filter==='yesterday'){var yd=new Date(today);yd.setDate(yd.getDate()-1);list=list.filter(function(s){return s.updatedAt&&new Date(s.updatedAt)>=yd&&new Date(s.updatedAt)<today})}
-    else if(filter==='week'){var wk=new Date(today);wk.setDate(wk.getDate()-wk.getDay());list=list.filter(function(s){return s.updatedAt&&new Date(s.updatedAt)>=wk})}
+    list=list.filter(function(s){var ut=s.updatedAt||s.updated_at;if(!ut)return false;var d=new Date(ut);
+    if(filter==='today')return d>=today;
+    if(filter==='yesterday'){var yd=new Date(today);yd.setDate(yd.getDate()-1);return d>=yd&&d<today}
+    if(filter==='week'){var wk=new Date(today);wk.setDate(wk.getDate()-wk.getDay());return d>=wk}
+    return true});
   }
   if(!list.length){l.innerHTML='<div class="dr-empty">暂无会话</div>';return}
   var h='';for(var i=0;i<list.length;i++){var s=list[i],a=s.id===curSid?' act':'';
-    var tm=s.updatedAt?timeAgo(new Date(s.updatedAt)):'';
+    var ut=s.updatedAt||s.updated_at;var tm=ut?timeAgo(new Date(ut)):'';
     h+='<div class="si'+a+'" onclick="switchSession(\''+s.id+'\')" oncontextmenu="showCtxMenu(event,\''+s.id+'\')"><span class="nm">'+esc(s.name||'新对话')+'</span><span class="tm">'+tm+'</span><button class="del" onclick="event.stopPropagation();delSession(\''+s.id+'\')">&times;</button></div>'}
   l.innerHTML=h}
 function filterSessions(){renderSessions()}
@@ -849,8 +851,8 @@ async function doRegister(){var name=document.getElementById('loginUser').value.
   document.getElementById('loginErr').textContent='注册中...';
   try{var d=await send('auth.login',{userId:name});if(d.success){onLoginSuccess(d)}else{document.getElementById('loginErr').textContent=d.error||'注册失败'}}catch(e){document.getElementById('loginErr').textContent=e.message}}
 function onLoginSuccess(d){document.getElementById('loginOverlay').classList.add('hide');document.getElementById('app').style.display='';
-  if(d.sessions&&d.sessions.length){sessions=d.sessions;renderSessions();if(sessions.length>0)switchSession(sessions[0].id)}else{loadSessions()}
-  loadConfig();loadGRStats();toast('欢迎回来！')}
+  curSid=null;msgs=[];sessions=[];renderMsgs();renderSessions();
+  loadSessions();loadConfig();loadGRStats();toast('欢迎回来！')}
 
 // ===== Init =====
 window.addEventListener('load',function(){connect();

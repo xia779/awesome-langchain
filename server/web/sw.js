@@ -1,5 +1,5 @@
 // Service Worker for AI Assistant PWA
-var CACHE_NAME = 'ai-assistant-v1';
+var CACHE_NAME = 'ai-assistant-v2';
 var ASSETS = [
   '/',
   '/index.html',
