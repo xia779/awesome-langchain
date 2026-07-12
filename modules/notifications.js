@@ -235,12 +235,18 @@ function hookIntoEvents() {
 function onNotification(fn) { if (typeof fn === 'function') _listeners.push(fn); }
 
 // ===== 持久化 =====
+var _notifSaveTimer = null;
 function saveNotifications() {
-  try {
-    var data = _notifications.slice(0, 50).map(function(n) { return { id: n.id, type: n.type, title: n.title, message: n.message, timestamp: n.timestamp, read: n.read }; });
-    var fs = require('fs'), path = require('path');
-    fs.writeFileSync(path.join(Core.DATA_ROOT, 'notifications.json'), JSON.stringify(data), 'utf8');
-  } catch (e) {}
+  // 🔧 防抖 + 异步写入：避免 writeFileSync 阻塞 renderer 主线程
+  if (_notifSaveTimer) clearTimeout(_notifSaveTimer);
+  _notifSaveTimer = setTimeout(function() {
+    _notifSaveTimer = null;
+    try {
+      var data = _notifications.slice(0, 50).map(function(n) { return { id: n.id, type: n.type, title: n.title, message: n.message, timestamp: n.timestamp, read: n.read }; });
+      var fs = require('fs'), path = require('path');
+      fs.promises.writeFile(path.join(Core.DATA_ROOT, 'notifications.json'), JSON.stringify(data), 'utf8').catch(function() {});
+    } catch (e) {}
+  }, 500);
 }
 function loadNotifications() {
   try {

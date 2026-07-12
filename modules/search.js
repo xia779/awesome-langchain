@@ -358,7 +358,8 @@ function updateWebSearchAvailability() {
     btn.disabled = true;
     btn.classList.remove('active');
     Core.config.webSearch = false;
-    Core.saveConfig({ webSearch: false });
+    // 不在此处调用 saveConfig — 避免 configChanged → saveConfig → configChanged 递归
+    // 持久化会在下次自然 saveConfig 时顺带写入
   } else if (btn.disabled) {
     btn.disabled = false;
   }

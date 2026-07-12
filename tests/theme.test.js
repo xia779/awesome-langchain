@@ -40,14 +40,14 @@ test('THEME_VISUAL_KEYS - 不包含非视觉键', function() {
   });
 });
 
-// ===== _isThemeRelatedChange — null / undefined → true（保守策略） =====
+// ===== _isThemeRelatedChange — null / undefined → false（跳过不必要的重建）=====
 
-test('_isThemeRelatedChange - null 返回 true（保守：假设涉及视觉）', function() {
-  assert.strictEqual(_isThemeRelatedChange(null), true);
+test('_isThemeRelatedChange - null 返回 false（跳过不必要的消息重建）', function() {
+  assert.strictEqual(_isThemeRelatedChange(null), false);
 });
 
-test('_isThemeRelatedChange - undefined 返回 true（保守：假设涉及视觉）', function() {
-  assert.strictEqual(_isThemeRelatedChange(undefined), true);
+test('_isThemeRelatedChange - undefined 返回 false（跳过不必要的消息重建）', function() {
+  assert.strictEqual(_isThemeRelatedChange(undefined), false);
 });
 
 // ===== _isThemeRelatedChange — 空对象 {} → false =====
@@ -118,14 +118,14 @@ test('_isThemeRelatedChange - language + textColor 混合返回 true', function(
   );
 });
 
-// ===== _isThemeRelatedChange — 非对象输入 → true =====
+// ===== _isThemeRelatedChange — 非对象输入 → false（避免不必要的 renderMessages）=====
 
-test('_isThemeRelatedChange - 数字类型返回 true（保守）', function() {
-  assert.strictEqual(_isThemeRelatedChange(42), true);
+test('_isThemeRelatedChange - 数字类型返回 false（非对象，跳过重建）', function() {
+  assert.strictEqual(_isThemeRelatedChange(42), false);
 });
 
-test('_isThemeRelatedChange - 字符串类型返回 true（保守）', function() {
-  assert.strictEqual(_isThemeRelatedChange('theme'), true);
+test('_isThemeRelatedChange - 字符串类型返回 false（非对象，跳过重建）', function() {
+  assert.strictEqual(_isThemeRelatedChange('theme'), false);
 });
 
 // ===== 模块导出完整性 =====

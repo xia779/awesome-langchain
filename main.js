@@ -22,17 +22,8 @@ const fs = require('fs');
 const { exec, spawn } = require('child_process');
 const { setupMobileRoutes } = require('./web-server');
 
-// 🔧 启动前清理 GPUCache / CodeCache，修复 disk_cache_util_win.cc 报错
-try {
-  const userDataPath = app.getPath('userData');
-  const cacheDirs = ['GPUCache', 'Code Cache', 'DawnGraphiteCache', 'DawnWebGPUCache'];
-  for (const dir of cacheDirs) {
-    const fullPath = path.join(userDataPath, dir);
-    if (fs.existsSync(fullPath)) {
-      fs.rmSync(fullPath, { recursive: true, force: true });
-    }
-  }
-} catch (e) { /* 忽略清理失败 */ }
+// 🔧 GPU 缓存清理已移至 app.whenReady() 内部（见下方），确保 app.getPath 可用
+// DATA_ROOT 优先使用 E:\my-ai-data，仅当不存在时才回退到 userData
 
 // ===== 全局变量 =====
 let mainWindow = null;
@@ -589,6 +580,30 @@ function createWindow() {
   });
   mainWindow.on('closed', () => { mainWindow = null; });
 
+  // 🔧 Renderer 进程崩溃自动恢复
+  var _crashReloadCount = 0;
+  var MAX_CRASH_RELOADS = 3;
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.error('❌ Renderer 进程崩溃:', details.reason, 'exitCode:', details.exitCode);
+    // 写入崩溃标记，下次启动时清理 GPU 缓存
+    try {
+      const userDataPath = app.getPath('userData');
+      fs.writeFileSync(path.join(userDataPath, '.crash-marker'), Date.now().toString(), 'utf8');
+    } catch (e) {}
+
+    if (_crashReloadCount < MAX_CRASH_RELOADS) {
+      _crashReloadCount++;
+      console.log('🔄 正在重新加载 renderer (第 ' + _crashReloadCount + ' 次)...');
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.reload();
+        }
+      }, 1000);
+    } else {
+      console.error('❌ Renderer 连续崩溃 ' + MAX_CRASH_RELOADS + ' 次，停止自动恢复');
+    }
+  });
+
   // 🔧 注册菜单快捷键（Ctrl+Shift+I 打开 DevTools）
   const template = [
     {
@@ -612,6 +627,13 @@ function createWindow() {
   Menu.setApplicationMenu(menu);
 
   mainWindow.webContents.on('did-finish-load', () => {
+    // 页面成功加载：重置崩溃计数器，删除崩溃标记
+    _crashReloadCount = 0;
+    try {
+      const userDataPath = app.getPath('userData');
+      const crashMarkerPath = path.join(userDataPath, '.crash-marker');
+      if (fs.existsSync(crashMarkerPath)) fs.unlinkSync(crashMarkerPath);
+    } catch (e) {}
     // 🔍 诊断：检查 Core.session.renderChatList 是否是树形版本
     setTimeout(() => {
       mainWindow.webContents.executeJavaScript(`
@@ -968,6 +990,46 @@ ipcMain.on('restore-data', (event) => {
 
 // ===== 应用生命周期 =====
 app.whenReady().then(async () => {
+
+  // 🔧 条件性清理 GPU/Code 缓存：仅在上次崩溃或版本变更时清理
+  // 每次启动都清理反而会 destabilize GPU 进程，导致黑屏
+  try {
+    const userDataPath = app.getPath('userData');
+    const markerPath = path.join(userDataPath, '.cache-version');
+    const APP_VERSION = '1.1.0'; // 递增此版本号以触发缓存清理
+    const crashMarkerPath = path.join(userDataPath, '.crash-marker');
+    const hasCrashMarker = fs.existsSync(crashMarkerPath);
+
+    let needsClean = hasCrashMarker;
+    try {
+      const lastVersion = fs.existsSync(markerPath) ? fs.readFileSync(markerPath, 'utf8').trim() : '';
+      if (lastVersion !== APP_VERSION) needsClean = true;
+    } catch (e) { needsClean = true; }
+
+    if (needsClean) {
+      const cacheDirs = ['GPUCache', 'Code Cache', 'DawnGraphiteCache', 'DawnWebGPUCache', 'ShaderCache', 'VideoDecodeStats'];
+      let cleaned = 0;
+      for (const dir of cacheDirs) {
+        const fullPath = path.join(userDataPath, dir);
+        if (fs.existsSync(fullPath)) {
+          try {
+            fs.rmSync(fullPath, { recursive: true, force: true });
+            cleaned++;
+          } catch (e) {
+            console.warn('⚠️ 缓存目录清理失败:', dir, e.message);
+          }
+        }
+      }
+      if (cleaned > 0) console.log('🧹 已清理 ' + cleaned + ' 个 GPU/代码缓存目录 (版本变更或崩溃恢复)');
+      // 写入版本标记 + 清除崩溃标记
+      try { fs.writeFileSync(markerPath, APP_VERSION, 'utf8'); } catch (e) {}
+      try { if (hasCrashMarker) fs.unlinkSync(crashMarkerPath); } catch (e) {}
+    } else {
+      console.log('⏭️ GPU 缓存跳过清理 (版本未变且无崩溃记录)');
+    }
+  } catch (e) {
+    console.warn('⚠️ GPU 缓存清理异常:', e.message);
+  }
 
   // 🔧 启动时清除 HTTP 缓存（保留 localStorage/IndexedDB 等用户数据）
   try {

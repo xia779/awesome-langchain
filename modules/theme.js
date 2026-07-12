@@ -11,7 +11,7 @@ var THEME_VISUAL_KEYS = {
 
 // 检查 configChanged 传入的变更是否涉及主题视觉
 function _isThemeRelatedChange(changedConfig) {
-  if (!changedConfig || typeof changedConfig !== 'object') return true;
+  if (!changedConfig || typeof changedConfig !== 'object') return false;
   var keys = Object.keys(changedConfig);
   if (keys.length === 0) return false; // saveConfig({}) 空对象 — 不涉及视觉
   for (var i = 0; i < keys.length; i++) {
@@ -46,7 +46,7 @@ function toggle() {
   const c = Core.config;
   const current = c.chatBackground || '#141425';
   c.chatBackground = current === '#141425' ? '#f0f0f0' : '#141425';
-  if (Core.saveConfig) Core.saveConfig();
+  if (Core.saveConfig) Core.saveConfig({ chatBackground: c.chatBackground });
   applyTheme();
 }
 

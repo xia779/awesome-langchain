@@ -786,8 +786,11 @@ try {
             if (_cid && Core.session.renderMessages) Core.session.renderMessages(_cid);
             if (_cid && Core.session.highlightChatItem) Core.session.highlightChatItem(_cid);
           }
-          if (Core.dom && Core.dom.currentUserDisplay) Core.dom.currentUserDisplay.textContent = '&#128100; ' + username;
-          if (Core.dom && Core.dom.status) Core.dom.status.textContent = '&#9989; 已就绪';
+          if (Core.dom && Core.dom.currentUserDisplay) Core.dom.currentUserDisplay.textContent = '\ud83d\udc64 ' + username;
+          if (Core.dom && Core.dom.status) Core.dom.status.textContent = '\u2705 已就绪';
+          // 保存 lastUser 用于下次自动登录
+          Core._currentUser = username;
+          if (Core.saveConfig) Core.saveConfig({ lastUser: username });
         } else { showError(result.error); }
       } catch (err) { console.error('登录失败:', err); showError('登录失败: ' + (err.message || '未知错误')); }
     }

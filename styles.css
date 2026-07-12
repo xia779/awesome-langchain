@@ -1826,32 +1826,67 @@
       font-weight: 700;
     }
     .settings-modal .api-group {
-      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 10px;
+      margin-bottom: 14px;
       border-bottom: 1px solid var(--border);
-      padding-bottom: 16px;
+      padding-bottom: 10px;
     }
     .settings-modal .api-group:last-child { border-bottom: none; }
-    .settings-modal label {
-      display: block;
+    .settings-modal .api-group > label:not(.auto-route-label) {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 80px;
+      flex-shrink: 0;
       font-size: 12px;
       font-weight: 600;
       color: var(--text-secondary);
-      margin-bottom: 6px;
-      text-transform: uppercase;
+      margin-bottom: 0;
       letter-spacing: 0.3px;
+    }
+    .settings-modal .api-group > input:not([type="checkbox"]):not([type="color"]),
+    .settings-modal .api-group > select {
+      flex: 1;
+      min-width: 0;
+      width: auto;
+      margin-bottom: 0;
+    }
+    .settings-modal .api-group > textarea {
+      flex-basis: 100%;
+      width: 100%;
+      margin-bottom: 0;
+    }
+    .settings-modal .api-pair {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    .settings-modal .api-pair > label {
+      min-width: 100px;
+      flex-shrink: 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .settings-modal .api-pair > input:not([type="checkbox"]):not([type="color"]),
+    .settings-modal .api-pair > select {
+      flex: 1;
+      min-width: 0;
     }
     .settings-modal input,
     .settings-modal select,
     .settings-modal textarea {
-      width: 100%;
-      padding: 10px 14px;
+      padding: 8px 12px;
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
       font-size: 13px;
       background: var(--bg-near-white);
       transition: var(--transition);
       font-family: inherit;
-      margin-bottom: 12px;
     }
     .settings-modal input:focus,
     .settings-modal select:focus,
@@ -2971,7 +3006,7 @@
 
     /* ===== 滚动到底部按钮（居中透明） ===== */
     .scroll-to-bottom-btn {
-      display: none;
+      display: flex;
       position: absolute;
       bottom: 140px;
       left: 50%;
@@ -2987,6 +3022,7 @@
       cursor: pointer;
       z-index: 50;
       opacity: 0;
+      pointer-events: none;
       transition: opacity 0.3s ease, transform 0.3s ease, background 0.15s ease;
       box-shadow: 0 2px 12px rgba(0,0,0,0.2);
       align-items: center;

@@ -13,6 +13,20 @@ try {
   childProcess = require('child_process');
 } catch (e) {}
 
+// 解析 Windows .cmd/.bat 包装器，避免使用 shell:true（DEP0190 警告）
+function _resolveCmd(cmd) {
+  if (process.platform !== 'win32') return cmd;
+  var extensions = ['.cmd', '.bat', '.exe'];
+  for (var i = 0; i < extensions.length; i++) {
+    var pathDirs = (process.env.PATH || '').split(path.delimiter);
+    for (var j = 0; j < pathDirs.length; j++) {
+      var full = path.join(pathDirs[j], cmd + extensions[i]);
+      try { if (fs.existsSync(full)) return full; } catch(e) {}
+    }
+  }
+  return cmd;
+}
+
 // ═══════════════════════════════════════════
 // 状态
 // ═══════════════════════════════════════════
@@ -45,11 +59,10 @@ function runGh(args, options) {
     var cwd = options.cwd || (Core && Core.DATA_ROOT) || process.cwd();
     var timeout = options.timeout || 30000;
 
-    var child = childProcess.spawn('gh', cmdArgs, {
+    var child = childProcess.spawn(_resolveCmd('gh'), cmdArgs, {
       cwd: cwd,
       env: Object.assign({}, process.env, options.env || {}),
-      timeout: timeout,
-      shell: process.platform === 'win32'
+      timeout: timeout
     });
 
     var stdout = '';
@@ -82,10 +95,9 @@ function runGh(args, options) {
  */
 function runGit(args, cwd) {
   return new Promise(function(resolve, reject) {
-    var child = childProcess.spawn('git', Array.isArray(args) ? args : args.split(/\s+/), {
+    var child = childProcess.spawn(_resolveCmd('git'), Array.isArray(args) ? args : args.split(/\s+/), {
       cwd: cwd || process.cwd(),
-      timeout: 15000,
-      shell: process.platform === 'win32'
+      timeout: 15000
     });
     var stdout = '';
     var stderr = '';

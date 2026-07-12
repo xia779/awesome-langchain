@@ -13,6 +13,15 @@ const SENSITIVE_KEY_FIELDS = cryptoUtils.SENSITIVE_KEY_FIELDS;
 const encryptValue = cryptoUtils.encryptValue;
 const decryptValue = cryptoUtils.decryptValue;
 
+// 🔧 强制 temperature 在 JSON 中始终带小数点（DashScope 严格要求 Float 格式）
+function _tempFloat(v) {
+  var t = Number(v);
+  if (!isFinite(t) || t < 0 || t > 2) t = 0.7;
+  t = Math.round(t * 100) / 100;
+  if (Number.isInteger(t)) t += 0.001;
+  return t;
+}
+
 // ===== 常量 =====
 const CLOUD_SERVICES = {
   deepseek: { baseURL: 'https://api.deepseek.com/v1', apiKeyField: 'deepseekKey', name: 'DeepSeek' },
@@ -92,7 +101,7 @@ async function callCloudAPIStream(config, provider, model, messages, temperature
   const resp = await fetch(baseURL + '/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-    body: JSON.stringify({ model: actualModel, messages, temperature: parseFloat(temperature) || 0.7, stream: true }),
+    body: JSON.stringify({ model: actualModel, messages, temperature: _tempFloat(temperature), stream: true }),
     signal,
   });
   if (!resp.ok) {
@@ -133,7 +142,7 @@ async function callOllamaStream(model, messages, temperature, onChunk, signal) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: model || 'qwen2.5:7b', messages, stream: true,
-      options: { temperature: parseFloat(temperature) || 0.7 },
+      options: { temperature: _tempFloat(temperature) },
     }),
     signal,
   });
@@ -265,7 +274,7 @@ function setupMobileRoutes(expressApp, dataRoot) {
     const config = loadConfig(dataRoot);
     const prov = provider || config.currentService || 'ollama';
     const mdl = model || config.ollamaModel || 'qwen2.5:7b';
-    const temp = parseFloat(temperature) || (parseFloat(config.temperature) || 0.7);
+    const temp = _tempFloat(temperature || config.temperature);
 
     // SSE 响应头
     res.writeHead(200, {

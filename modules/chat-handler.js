@@ -3,6 +3,14 @@
 const path = require('path');
 const { ipcRenderer } = require('electron');
 
+// 原子化 HTML 替换：先在临时容器中解析，再一次性替换子节点，避免 innerHTML 先清空再重建的闪烁
+function _atomicSetHtml(el, html) {
+  if (!el) return;
+  var tmp = document.createElement('div');
+  tmp.innerHTML = html || '';
+  el.replaceChildren(...tmp.childNodes);
+}
+
 // 根据背景色计算对比文字颜色（WCAG 相对亮度）
 function _contrastTextColor(hex) {
   if (!hex || hex.charAt(0) !== '#') return '';
@@ -105,11 +113,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
     currentSessionId = Core.session.getCurrentId();
   }
 
-  // 🔧 如果提供了知识库上下文，附加到用户消息
-  var finalText = text;
-  if (knowledgeContext && knowledgeContext.trim()) {
-    finalText = text + '\n\n[知识库检索结果]\n' + knowledgeContext;
-  }
+  // 🔧 知识库上下文将在下方注入 system prompt（不再拼接到显示文本）
 
   let sessionData = sessions && currentSessionId ? sessions[currentSessionId] : null;
   if (!sessionData) {
@@ -293,6 +297,11 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
     }
   }
 
+  // 📚 知识库上下文注入：将检索到的相关知识作为参考材料提供给 AI
+  if (knowledgeContext && knowledgeContext.trim()) {
+    injectedSystemPrompt += '\n\n【知识库参考】\n以下是与用户问题相关的知识片段，请据此回答：\n' + knowledgeContext + '\n【知识库参考结束】';
+  }
+
   // 🔧 消息引用：如果有引用，附加到 prompt 中
   var quote = Core.getQuote ? Core.getQuote() : null;
   var quoteText = promptForAPI;
@@ -432,9 +441,9 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       // 流式结束，设置冷却期标记（2 秒内不折叠）
       delete aiDiv.dataset.streaming;
       aiDiv.dataset.streamEnded = Date.now().toString();
-      // 最终渲染：一次性 markdown 渲染
+      // 最终渲染：一次性 markdown 渲染（原子化替换，避免闪烁）
       if (window.marked) {
-        aiDiv.innerHTML = Core.renderMarkdown(reply);
+        _atomicSetHtml(aiDiv, Core.renderMarkdown(reply));
       } else {
         aiDiv.textContent = reply;
       }
@@ -457,9 +466,9 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       // 打字机效果显示
       try {
         await typewriterEffect(aiDiv, reply);
-        // 打字完成后渲染 Markdown
+        // 打字完成后渲染 Markdown（原子化替换，避免闪烁）
         if (window.marked) {
-          aiDiv.innerHTML = Core.renderMarkdown(reply);
+          _atomicSetHtml(aiDiv, Core.renderMarkdown(reply));
         } else {
           aiDiv.textContent = reply;
         }
@@ -467,7 +476,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
         console.warn('打字机效果出错，直接显示:', typewriterErr);
         // 如果打字机效果失败，直接显示内容
         if (window.marked) {
-          aiDiv.innerHTML = Core.renderMarkdown(reply);
+          _atomicSetHtml(aiDiv, Core.renderMarkdown(reply));
         } else {
           aiDiv.textContent = reply;
         }
@@ -523,7 +532,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
         reply = outputCheck.cleaned;
         // 更新已显示的 DOM（如果 aiDiv 还在作用域内）
         if (typeof aiDiv !== 'undefined' && aiDiv && window.marked) {
-          aiDiv.innerHTML = Core.renderMarkdown(reply);
+          _atomicSetHtml(aiDiv, Core.renderMarkdown(reply));
         }
       }
     }

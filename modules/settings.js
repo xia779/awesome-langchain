@@ -1,4 +1,4 @@
-// modules/settings.js - 设置管理模块（修复事件绑定 + 关闭按钮）
+// modules/settings.js - 设置管理模块 v2 (customizer fix + panel guards)
 let Core = null;
 var _htmlUtils = require('./html-utils');
 
@@ -576,21 +576,23 @@ async function renderMarketplaceList(url) {
 
     var installedIds = Core.plugins.getInstalledIds ? Core.plugins.getInstalledIds() : [];
     var html = '';
+    var _esc = _htmlUtils.escapeHtml;  // 🔒 XSS 防护：所有远程数据必须转义
     registry.plugins.forEach(function(mp) {
       var isInstalled = installedIds.indexOf(mp.id) >= 0;
-      var categoryBadge = mp.category ? '<span style="font-size:10px;padding:1px 6px;background:rgba(59,130,246,0.15);color:var(--primary);border-radius:4px;margin-left:6px;">' + mp.category + '</span>' : '';
+      var safeId = _esc(String(mp.id || '')).replace(/"/g, '&quot;');
+      var categoryBadge = mp.category ? '<span style="font-size:10px;padding:1px 6px;background:rgba(59,130,246,0.15);color:var(--primary);border-radius:4px;margin-left:6px;">' + _esc(mp.category) + '</span>' : '';
       html += '<div style="padding:8px 12px;margin-bottom:6px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
-      html += '<span style="font-size:13px;color:var(--text);font-weight:500;">' + mp.name + categoryBadge + '</span>';
-      html += '<span style="font-size:11px;color:#94a3b8;">v' + mp.version + '</span>';
+      html += '<span style="font-size:13px;color:var(--text);font-weight:500;">' + _esc(mp.name) + categoryBadge + '</span>';
+      html += '<span style="font-size:11px;color:#94a3b8;">v' + _esc(mp.version) + '</span>';
       html += '</div>';
-      html += '<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">' + (mp.description || '无描述') + '</div>';
+      html += '<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">' + _esc(mp.description || '无描述') + '</div>';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-      html += '<span style="font-size:11px;color:#94a3b8;">👤 ' + (mp.author || '未知') + ' · ' + mp.skills.length + ' 个技能</span>';
+      html += '<span style="font-size:11px;color:#94a3b8;">👤 ' + _esc(mp.author || '未知') + ' · ' + (mp.skills ? mp.skills.length : 0) + ' 个技能</span>';
       if (isInstalled) {
         html += '<span style="padding:2px 10px;background:rgba(34,197,94,0.15);color:#22c55e;border-radius:4px;font-size:11px;">已安装</span>';
       } else {
-        html += '<button class="marketplace-install-btn" data-id="' + mp.id + '" style="padding:3px 12px;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;transition:opacity 0.2s;">安装</button>';
+        html += '<button class="marketplace-install-btn" data-id="' + safeId + '" style="padding:3px 12px;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;transition:opacity 0.2s;">安装</button>';
       }
       html += '</div>';
       html += '</div>';
@@ -1175,7 +1177,7 @@ function renderFavoritesList() {
 
   function renderThemeList() {
     var container = document.getElementById('themeList');
-    if (!container || !Core.customizer || !Core.customizer.themes) return;
+    if (!container || !Core.customizer || !Core.customizer.themes || typeof Core.customizer.themes.list !== 'function') return;
     container.innerHTML = '';
     var list = Core.customizer.themes.list();
     var activeId = Core.customizer.themes.getActive();
@@ -1196,7 +1198,7 @@ function renderFavoritesList() {
 
   function renderKeybindList() {
     var container = document.getElementById('keybindList');
-    if (!container || !Core.customizer || !Core.customizer.keybindings) return;
+    if (!container || !Core.customizer || !Core.customizer.keybindings || typeof Core.customizer.keybindings.list !== 'function') return;
     container.innerHTML = '';
     var list = Core.customizer.keybindings.list();
     list.forEach(function(kb) {
@@ -1238,7 +1240,7 @@ function renderFavoritesList() {
 
   function renderToolbarList() {
     var container = document.getElementById('toolbarList');
-    if (!container || !Core.customizer) return;
+    if (!container || !Core.customizer || !Core.customizer.toolbar || typeof Core.customizer.toolbar.get !== 'function') return;
     container.innerHTML = '';
     var layout = Core.customizer.toolbar.get();
     var allBtns = layout.left.concat(layout.right);
@@ -1262,7 +1264,7 @@ function renderFavoritesList() {
 
   function renderHookList() {
     var container = document.getElementById('hookList');
-    if (!container || !Core.customizer || !Core.customizer.hooks) return;
+    if (!container || !Core.customizer || !Core.customizer.hooks || typeof Core.customizer.hooks.list !== 'function') return;
     container.innerHTML = '';
     var list = Core.customizer.hooks.list();
     if (list.length === 0) {
@@ -1399,7 +1401,7 @@ function _applyCustomColors(skipSave) {
 
 module.exports = {
   name: 'settings',
-  dependencies: ['knowledge', 'customizer'],
+  dependencies: ['knowledge', 'customizer', 'workflow', 'scheduler'],
 
   init(_Core) {
 
@@ -1477,7 +1479,7 @@ module.exports = {
         _applyThemeMode(mode);
         // 主题切换会重置 :root CSS 变量，需重新填充自定义颜色
         _loadColorInputs();
-        _applyCustomColors();
+        _applyCustomColors(true); // skipSave: saveConfig 已在上方调用，避免二次 configChanged
       });
     }
 
@@ -1492,14 +1494,14 @@ module.exports = {
     });
 
     // ===== 知识库管理 =====
-    initKnowledgePanel();
-    
+    try { initKnowledgePanel(); } catch(e) { console.warn('⚠️ Knowledge panel init error:', e.message); }
+
     // ===== 收藏夹 =====
-    initFavoritesPanel();
+    try { initFavoritesPanel(); } catch(e) { console.warn('⚠️ Favorites panel init error:', e.message); }
 
     // ===== 插件管理 =====
-    initPluginsPanel();
-  initMarketplacePanel();
+    try { initPluginsPanel(); } catch(e) { console.warn('⚠️ Plugins panel init error:', e.message); }
+    try { initMarketplacePanel(); } catch(e) { console.warn('⚠️ Marketplace panel init error:', e.message); }
 
     // ===== 启动时应用保存的主题模式和自定义颜色 =====
     _loadColorInputs(); // 先将 config 颜色值写入 DOM 输入框
@@ -1507,19 +1509,21 @@ module.exports = {
     _applyCustomColors(true); // skipSave: 启动时只应用 CSS，不触发 saveConfig/configChanged 级联
 
     // ===== 技能管理 =====
-    initSkillsPanel();
-    initWorkflowPanel();
-    initPermissionsPanel();
-    initCustomizerPanel();
+    try { initSkillsPanel(); } catch(e) { console.warn('⚠️ Skills panel init error:', e.message); }
+    try { initWorkflowPanel(); } catch(e) { console.warn('⚠️ Workflow panel init error:', e.message); }
+    try { initPermissionsPanel(); } catch(e) { console.warn('⚠️ Permissions panel init error:', e.message); }
+    try { initCustomizerPanel(); } catch(e) { console.warn('⚠️ Customizer panel init error:', e.message); }
 
     Core.on('configChanged', () => {
-      if (document.getElementById('settingsModal').classList.contains('show')) {
-        loadSettingsToUI();
-        renderAllowedDirsList();
-        renderAuditStats();
-      }
+      try {
+        if (document.getElementById('settingsModal').classList.contains('show')) {
+          loadSettingsToUI();
+          renderAllowedDirsList();
+          renderAuditStats();
+        }
+      } catch(e) { console.warn('⚠️ configChanged handler error:', e.message); }
     });
-    console.log('✅ 设置管理模块已加载');
+    console.log('✅ 设置管理模块已加载 v3 (all render guards + try-catch)');
   },
   loadSettings: openSettings,
   saveSettings: saveSettings,

@@ -405,7 +405,10 @@ function renderPanel() {
     'background:var(--bg-tertiary,#2a2a3a);color:var(--text-primary,#eee);cursor:pointer;font-size:12px;">🔄 刷新</button>';
   html += '</div>';
 
-  container.innerHTML = html;
+  // 🔧 原子 DOM 替换：避免 innerHTML 两阶段闪烁
+  var _tmp = document.createElement('div');
+  _tmp.innerHTML = html;
+  container.replaceChildren(..._tmp.childNodes);
 }
 
 // ===== 渲染辅助 =====

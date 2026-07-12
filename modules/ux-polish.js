@@ -146,15 +146,7 @@ function injectPolishStyles() {
     '.reaction-chip:hover { background: var(--bg-primary,#181825); }',
     '.reaction-chip.active { border-color: #3b82f6; background: rgba(59,130,246,0.1); }',
 
-    // 滚动提示
-    '.scroll-to-bottom-btn {',
-    '  position: absolute; bottom: 80px; right: 20px; width: 36px; height: 36px;',
-    '  border-radius: 50%; display: flex; align-items: center; justify-content: center;',
-    '  background: var(--bg-tertiary,#2a2a3a); border: 1px solid var(--border-color,#444);',
-    '  cursor: pointer; z-index: 50; font-size: 16px;',
-    '  box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: opacity 0.3s, transform 0.3s;',
-    '}',
-    '.scroll-to-bottom-btn:hover { transform: scale(1.1); }',
+    // 🔧 滚动按钮由 styles.css + core-v10.js 统一管理，此处不再注入冲突样式
 
     // 面板过渡
     '.panel-transition {',
@@ -295,41 +287,17 @@ function setupSmartScroll() {
       var clientHeight = chatContainer.clientHeight;
       var distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-      // 如果距离底部超过 100px，认为用户在看历史消息
+      // 检测用户是否向上滚动（按钮由 core-v10.js 统一管理）
       polishState.userScrolledUp = distanceFromBottom > 100;
       polishState.lastScrollTop = scrollTop;
-
-      // 显示/隐藏回到底部按钮
-      var btn = document.getElementById('scrollToBottomBtn');
-      if (polishState.userScrolledUp) {
-        if (!btn) createScrollToBottomBtn();
-      } else {
-        if (btn) btn.style.opacity = '0';
-      }
     });
   }, { passive: true });
 }
 
 function createScrollToBottomBtn() {
+  // 按钮已在 index.html 中静态定义，由 core-v10.js 管理显隐，此处不再动态创建
   var existing = document.getElementById('scrollToBottomBtn');
-  if (existing) { existing.style.opacity = '1'; return; }
-
-  var chatArea = document.querySelector('.chat-area') || document.getElementById('chatContainer');
-  if (!chatArea || !chatArea.parentNode) return;
-
-  var btn = document.createElement('div');
-  btn.id = 'scrollToBottomBtn';
-  btn.className = 'scroll-to-bottom-btn';
-  btn.innerHTML = '↓';
-  btn.title = '滚动到底部';
-  btn.onclick = function() {
-    smartScrollToBottom();
-    btn.style.opacity = '0';
-    setTimeout(function() { btn.remove(); }, 300);
-  };
-
-  chatArea.parentNode.style.position = 'relative';
-  chatArea.parentNode.appendChild(btn);
+  if (existing) existing.style.opacity = '1';
 }
 
 function smartScrollToBottom(force) {

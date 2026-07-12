@@ -111,7 +111,7 @@ function addAllowedDir(dirPath) {
   if (dirs.indexOf(resolved) >= 0) return true; // 已存在
   dirs.push(resolved);
   Core.config.allowedDirs = dirs;
-  if (Core.saveConfig) Core.saveConfig();
+  if (Core.saveConfig) Core.saveConfig({ allowedDirs: dirs });
   console.log('✅ 已添加允许目录:', resolved);
   return true;
 }
@@ -124,7 +124,7 @@ function removeAllowedDir(dirPath) {
   if (idx < 0) return false;
   dirs.splice(idx, 1);
   Core.config.allowedDirs = dirs;
-  if (Core.saveConfig) Core.saveConfig();
+  if (Core.saveConfig) Core.saveConfig({ allowedDirs: dirs });
   console.log('✅ 已移除允许目录:', resolved);
   return true;
 }
@@ -140,7 +140,7 @@ function setPermissionMode(mode) {
   if (mode !== 'full' && mode !== 'ask') return false;
   if (!Core || !Core.config) return false;
   Core.config.permissionMode = mode;
-  if (Core.saveConfig) Core.saveConfig();
+  if (Core.saveConfig) Core.saveConfig({ permissionMode: mode });
   console.log('✅ 权限模式已切换:', mode === 'full' ? '全权模式' : '询问模式');
   return true;
 }

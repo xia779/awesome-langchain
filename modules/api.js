@@ -3,6 +3,15 @@ const fs = require('fs');
 const path = require('path');
 const { ipcRenderer } = require('electron');
 
+// 🔧 强制 temperature 在 JSON 中始终带小数点（DashScope 严格要求 Float 格式）
+function _tempFloat(v) {
+  var t = Number(v);
+  if (!isFinite(t) || t < 0 || t > 2) t = 0.7;
+  t = Math.round(t * 100) / 100;
+  if (Number.isInteger(t)) t += 0.001;
+  return t;
+}
+
 let Core = null;
 let webSearchFn = null;
 
@@ -134,7 +143,7 @@ async function runBackgroundTask(childSessionId, text, masterSessionId, roleName
     var selectedValue = Core.dom.modelSelect ? Core.dom.modelSelect.value : 'ollama';
     var provider = selectedValue.split(':')[0] || 'ollama';
     var model = selectedValue.includes(':') ? selectedValue.substring(selectedValue.indexOf(':') + 1) : selectedValue;
-    var systemMsg = Core.config.systemMessage || '';
+    var systemMsg = Core.config.systemInstruction || '';
 
     // 🔧 注入角色专属系统提示词，确保子角色以专业身份回答
     var roleSystemPrompts = {
@@ -375,7 +384,7 @@ async function callAPI(prompt, systemMsg, temperature, model, provider, messages
     model: fullModel,
     messages: chatMessages,
     stream: false,
-    options: { temperature: (function() { var t = Number(temperature); return (isFinite(t) && t >= 0 && t <= 2) ? Math.round(t * 100) / 100 : 0.7; })(), num_predict: -1 }
+    options: { temperature: _tempFloat(temperature), num_predict: -1 }
   };
   if (tools.length > 0) bodyObj.tools = tools;
 
@@ -528,7 +537,7 @@ async function callAPIStream(prompt, systemMsg, temperature, model, provider, on
       model: fullModel,
       messages: chatMessages,
       stream: true,
-      options: { temperature: (function() { var t = Number(temperature); return (isFinite(t) && t >= 0 && t <= 2) ? Math.round(t * 100) / 100 : 0.7; })(), num_predict: -1 }
+      options: { temperature: _tempFloat(temperature), num_predict: -1 }
     })
   };
   if (signal) fetchOpts.signal = signal;
@@ -848,7 +857,7 @@ async function sendMessage() {
         console.error('Agent模式错误:', err);
         setGeneratingState(false, Core.session.getCurrentId());
         try {
-          await Core.chatHandler.handleNormalChat(text, null, apiText);
+          await Core.chatHandler.handleNormalChat(text, knowledgeContext, apiText);
         } catch (chatErr) {
           console.error('Agent回退到普通聊天失败:', chatErr);
         }
@@ -891,7 +900,7 @@ async function sendMessage() {
           // 启动后台任务（fire-and-forget）— 使用 apiText 包含文件内容
           runBackgroundTask(roleSessionId, apiText, currentId, routeResult.displayName);
 
-          Core.dom.sendBtn.disabled = false;
+          // 🔧 sendBtn 由 finally 块统一恢复，此处不提前启用，防止快速双击
           Core.dom.input.focus();
           return;
         }

@@ -2,6 +2,17 @@
 let Core = null;
 let currentService = 'ollama';
 
+// 🔧 强制 temperature 在 JSON 中始终带小数点
+// JSON.stringify({temperature:2}) → {"temperature":2} → DashScope 拒绝
+// _tempFloat(2) → 2.0001 → JSON.stringify → {"temperature":2.0001} → DashScope 接受
+function _tempFloat(v) {
+  var t = Number(v);
+  if (!isFinite(t) || t < 0 || t > 2) t = 0.7;
+  t = Math.round(t * 100) / 100;
+  if (Number.isInteger(t)) t += 0.001; // 整数加微小 epsilon 强制小数点
+  return t;
+}
+
 // 服务配置（优先级：DeepSeek > 千问 > 豆包 > 本地 > 自定义）
 const SERVICES = {
   deepseek: {
@@ -282,7 +293,7 @@ async function handleToolCalls(toolCalls, messages, apiKey, baseURL, model, temp
     body: JSON.stringify({
       model: model,
       messages: messages,
-      temperature: (function() { var t = Number(temperature); return (isFinite(t) && t >= 0 && t <= 2) ? Math.round(t * 100) / 100 : 0.7; })(),
+      temperature: _tempFloat(temperature),
       max_tokens: 16384,
       stream: false
     })
@@ -318,10 +329,8 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
         }
       }
 
-      // 🔧 F12: Function Calling — 构建请求体，确保 temperature 为有效浮点数
-      var _temp = Number(temperature);
-      if (!isFinite(_temp) || _temp < 0 || _temp > 2) _temp = 0.7;
-      _temp = Math.round(_temp * 100) / 100;
+      // 🔧 temperature 强制 Float 格式（DashScope 严格要求）
+      var _temp = _tempFloat(temperature);
       const requestBody = {
         model: actualModel || 'gpt-3.5-turbo',
         messages: messages,
@@ -404,10 +413,8 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
       throw new Error('豆包需要配置 Endpoint ID（格式 ep-xxx），请在设置面板 → 豆包 中填写从火山引擎 Ark 控制台创建的 Endpoint ID');
     }
   }
-  // 确保 temperature 始终为有效浮点数（DashScope 等 API 严格要求 Float 类型）
-  var _temp = Number(temperature);
-  if (!isFinite(_temp) || _temp < 0 || _temp > 2) _temp = 0.7;
-  _temp = Math.round(_temp * 100) / 100; // 精度控制在2位小数，避免浮点误差
+  // 确保 temperature 始终为有效浮点数且带小数点（DashScope 等 API 严格要求 Float 类型）
+  var _temp = _tempFloat(temperature);
   var requestBody = {
     model: actualModel || 'gpt-3.5-turbo',
     messages: messages,
@@ -556,9 +563,7 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
     }
     // 发起后续流式请求获取最终回复
     console.log('🔄 Function Calling (stream): 请求最终回复...');
-    var _fuTemp = Number(temperature);
-    if (!isFinite(_fuTemp) || _fuTemp < 0 || _fuTemp > 2) _fuTemp = 0.7;
-    _fuTemp = Math.round(_fuTemp * 100) / 100;
+    var _fuTemp = _tempFloat(temperature);
     const followUpBody = {
       model: actualModel || 'gpt-3.5-turbo',
       messages: messages,
@@ -619,6 +624,6 @@ module.exports = {
       testConnection,
       invalidateClient: () => {} // 纯 fetch 无需缓存，空函数保持兼容
     };
-    console.log('✅ 云端 API 模块已加载（纯 fetch 实现，无需 openai 包）');
+    console.log('✅ 云端 API 模块已加载 v2 (temperature fix applied)');
   }
 };

@@ -259,7 +259,10 @@ function installSkill(sourcePath) {
         return { success: false, error: '目录中缺少 skill.json' };
       }
       var meta = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-      var targetDir = path.join(dir, meta.id || path.basename(sourcePath));
+      // 🔒 安全：清理 meta.id，防止路径穿越（../../ 等攻击）
+      var safeId = (meta.id || path.basename(sourcePath)).replace(/[^a-zA-Z0-9_-]/g, '-').replace(/^-+|-+$/g, '');
+      if (!safeId) safeId = path.basename(sourcePath).replace(/[^a-zA-Z0-9_-]/g, '-');
+      var targetDir = path.join(dir, safeId);
       if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
       // 复制所有文件
       var files = fs.readdirSync(sourcePath);

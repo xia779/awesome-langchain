@@ -152,8 +152,13 @@ async function refreshModels() {
   const models = await fetchOllamaModels();
   updateModelSelect(models);
   if (Core.config) {
-    Core.config.availableModels = models.map(m => m.name || m.model);
-    Core.saveConfig({ availableModels: Core.config.availableModels });
+    const newList = models.map(m => m.name || m.model).sort();
+    const oldList = (Core.config.availableModels || []).slice().sort();
+    // 🔧 只在模型列表实际变化时才触发 saveConfig → configChanged（排序后比较，避免顺序差异导致误触发）
+    if (JSON.stringify(newList) !== JSON.stringify(oldList)) {
+      Core.config.availableModels = newList;
+      Core.saveConfig({ availableModels: newList });
+    }
   }
   return models;
 }
@@ -171,7 +176,9 @@ const Core = {
   dom: {},
   pluginManager: null,
   events: {},
-  
+  _emitDepth: 0,
+  _MAX_EMIT_DEPTH: 5,
+
   on(event, callback) {
     if (!this.events[event]) this.events[event] = [];
     this.events[event].push(callback);
@@ -182,8 +189,17 @@ const Core = {
     this.events[event] = this.events[event].filter(cb => cb !== callback);
   },
   emit(event, data) {
+    if (this._emitDepth >= this._MAX_EMIT_DEPTH) {
+      console.warn('[Core.emit] 递归深度超限，跳过事件:', event);
+      return;
+    }
     if (this.events[event]) {
-      this.events[event].forEach(cb => { try { cb(data); } catch (e) { console.error(`事件[${event}]错误:`, e); } });
+      this._emitDepth++;
+      try {
+        this.events[event].forEach(cb => { try { cb(data); } catch (e) { console.error('事件[' + event + ']错误:', e); } });
+      } finally {
+        this._emitDepth--;
+      }
     }
   },
 
@@ -332,7 +348,7 @@ const Core = {
     if (hadPlaintextKeys) {
       setTimeout(() => {
         try { this.saveConfig({}); } catch(e) { console.warn('⚠️ 自动加密保存失败:', e.message); }
-      }, 2000);
+      }, 4000);
     }
     
     return this.config;
@@ -354,6 +370,11 @@ const Core = {
   },
 
   saveConfig(newConfig) {
+    // 🔧 确保 temperature 始终为有效数字（防止字符串类型存入配置）
+    if (newConfig.temperature !== undefined) {
+      var t = Number(newConfig.temperature);
+      newConfig.temperature = (isFinite(t) && t >= 0 && t <= 2) ? Math.round(t * 100) / 100 : 0.7;
+    }
     this.config = { ...this.config, ...newConfig };
     
     // 🔒 创建加密副本用于持久化（内存中保持明文）
@@ -391,11 +412,12 @@ const Core = {
     }
     const allFiles = fs.readdirSync(modulesDir).filter(f => f.endsWith('.js'));
 
-    // 🔧 双重缓存清除
+    // 🔧 双重缓存清除（仅限项目自身模块，避免误清第三方包）
     var clearedCount = 0;
     var allKeys = Object.keys(require.cache);
+    var _projectModulesPath = path.join(__dirname, 'modules');
     for (var k = 0; k < allKeys.length; k++) {
-      if (allKeys[k].indexOf('my-ai-desktop') >= 0 || allKeys[k].indexOf('modules') >= 0) {
+      if (allKeys[k].indexOf(_projectModulesPath) >= 0) {
         delete require.cache[allKeys[k]];
         clearedCount++;
       }
@@ -2106,14 +2128,12 @@ Core.renderMarkdown = function(text) {
         var isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 100;
         if (isNearBottom) {
           scrollBtn.style.opacity = '0';
+          scrollBtn.style.pointerEvents = 'none';
           scrollBtn.style.transform = 'translateX(-50%) translateY(10px)';
-          setTimeout(function() { scrollBtn.style.display = 'none'; }, 300);
         } else {
-          scrollBtn.style.display = 'flex';
-          setTimeout(function() {
-            scrollBtn.style.opacity = '1';
-            scrollBtn.style.transform = 'translateX(-50%) translateY(0)';
-          }, 10);
+          scrollBtn.style.pointerEvents = 'auto';
+          scrollBtn.style.opacity = '1';
+          scrollBtn.style.transform = 'translateX(-50%) translateY(0)';
         }
       });
     });

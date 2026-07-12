@@ -1087,9 +1087,14 @@ function optimizeStreamingUpdate(aiDiv, fullText, isNewChunk) {
     // 只对增量部分做 parse（如果增长不多，用 append 模式）
     try {
       var html = typeof marked !== 'undefined' ? Core.renderMarkdown(latestText) : escapeHtmlSimple(latestText);
-      aiDiv.innerHTML = html + '<span class="typing-cursor"></span>';
+      // 🔧 原子 DOM 替换：先在临时 div 中解析，再一次性 swap，避免 innerHTML 两阶段闪烁
+      var _tmp = document.createElement('div');
+      _tmp.innerHTML = html + '<span class="typing-cursor"></span>';
+      aiDiv.replaceChildren(..._tmp.childNodes);
     } catch (e) {
-      aiDiv.innerHTML = escapeHtmlSimple(latestText) + '<span class="typing-cursor"></span>';
+      var _tmp2 = document.createElement('div');
+      _tmp2.innerHTML = escapeHtmlSimple(latestText) + '<span class="typing-cursor"></span>';
+      aiDiv.replaceChildren(..._tmp2.childNodes);
     }
   }, _streamingState.PARSE_DEBOUNCE_MS);
 }
@@ -1107,9 +1112,14 @@ function endStreamingOptimization(aiDiv, finalText) {
   if (aiDiv && finalText) {
     try {
       var html = typeof marked !== 'undefined' ? Core.renderMarkdown(finalText) : escapeHtmlSimple(finalText);
-      aiDiv.innerHTML = html;
+      // 🔧 原子 DOM 替换
+      var _tmp = document.createElement('div');
+      _tmp.innerHTML = html;
+      aiDiv.replaceChildren(..._tmp.childNodes);
     } catch (e) {
-      aiDiv.innerHTML = escapeHtmlSimple(finalText);
+      var _tmp2 = document.createElement('div');
+      _tmp2.innerHTML = escapeHtmlSimple(finalText);
+      aiDiv.replaceChildren(..._tmp2.childNodes);
     }
   }
 }

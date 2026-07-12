@@ -325,7 +325,9 @@ function saveSession(id) {
   // 2. 同时保存到 JSON 作为备份
   try {
     const dir = getSessionsDir();
-    fs.writeFile(path.join(dir, id + '.json'), JSON.stringify(saveData, null, 2), function() {});
+    fs.writeFile(path.join(dir, id + '.json'), JSON.stringify(saveData, null, 2), function(err) {
+      if (err) console.error('❌ JSON 保存会话失败 [' + id + ']:', err.message);
+    });
   } catch (e) {
     console.error('❌ JSON 保存会话失败:', e.message);
   }
@@ -397,28 +399,32 @@ function matchesFilter(session) {
 function renderChatList() {
   var chatList = document.getElementById('chatList');
   if (!chatList) return;
-  chatList.innerHTML = '';
-  
+  // 使用 DocumentFragment 原子化渲染，避免 innerHTML='' 造成的空白闪烁
+  var fragment = document.createDocumentFragment();
+
   var hasFilter = chatListFilter || chatListDateFilter !== 'all';
-  
+
   if (hasFilter) {
     // 🔧 P4: 有筛选条件时，扁平化显示匹配的节点
     var matchedIds = Object.keys(sessions).filter(function(id) {
       return matchesFilter(sessions[id]);
     });
-    
-    
+
+
     if (matchedIds.length === 0) {
-      chatList.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">没有找到匹配的会话</div>';
+      var emptyDiv = document.createElement('div');
+      emptyDiv.style.cssText = 'padding:20px;text-align:center;color:#999;';
+      emptyDiv.textContent = '没有找到匹配的会话';
+      fragment.appendChild(emptyDiv);
     } else {
       matchedIds.forEach(function(id) {
-        renderFlatNode(id, chatList);
+        renderFlatNode(id, fragment);
       });
     }
   } else {
     // 🔧 无筛选时，正常树形渲染（置顶会话排在前面）
     var rootIds = Object.keys(sessions).filter(function(id) { return !sessions[id].parentId; });
-    
+
     // 置顶会话排在最前面，然后按时间排序
     rootIds.sort(function(a, b) {
       var aPinned = sessions[a].pinned ? 1 : 0;
@@ -428,17 +434,23 @@ function renderChatList() {
       var bTime = sessions[b].timestamp || 0;
       return bTime - aTime;
     });
-    
-    
+
+
     rootIds.forEach(function(id) {
-      renderTreeNode(id, chatList, 0);
+      renderTreeNode(id, fragment, 0);
     });
-    
+
     if (rootIds.length === 0) {
-      chatList.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">暂无对话</div>';
+      var emptyDiv = document.createElement('div');
+      emptyDiv.style.cssText = 'padding:20px;text-align:center;color:#999;';
+      emptyDiv.textContent = '暂无对话';
+      fragment.appendChild(emptyDiv);
     }
   }
-  
+
+  // 原子化替换：一次 DOM 操作，避免先清空再重建的闪烁
+  chatList.replaceChildren(fragment);
+
   updateChatCountDisplay();
   highlightChatItem(currentSessionId);
 }
@@ -1202,12 +1214,18 @@ function addMessage(content, role, type) {
 }
 
 // 🔧 给非当前会话添加未读消息（由外部调用）
+var _unreadRenderTimer = null;
 function addUnreadToSession(sessionId) {
   if (!sessionId || !sessions[sessionId]) return;
   if (sessionId === currentSessionId) return;
   if (!sessions[sessionId]._unreadCount) sessions[sessionId]._unreadCount = 0;
   sessions[sessionId]._unreadCount++;
-  renderChatList();  // 立即刷新侧边栏显示未读红点
+  // 防抖 500ms：合并多次未读消息后再刷新侧边栏，避免密集 DOM 重建
+  if (_unreadRenderTimer) clearTimeout(_unreadRenderTimer);
+  _unreadRenderTimer = setTimeout(function() {
+    _unreadRenderTimer = null;
+    renderChatList();
+  }, 500);
 }
 
 // ===== 滚动到底部 =====
@@ -1726,8 +1744,13 @@ function init(core) {
   }
   
   if (searchInput) {
+    var _searchDebounce = null;
     searchInput.addEventListener('input', function(e) {
-      performGlobalSearch(e.target.value.trim());
+      if (_searchDebounce) clearTimeout(_searchDebounce);
+      _searchDebounce = setTimeout(function() {
+        _searchDebounce = null;
+        performGlobalSearch(e.target.value.trim());
+      }, 200);
     });
   }
   if (clearBtn) {
