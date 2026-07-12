@@ -225,10 +225,58 @@ details.dr-det .body{padding:12px}
 .ctx-menu button:hover{background:var(--bg3)}
 .ctx-menu button .mi-out{font-size:16px;color:var(--t2)}
 .ctx-menu .sep{height:1px;background:var(--bdr);margin:4px 0}
+/* Login overlay */
+.login-ov{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center}
+.login-ov.hide{display:none}
+.login-box{width:340px;max-width:90vw;text-align:center}
+.login-logo{margin-bottom:24px}
+.login-logo h2{font-size:24px;font-weight:700;margin-bottom:4px}
+.login-logo p{font-size:14px;color:var(--t2)}
+.login-logo .avatar{width:64px;height:64px;border-radius:50%;background:var(--bg3);display:inline-flex;align-items:center;justify-content:center;font-size:28px;margin-bottom:12px}
+.login-field{margin-bottom:16px;text-align:left}
+.login-field label{font-size:13px;color:var(--t2);display:block;margin-bottom:4px}
+.login-field input{width:100%;padding:10px 14px;background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;font-size:14px;color:var(--t1)}
+.login-field input:focus{border-color:var(--pri)}
+.login-btns{display:flex;gap:10px;margin-top:20px}
+.login-btns button{flex:1;padding:11px;border-radius:10px;font-size:14px;font-weight:500;transition:var(--tr)}
+.login-btns .lbtn-pri{background:var(--pri);color:#fff}
+.login-btns .lbtn-pri:hover{background:var(--pri2)}
+.login-btns .lbtn-sec{background:var(--bg2);color:var(--t1);border:1px solid var(--bdr)}
+.login-btns .lbtn-sec:hover{background:var(--bg3)}
+.login-users{margin-top:20px;text-align:left}
+.login-users h4{font-size:12px;color:var(--t3);margin-bottom:8px}
+.login-users .user-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:10px;margin-bottom:6px;cursor:pointer;transition:var(--tr)}
+.login-users .user-item:hover{border-color:var(--pri);background:var(--bg3)}
+.login-users .user-item .uname{font-size:14px;font-weight:500}
+.login-err{color:var(--err);font-size:12px;margin-top:8px;min-height:16px}
+/* Safe area for mobile bottom nav */
+#input-area{padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
 </style>
 </head>
 <body>
-<div id="app">
+
+<!-- 登录界面 -->
+<div class="login-ov" id="loginOverlay">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="avatar">AI</div>
+      <h2>AI 智能体</h2>
+      <p>你的私人 AI 助手</p>
+    </div>
+    <div class="login-field">
+      <label>用户名</label>
+      <input type="text" id="loginUser" placeholder="请输入用户名" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-btns">
+      <button class="lbtn-pri" onclick="doLogin()">登录</button>
+      <button class="lbtn-sec" onclick="doRegister()">注册</button>
+    </div>
+    <div class="login-users" id="loginUsers"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
   <!-- 侧边栏 -->
   <div id="sidebar">
     <div class="sb-hdr"><h2>AI 智能体</h2><button class="btn-new" onclick="createSession()">+ 新建</button></div>
@@ -562,7 +610,7 @@ var activeRole=null;
 function connect(){
   var p=location.protocol==='https:'?'wss:':'ws:';
   ws=new WebSocket(p+'//'+location.host);
-  ws.onopen=function(){reconnD=1000;setSt(true,'已连接');loadSessions();loadConfig();loadGRStats()};
+  ws.onopen=function(){reconnD=1000;setSt(true,'已连接')};
   ws.onmessage=function(e){
     var m=JSON.parse(e.data);
     if(m.id&&pending[m.id]){var c=pending[m.id];delete pending[m.id];m.type==='error'?c.reject(new Error(m.payload?m.payload.error||m.error:'错误')):c.resolve(m.payload);return}
@@ -789,8 +837,25 @@ function scrollToBot(){chatEl.scrollTop=chatEl.scrollHeight}
 function esc(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function toast(msg){var d=document.createElement('div');d.className='toast';d.textContent=msg;document.body.appendChild(d);setTimeout(function(){d.remove()},3000)}
 
+// ===== Login =====
+async function loadUsers(){try{var d=await send('auth.listUsers');var el=document.getElementById('loginUsers');var users=d.users||[];if(!users.length){el.innerHTML='';return}
+  var h='<h4>已有用户</h4>';for(var i=0;i<users.length;i++){h+='<div class="user-item" onclick="quickLogin(\''+esc(users[i])+'\')"><span class="mi-out" style="font-size:20px;color:var(--pri)">person</span><span class="uname">'+esc(users[i])+'</span></div>'}
+  el.innerHTML=h}catch(e){}}
+function quickLogin(name){document.getElementById('loginUser').value=name;doLogin()}
+async function doLogin(){var name=document.getElementById('loginUser').value.trim();if(!name){document.getElementById('loginErr').textContent='请输入用户名';return}
+  document.getElementById('loginErr').textContent='登录中...';
+  try{var d=await send('auth.login',{userId:name});if(d.success){onLoginSuccess(d)}else{document.getElementById('loginErr').textContent=d.error||'登录失败'}}catch(e){document.getElementById('loginErr').textContent=e.message}}
+async function doRegister(){var name=document.getElementById('loginUser').value.trim();if(!name){document.getElementById('loginErr').textContent='请输入用户名';return}
+  document.getElementById('loginErr').textContent='注册中...';
+  try{var d=await send('auth.login',{userId:name});if(d.success){onLoginSuccess(d)}else{document.getElementById('loginErr').textContent=d.error||'注册失败'}}catch(e){document.getElementById('loginErr').textContent=e.message}}
+function onLoginSuccess(d){document.getElementById('loginOverlay').classList.add('hide');document.getElementById('app').style.display='';
+  if(d.sessions&&d.sessions.length){sessions=d.sessions;renderSessions();if(sessions.length>0)switchSession(sessions[0].id)}else{loadSessions()}
+  loadConfig();loadGRStats();toast('欢迎回来！')}
+
 // ===== Init =====
-window.addEventListener('load',function(){connect();document.getElementById('msg-input').focus();
+window.addEventListener('load',function(){connect();
+  // Wait for WS to connect, then load users
+  var waitConn=setInterval(function(){if(ws&&ws.readyState===1){clearInterval(waitConn);loadUsers()}},200);
   if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});
   document.addEventListener('click',function(e){if(!e.target.closest('#apps-panel')&&!e.target.closest('[onclick*="toggleApps"]'))document.getElementById('apps-panel').classList.remove('open')});
   document.addEventListener('keydown',function(e){

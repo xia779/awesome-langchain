@@ -129,6 +129,24 @@ router.handle(PROTOCOL.CONFIG_SET, function(payload) {
   return { success: true };
 });
 
+// auth.login — switch user and load their data
+router.handle('auth.login', function(payload) {
+  var userId = (payload && payload.userId) || 'admin';
+  var dbApi = Core.getModule('db');
+  if (!dbApi) return { success: false, error: '数据库未初始化' };
+  dbApi.switchUser(userId);
+  Core.loadConfig(userId);
+  var sessions = dbApi.listSessions ? Core.getModule('session').list() : [];
+  return { success: true, userId: userId, sessions: sessions || [] };
+});
+
+// auth.listUsers — return available user accounts
+router.handle('auth.listUsers', function() {
+  var dbApi = Core.getModule('db');
+  if (!dbApi) return { users: [] };
+  return { users: dbApi.listUsers(), currentUser: Core.config.lastUser || 'admin' };
+});
+
 // Bridge Core events to WebSocket clients
 Core.on('configChanged', function(delta) {
   router.broadcast(PROTOCOL.EVENT_CONFIG, { delta: delta });
