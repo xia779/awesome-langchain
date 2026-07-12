@@ -2,65 +2,79 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#0f172a">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>AI Assistant</title>
+<title>AI 智能体</title>
 <link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--t1:#e2e8f0;--t2:#94a3b8;--t3:#64748b;--pri:#3b82f6;--pri2:#2563eb;--ok:#22c55e;--err:#ef4444;--warn:#f59e0b;--bdr:#334155;--r:12px;--sw:280px;--tr:background-color .2s,color .2s,border-color .2s}
-html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--t1);overflow:hidden}
+:root{--bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--bg4:#475569;--t1:#e2e8f0;--t2:#94a3b8;--t3:#64748b;--pri:#3b82f6;--pri2:#2563eb;--ok:#22c55e;--err:#ef4444;--warn:#f59e0b;--bdr:#334155;--r:10px;--sw:280px;--tr:.2s ease}
+html,body{height:100%;font-family:'Noto Sans SC',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--t1);overflow:hidden;font-size:14px}
 button{cursor:pointer;border:none;background:none;color:inherit;font:inherit}
 input,textarea,select{font:inherit;color:inherit;background:transparent;border:none;outline:none}
-::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:3px}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:3px}
 select{background:var(--bg3);color:var(--t1);padding:6px 10px;border-radius:6px;border:1px solid var(--bdr);font-size:13px}
+.mi-out{font-family:'Material Icons Outlined';font-style:normal;font-weight:normal;font-size:inherit}
+.icon-btn{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;transition:var(--tr);font-size:18px}
+.icon-btn:hover{background:var(--bg3)}
+.icon-btn.active{color:var(--pri);background:rgba(59,130,246,.12)}
 
 /* Layout */
 #app{display:flex;height:100vh;height:100dvh}
 #sidebar{width:var(--sw);background:var(--bg2);border-right:1px solid var(--bdr);display:flex;flex-direction:column;flex-shrink:0;transition:transform .3s;z-index:100}
 #main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
-#header{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--bdr);background:var(--bg2);flex-shrink:0}
-#chat{flex:1;overflow-y:auto;padding:16px;scroll-behavior:smooth}
-#input-area{padding:10px 16px;border-top:1px solid var(--bdr);background:var(--bg2);flex-shrink:0}
 
 /* Sidebar */
 .sb-hdr{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bdr)}
 .sb-hdr h2{font-size:15px;font-weight:600}
-.btn-new{padding:7px 12px;background:var(--pri);color:#fff;border-radius:8px;font-size:12px;font-weight:500;transition:var(--tr)}
+.btn-new{padding:6px 12px;background:var(--pri);color:#fff;border-radius:8px;font-size:12px;font-weight:500;transition:var(--tr)}
 .btn-new:hover{background:var(--pri2)}
-#session-list{flex:1;overflow-y:auto;padding:6px}
+.sb-search{padding:8px 12px}
+.sb-search input{width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;font-size:13px}
+.sb-search input:focus{border-color:var(--pri)}
+.sb-filters{display:flex;gap:4px;padding:0 12px 6px}
+.sb-filters button{padding:4px 10px;border-radius:6px;font-size:11px;color:var(--t2);transition:var(--tr)}
+.sb-filters button:hover{background:var(--bg3)}
+.sb-filters button.act{background:var(--pri);color:#fff}
+#session-list{flex:1;overflow-y:auto;padding:4px 6px}
 .si{display:flex;align-items:center;padding:9px 12px;border-radius:8px;cursor:pointer;transition:var(--tr);margin-bottom:2px}
 .si:hover{background:var(--bg3)}.si.act{background:var(--pri);color:#fff}
 .si .nm{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.si .tm{font-size:10px;color:var(--t3);flex-shrink:0;margin-left:6px}
 .si .del{opacity:0;font-size:14px;padding:2px 6px;border-radius:4px;flex-shrink:0;transition:opacity .2s}
 .si:hover .del{opacity:.7}.si .del:hover{opacity:1;background:rgba(255,255,255,.1)}
-.sb-ft{padding:10px 16px;border-top:1px solid var(--bdr);font-size:11px;color:var(--t3);display:flex;flex-direction:column;gap:6px}
-.sb-ft .row{display:flex;align-items:center;gap:6px}
+.sb-ft{padding:8px 12px;border-top:1px solid var(--bdr)}
+.sb-icons{display:flex;gap:2px;flex-wrap:wrap;justify-content:center}
+.sb-icons .icon-btn{width:34px;height:34px;font-size:17px}
+.sb-status{display:flex;align-items:center;gap:6px;padding:6px 0 2px;font-size:11px;color:var(--t3)}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--err);flex-shrink:0}.dot.on{background:var(--ok)}
-.gr-stats{display:flex;gap:12px;font-size:10px}
-.gr-stats span{color:var(--t2)}
 
 /* Header */
-.hdr-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:16px;transition:var(--tr);position:relative}
-.hdr-btn:hover{background:var(--bg3)}
-.hdr-btn .badge{position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;background:var(--pri)}
+#header{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--bdr);background:var(--bg2);flex-shrink:0}
 #header .ttl{flex:1;font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .menu-btn{display:none}
-@media(max-width:768px){.menu-btn{display:flex}#sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%)}#sidebar.open{transform:translateX(0)}.ov.open{display:block}.msg-user .msg-bubble{max-width:85%}}
+@media(max-width:768px){.menu-btn{display:flex}#sidebar{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%)}#sidebar.open{transform:translateX(0)}.ov.open{display:block}}
 
 /* Chat */
+#chat{flex:1;overflow-y:auto;padding:16px;scroll-behavior:smooth}
 .message{max-width:800px;margin:0 auto 16px;animation:mi .3s ease}
 @keyframes mi{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .msg-user{display:flex;justify-content:flex-end}
-.msg-user .mb{background:var(--pri);color:#fff;border-radius:var(--r) var(--r) 4px var(--r);padding:10px 14px;max-width:75%;word-break:break-word;line-height:1.5}
+.msg-user .mb{background:var(--pri);color:#fff;border-radius:var(--r) var(--r) 4px var(--r);padding:10px 14px;max-width:75%;word-break:break-word;line-height:1.6}
 .msg-ai{display:flex;gap:10px;align-items:flex-start}
 .msg-ai .av{width:30px;height:30px;background:var(--bg3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
-.msg-ai .mb{background:var(--bg2);border:1px solid var(--bdr);border-radius:4px var(--r) var(--r) var(--r);padding:12px 16px;max-width:calc(100% - 46px);word-break:break-word;line-height:1.6}
+.msg-ai .mb{background:var(--bg2);border:1px solid var(--bdr);border-radius:4px var(--r) var(--r) var(--r);padding:12px 16px;max-width:calc(100% - 46px);word-break:break-word;line-height:1.7}
 .msg-ai .mb p{margin-bottom:8px}.msg-ai .mb p:last-child{margin-bottom:0}
-.msg-ai .mb code{background:rgba(255,255,255,.08);padding:2px 5px;border-radius:4px;font-size:.9em;font-family:'Cascadia Code','Fira Code',monospace}
-.msg-ai .mb pre{background:rgba(0,0,0,.3);border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0}
+.msg-ai .mb code{background:rgba(255,255,255,.08);padding:2px 5px;border-radius:4px;font-size:.9em;font-family:'JetBrains Mono',monospace}
+.msg-ai .mb pre{background:rgba(0,0,0,.3);border-radius:8px;padding:12px;overflow-x:auto;margin:8px 0;position:relative}
 .msg-ai .mb pre code{background:none;padding:0;font-size:13px}
 .msg-ai .mb ul,.msg-ai .mb ol{padding-left:20px;margin:6px 0}
 .msg-ai .mb li{margin-bottom:4px}
@@ -68,345 +82,656 @@ select{background:var(--bg3);color:var(--t1);padding:6px 10px;border-radius:6px;
 .msg-ai .mb table{border-collapse:collapse;margin:8px 0;width:100%}
 .msg-ai .mb th,.msg-ai .mb td{border:1px solid var(--bdr);padding:6px 10px;text-align:left;font-size:13px}
 .msg-ai .mb th{background:rgba(255,255,255,.05);font-weight:600}
-.msg-ai .mb h1,.msg-ai .mb h2,.msg-ai .mb h3,.msg-ai .mb h4{margin:12px 0 6px;font-size:1.1em}
+.msg-ai .mb h1,.msg-ai .mb h2,.msg-ai .mb h3,.msg-ai .mb h4{margin:12px 0 6px}
+.msg-ai .mb a{color:var(--pri);text-decoration:none}.msg-ai .mb a:hover{text-decoration:underline}
+.msg-ai .mb img{max-width:100%;border-radius:8px;margin:8px 0}
 .typing{display:inline-flex;gap:4px;padding:4px 0}
 .typing span{width:6px;height:6px;background:var(--t3);border-radius:50%;animation:bn 1.4s infinite}
 .typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
 @keyframes bn{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
 .welcome{text-align:center;padding:40px 20px;color:var(--t3)}
-.welcome h2{font-size:22px;color:var(--t1);margin-bottom:8px}
+.welcome h2{font-size:22px;color:var(--t1);margin-bottom:6px}
 .welcome p{font-size:14px;max-width:400px;margin:0 auto;line-height:1.6}
-.welcome .cards{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:24px}
-.welcome .card{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);padding:16px;width:140px;text-align:center;cursor:pointer;transition:var(--tr)}
+.welcome .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:420px;margin:24px auto 0}
+.welcome .card{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);padding:14px 8px;text-align:center;cursor:pointer;transition:var(--tr)}
 .welcome .card:hover{border-color:var(--pri);background:var(--bg3)}
-.welcome .card .icon{font-size:28px;margin-bottom:8px}
-.welcome .card .label{font-size:12px;color:var(--t2)}
+.welcome .card .wmi{font-size:24px;margin-bottom:6px;color:var(--pri);font-family:'Material Icons Outlined';font-style:normal}
+.welcome .card .lb{font-size:11px;color:var(--t2)}
 .agent-tag{display:inline-block;font-size:11px;padding:2px 8px;background:rgba(59,130,246,.15);color:var(--pri);border-radius:10px;margin-bottom:6px}
+.copy-btn{position:absolute;top:6px;right:6px;padding:3px 8px;background:rgba(255,255,255,.1);border-radius:4px;font-size:11px;color:var(--t2);opacity:0;transition:opacity .2s;cursor:pointer;border:none}
+pre:hover .copy-btn{opacity:1}.copy-btn:hover{background:rgba(255,255,255,.2)}
 
 /* Input */
-.iw{display:flex;align-items:flex-end;gap:8px;max-width:800px;margin:0 auto;background:var(--bg);border:1px solid var(--bdr);border-radius:var(--r);padding:8px 12px;transition:border-color .2s}
+#input-area{border-top:1px solid var(--bdr);background:var(--bg2);flex-shrink:0;padding:6px 12px 8px;position:relative}
+.input-toolbar{display:flex;align-items:center;gap:2px;margin-bottom:6px;flex-wrap:wrap}
+.input-toolbar .sep{width:1px;height:18px;background:var(--bdr);margin:0 4px}
+.mode-tag{font-size:12px;padding:4px 8px;border-radius:6px;color:var(--t3);gap:3px;display:inline-flex;align-items:center;transition:var(--tr);border:none;background:none;cursor:pointer}
+.mode-tag .mi-out{font-size:15px}
+.mode-tag:hover{color:var(--t1);background:var(--bg3)}
+.mode-tag.active{color:var(--pri);background:rgba(59,130,246,.1)}
+.input-row{display:flex;align-items:flex-end;gap:8px;max-width:900px;margin:0 auto}
+.model-sel{position:relative;flex-shrink:0}
+.model-sel select{padding:6px 8px;font-size:12px;max-width:140px;border-radius:8px}
+.iw{flex:1;display:flex;align-items:flex-end;background:var(--bg);border:1px solid var(--bdr);border-radius:var(--r);padding:6px 10px;transition:border-color .2s}
 .iw:focus-within{border-color:var(--pri)}
 #msg-input{flex:1;resize:none;min-height:24px;max-height:150px;line-height:1.5;font-size:14px}
 #msg-input::placeholder{color:var(--t3)}
-.snd{width:36px;height:36px;background:var(--pri);border-radius:8px;display:flex;align-items:center;justify-content:center;transition:var(--tr);flex-shrink:0}
+.snd{width:34px;height:34px;background:var(--pri);border-radius:8px;display:flex;align-items:center;justify-content:center;transition:var(--tr);flex-shrink:0}
 .snd:hover{background:var(--pri2)}.snd:disabled{opacity:.4;cursor:not-allowed}
-.snd svg{width:18px;height:18px;fill:#fff}
+.snd .mi-out{font-size:18px;color:#fff}
+#status-bar{font-size:11px;color:var(--t3);text-align:center;padding:4px 0 0}
 
-/* Drawer Panel */
-.drawer{position:fixed;top:0;right:0;bottom:0;width:380px;max-width:90vw;background:var(--bg2);border-left:1px solid var(--bdr);z-index:200;transform:translateX(100%);transition:transform .3s ease;display:flex;flex-direction:column}
+/* Drawer */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:400px;max-width:92vw;background:var(--bg2);border-left:1px solid var(--bdr);z-index:200;transform:translateX(100%);transition:transform .3s ease;display:flex;flex-direction:column}
 .drawer.open{transform:translateX(0)}
 .drawer-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199}
 .drawer-ov.open{display:block}
-.dr-hdr{padding:14px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.dr-hdr h3{font-size:15px;font-weight:600}
+.dr-hdr{padding:12px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.dr-hdr h3{font-size:15px;font-weight:600;display:flex;align-items:center;gap:6px}
+.dr-hdr h3 .mi-out{font-size:18px}
 .dr-close{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px;font-size:18px}
 .dr-close:hover{background:var(--bg3)}
 .dr-body{flex:1;overflow-y:auto;padding:16px}
 .dr-section{margin-bottom:20px}
-.dr-section h4{font-size:12px;text-transform:uppercase;color:var(--t3);margin-bottom:8px;letter-spacing:.5px}
-.dr-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;gap:10px}
+.dr-section h4{font-size:12px;color:var(--t3);margin-bottom:8px;letter-spacing:.5px;font-weight:500}
+.dr-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;gap:10px}
 .dr-row label{font-size:13px;color:var(--t2);flex-shrink:0}
-.dr-input{width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;font-size:13px;color:var(--t1)}
+.dr-input{width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;font-size:13px;color:var(--t1)}
 .dr-input:focus{border-color:var(--pri)}
-.dr-textarea{width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;font-size:13px;color:var(--t1);resize:vertical;min-height:80px}
+.dr-textarea{width:100%;padding:7px 10px;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;font-size:13px;color:var(--t1);resize:vertical;min-height:70px}
 .dr-textarea:focus{border-color:var(--pri)}
-.dr-btn{padding:8px 16px;background:var(--pri);color:#fff;border-radius:8px;font-size:13px;transition:var(--tr)}
+.dr-btn{padding:7px 14px;background:var(--pri);color:#fff;border-radius:8px;font-size:13px;transition:var(--tr);white-space:nowrap}
 .dr-btn:hover{background:var(--pri2)}
-.dr-btn.sec{background:var(--bg3);color:var(--t1)}
-.dr-btn.sec:hover{background:var(--bdr)}
-.dr-btn.sm{padding:5px 10px;font-size:12px}
+.dr-btn.sec{background:var(--bg3);color:var(--t1)}.dr-btn.sec:hover{background:var(--bdr)}
+.dr-btn.sm{padding:4px 10px;font-size:12px}
 .dr-btn.danger{background:var(--err)}
 .dr-list{display:flex;flex-direction:column;gap:6px}
-.dr-item{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--bdr);font-size:13px}
+.dr-item{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--bdr);font-size:13px}
 .dr-item .info{flex:1;min-width:0}
 .dr-item .info .title{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dr-item .info .sub{font-size:11px;color:var(--t3);margin-top:2px}
 .dr-item .actions{display:flex;gap:4px;flex-shrink:0}
-.dr-empty{text-align:center;padding:30px;color:var(--t3);font-size:13px}
+.dr-empty{text-align:center;padding:24px;color:var(--t3);font-size:13px}
 .dr-tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:var(--bg3);color:var(--t2)}
 input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--bg3);border-radius:2px;outline:none}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;background:var(--pri);border-radius:50%;cursor:pointer}
+details.dr-det{border:1px solid var(--bdr);border-radius:8px;margin-bottom:8px}
+details.dr-det summary{padding:10px 12px;cursor:pointer;font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px;user-select:none}
+details.dr-det summary:hover{background:var(--bg3)}
+details.dr-det[open] summary{border-bottom:1px solid var(--bdr)}
+details.dr-det .body{padding:12px}
 
-/* Scroll button */
-#scroll-bot{position:fixed;bottom:76px;right:20px;width:38px;height:38px;background:var(--bg2);border:1px solid var(--bdr);border-radius:50%;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .3s;pointer-events:none;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.3)}
-#scroll-bot.vis{opacity:1;pointer-events:auto}
 /* Overlay */
 .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
+/* Scroll button */
+#scroll-bot{position:fixed;bottom:90px;right:20px;width:36px;height:36px;background:var(--bg2);border:1px solid var(--bdr);border-radius:50%;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .3s;pointer-events:none;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#scroll-bot.vis{opacity:1;pointer-events:auto}
 /* Toast */
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);padding:10px 20px;background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;font-size:13px;z-index:300;box-shadow:0 4px 12px rgba(0,0,0,.3);animation:tIn .3s ease}
 @keyframes tIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%)}}
+/* Apps grid panel */
+.apps-panel{position:absolute;bottom:100%;left:0;right:0;background:var(--bg2);border:1px solid var(--bdr);border-radius:12px 12px 0 0;padding:12px;display:none;z-index:10}
+.apps-panel.open{display:block}
+.apps-panel .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.apps-panel .item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px;border-radius:8px;cursor:pointer;transition:var(--tr);font-size:12px;color:var(--t2)}
+.apps-panel .item:hover{background:var(--bg3);color:var(--t1)}
+.apps-panel .item .mi-out{font-size:22px;color:var(--pri)}
+/* Context menu */
+.ctx-menu{position:fixed;background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;padding:4px;z-index:250;min-width:160px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.ctx-menu button{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:6px;font-size:13px;text-align:left;color:var(--t1)}
+.ctx-menu button:hover{background:var(--bg3)}
+.ctx-menu button .mi-out{font-size:16px;color:var(--t2)}
+.ctx-menu .sep{height:1px;background:var(--bdr);margin:4px 0}
 </style>
 </head>
 <body>
 <div id="app">
+  <!-- 侧边栏 -->
   <div id="sidebar">
-    <div class="sb-hdr"><h2>AI Assistant</h2><button class="btn-new" onclick="createSession()">+ New</button></div>
+    <div class="sb-hdr"><h2>AI 智能体</h2><button class="btn-new" onclick="createSession()">+ 新建</button></div>
+    <div class="sb-search"><input id="session-search" placeholder="搜索会话..." oninput="filterSessions()"></div>
+    <div class="sb-filters">
+      <button class="act" data-f="all" onclick="setFilter('all')">全部</button>
+      <button data-f="today" onclick="setFilter('today')">今天</button>
+      <button data-f="yesterday" onclick="setFilter('yesterday')">昨天</button>
+      <button data-f="week" onclick="setFilter('week')">本周</button>
+    </div>
     <div id="session-list"></div>
     <div class="sb-ft">
-      <div class="row"><span class="dot" id="sdot"></span><span id="stxt">Connecting...</span></div>
-      <div class="gr-stats" id="gr-stats"><span>Blocked: 0</span><span>Warn: 0</span><span>Pass: 0</span></div>
+      <div class="sb-icons">
+        <button class="icon-btn" onclick="openDrawer('kb')" title="知识库"><span class="mi-out">menu_book</span></button>
+        <button class="icon-btn" onclick="openDrawer('mem')" title="记忆"><span class="mi-out">psychology</span></button>
+        <button class="icon-btn" onclick="openDrawer('tools')" title="工具集"><span class="mi-out">build</span></button>
+        <button class="icon-btn" onclick="exportSession()" title="导出会话"><span class="mi-out">download</span></button>
+        <button class="icon-btn" onclick="openDrawer('prompts')" title="提示词库"><span class="mi-out">format_list_bulleted</span></button>
+        <button class="icon-btn" onclick="openDrawer('roles')" title="角色切换"><span class="mi-out">theaters</span></button>
+        <button class="icon-btn" onclick="openDrawer('settings')" title="设置"><span class="mi-out">settings</span></button>
+      </div>
+      <div class="sb-status"><span class="dot" id="sdot"></span><span id="stxt">连接中...</span></div>
     </div>
   </div>
   <div class="ov" id="overlay" onclick="closeSidebar()"></div>
+
+  <!-- 主区域 -->
   <div id="main">
     <div id="header">
-      <button class="hdr-btn menu-btn" onclick="toggleSidebar()">&#9776;</button>
-      <span class="ttl" id="hdr-title">New Chat</span>
-      <button class="hdr-btn" onclick="openDrawer('kb')" title="Knowledge Base">&#128218;</button>
-      <button class="hdr-btn" onclick="openDrawer('mem')" title="Memory">&#129504;</button>
-      <button class="hdr-btn" onclick="openDrawer('tools')" title="Tools">&#128295;</button>
-      <button class="hdr-btn" onclick="openDrawer('settings')" title="Settings">&#9881;</button>
-      <span class="dr-tag" id="model-badge">v1.0</span>
+      <button class="icon-btn menu-btn" onclick="toggleSidebar()"><span class="mi-out">menu</span></button>
+      <span class="ttl" id="hdr-title">新对话</span>
+      <button class="icon-btn" onclick="openDrawer('kb')" title="知识库"><span class="mi-out">menu_book</span></button>
+      <button class="icon-btn" onclick="openDrawer('settings')" title="设置"><span class="mi-out">settings</span></button>
     </div>
     <div id="chat">
       <div class="welcome" id="welcome">
-        <h2>AI Assistant</h2>
-        <p>Your private AI assistant with knowledge base, memory, tools, and intelligent routing.</p>
+        <h2>AI 智能体</h2>
+        <p>你的私人 AI 助手，支持知识库、记忆、工具集和智能路由</p>
         <div class="cards">
-          <div class="card" onclick="openDrawer('kb')"><div class="icon">&#128218;</div><div class="label">Knowledge Base</div></div>
-          <div class="card" onclick="openDrawer('mem')"><div class="icon">&#129504;</div><div class="label">Memory</div></div>
-          <div class="card" onclick="openDrawer('tools')"><div class="icon">&#128295;</div><div class="label">Tools</div></div>
-          <div class="card" onclick="openDrawer('settings')"><div class="icon">&#9881;</div><div class="label">Settings</div></div>
+          <div class="card" onclick="openDrawer('kb')"><div class="wmi">menu_book</div><div class="lb">知识库</div></div>
+          <div class="card" onclick="openDrawer('mem')"><div class="wmi">psychology</div><div class="lb">记忆</div></div>
+          <div class="card" onclick="openDrawer('tools')"><div class="wmi">build</div><div class="lb">工具集</div></div>
+          <div class="card" onclick="openDrawer('prompts')"><div class="wmi">format_list_bulleted</div><div class="lb">提示词库</div></div>
+          <div class="card" onclick="openDrawer('roles')"><div class="wmi">theaters</div><div class="lb">角色切换</div></div>
+          <div class="card" onclick="openDrawer('settings')"><div class="wmi">settings</div><div class="lb">设置</div></div>
         </div>
       </div>
     </div>
+    <button id="scroll-bot" onclick="scrollToBot()"><span class="mi-out">keyboard_arrow_down</span></button>
+
+    <!-- 输入区域 -->
     <div id="input-area">
-      <div class="iw">
-        <textarea id="msg-input" rows="1" placeholder="Type a message..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
-        <button class="snd" id="send-btn" onclick="sendMessage()" disabled>
-          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-        </button>
+      <!-- 应用菜单 -->
+      <div class="apps-panel" id="apps-panel">
+        <div class="grid">
+          <div class="item" onclick="createSession();toggleApps()"><span class="mi-out">add_circle</span>新建对话</div>
+          <div class="item" onclick="openDrawer('kb');toggleApps()"><span class="mi-out">menu_book</span>知识库</div>
+          <div class="item" onclick="openDrawer('tools');toggleApps()"><span class="mi-out">build</span>工具集</div>
+          <div class="item" onclick="openDrawer('mem');toggleApps()"><span class="mi-out">psychology</span>记忆</div>
+          <div class="item" onclick="exportSession();toggleApps()"><span class="mi-out">download</span>导出会话</div>
+          <div class="item" onclick="openDrawer('settings');toggleApps()"><span class="mi-out">settings</span>设置</div>
+        </div>
       </div>
+      <!-- 工具栏 -->
+      <div class="input-toolbar">
+        <button class="icon-btn" onclick="toggleApps()" title="应用与插件"><span class="mi-out">apps</span></button>
+        <span class="sep"></span>
+        <button class="mode-tag" id="btn-search" onclick="toggleMode('webSearch')" title="联网搜索"><span class="mi-out">travel_explore</span>联网</button>
+        <button class="mode-tag" id="btn-deep" onclick="toggleMode('deepThink')" title="深度思考"><span class="mi-out">psychology</span>深度</button>
+        <button class="mode-tag active" id="btn-stream" onclick="toggleMode('stream')" title="流式输出"><span class="mi-out">bolt</span>流式</button>
+        <button class="mode-tag" id="btn-agent" onclick="toggleMode('agent')" title="Agent模式"><span class="mi-out">smart_toy</span>Agent</button>
+        <span class="sep"></span>
+        <button class="icon-btn" id="btn-voice" onclick="toggleVoice()" title="语音输入"><span class="mi-out">mic</span></button>
+        <button class="icon-btn" id="btn-tts" onclick="toggleTTS()" title="朗读回复"><span class="mi-out">volume_up</span></button>
+      </div>
+      <!-- 输入行 -->
+      <div class="input-row">
+        <div class="model-sel">
+          <select id="model-select" onchange="onModelChange()">
+            <optgroup label="DeepSeek">
+              <option value="deepseek:deepseek-v4-flash">DeepSeek V4</option>
+              <option value="deepseek:deepseek-chat">DeepSeek V3</option>
+              <option value="deepseek:deepseek-reasoner">DeepSeek R1</option>
+            </optgroup>
+            <optgroup label="通义千问">
+              <option value="qwen:qwen-plus">通义千问 Plus</option>
+            </optgroup>
+            <optgroup label="豆包">
+              <option value="doubao:doubao-pro-32k">豆包 Pro</option>
+            </optgroup>
+            <optgroup label="Ollama 本地">
+              <option value="ollama:qwen2.5:7b">Qwen2.5 7B</option>
+              <option value="ollama:llama3.1:8b">Llama3.1 8B</option>
+              <option value="ollama:tinyllama:latest">TinyLlama</option>
+            </optgroup>
+            <optgroup label="硅基流动">
+              <option value="silicon:deepseek-ai/DeepSeek-V3">DeepSeek-V3</option>
+              <option value="silicon:deepseek-ai/DeepSeek-V3.2">DeepSeek-V3.2</option>
+              <option value="silicon:deepseek-ai/DeepSeek-R1">DeepSeek-R1</option>
+              <option value="silicon:deepseek-ai/DeepSeek-V4-Flash">DeepSeek-V4-Flash</option>
+              <option value="silicon:Qwen/Qwen3-32B">Qwen3-32B</option>
+              <option value="silicon:Qwen/Qwen3-8B">Qwen3-8B</option>
+              <option value="silicon:Qwen/Qwen3.5-397B-A17B">Qwen3.5-397B</option>
+              <option value="silicon:Qwen/Qwen3.5-27B">Qwen3.5-27B</option>
+              <option value="silicon:Qwen/QwQ-32B">QwQ-32B 推理</option>
+              <option value="silicon:zai-org/GLM-4.7">GLM-4.7</option>
+              <option value="silicon:zai-org/GLM-4.6V">GLM-4.6V 视觉</option>
+              <option value="silicon:Qwen/Qwen3-Coder-480B-A35B-Instruct">Qwen3-Coder-480B</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="iw">
+          <textarea id="msg-input" rows="1" placeholder="输入消息，Shift+Enter 换行..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        </div>
+        <button class="snd" id="send-btn" onclick="sendMessage()" disabled><span class="mi-out">arrow_upward</span></button>
+      </div>
+      <div id="status-bar">已就绪</div>
     </div>
   </div>
 </div>
 
-<!-- Drawer panels -->
+<!-- Drawer overlay -->
 <div class="drawer-ov" id="dr-ov" onclick="closeDrawer()"></div>
 
-<!-- Settings Drawer -->
+<!-- ===== 设置面板 ===== -->
 <div class="drawer" id="dr-settings">
-  <div class="dr-hdr"><h3>Settings</h3><button class="dr-close" onclick="closeDrawer()">&times;</button></div>
+  <div class="dr-hdr"><h3><span class="mi-out">settings</span> 设置</h3><button class="dr-close" onclick="closeDrawer()">&times;</button></div>
   <div class="dr-body">
-    <div class="dr-section">
-      <h4>Model</h4>
-      <div class="dr-row"><label>Provider</label>
-        <select id="cfg-provider" onchange="saveSetting('provider',this.value)">
-          <option value="ollama">Ollama (Local)</option>
-          <option value="deepseek">DeepSeek</option>
-          <option value="qwen">Qwen (DashScope)</option>
-          <option value="openai">OpenAI</option>
-          <option value="silicon">SiliconFlow</option>
-        </select>
+    <details class="dr-det" open>
+      <summary><span class="mi-out" style="font-size:16px">tune</span> 模型与参数</summary>
+      <div class="body">
+        <div class="dr-row"><label>默认提供商</label>
+          <select id="cfg-provider" onchange="saveSetting('defaultProvider',this.value)">
+            <option value="ollama">Ollama（本地）</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="qwen">通义千问</option>
+            <option value="doubao">豆包</option>
+            <option value="silicon">硅基流动</option>
+            <option value="openai">OpenAI 兼容</option>
+          </select>
+        </div>
+        <div class="dr-row"><label>默认模型</label><input class="dr-input" id="cfg-model" placeholder="如 qwen2.5:7b" onchange="saveSetting('defaultModel',this.value)"></div>
+        <div class="dr-row"><label>温度: <span id="temp-val">0.7</span></label>
+          <input type="range" min="0" max="2" step="0.1" value="0.7" id="cfg-temp" oninput="document.getElementById('temp-val').textContent=this.value" onchange="saveSetting('temperature',parseFloat(this.value))">
+        </div>
+        <div class="dr-row" style="flex-direction:column;align-items:stretch">
+          <label style="margin-bottom:4px">系统提示词</label>
+          <textarea class="dr-textarea" id="cfg-sysprompt" placeholder="自定义系统指令..." onchange="saveSetting('systemInstruction',this.value)"></textarea>
+        </div>
       </div>
-      <div class="dr-row"><label>Model</label><input class="dr-input" id="cfg-model" placeholder="e.g. qwen2.5:7b" onchange="saveSetting('model',this.value)"></div>
-      <div class="dr-row"><label>Temperature: <span id="temp-val">0.7</span></label>
-        <input type="range" min="0" max="2" step="0.1" value="0.7" id="cfg-temp" oninput="document.getElementById('temp-val').textContent=this.value" onchange="saveSetting('temperature',parseFloat(this.value))">
+    </details>
+    <details class="dr-det">
+      <summary><span class="mi-out" style="font-size:16px">palette</span> 外观</summary>
+      <div class="body">
+        <div class="dr-row"><label>界面主题</label>
+          <select id="cfg-theme" onchange="saveSetting('theme',this.value)">
+            <option value="dark">深色模式</option>
+            <option value="light">浅色模式</option>
+            <option value="system">跟随系统</option>
+          </select>
+        </div>
+        <div class="dr-row"><label>字体大小: <span id="font-val">14</span>px</label>
+          <input type="range" min="12" max="20" step="1" value="14" id="cfg-font" oninput="document.getElementById('font-val').textContent=this.value;document.body.style.fontSize=this.value+'px'" onchange="saveSetting('fontSize',parseInt(this.value))">
+        </div>
       </div>
-    </div>
-    <div class="dr-section">
-      <h4>System Prompt</h4>
-      <textarea class="dr-textarea" id="cfg-sysprompt" placeholder="Custom system instructions..." onchange="saveSetting('systemInstruction',this.value)"></textarea>
-    </div>
-    <div class="dr-section">
-      <h4>Guardrails</h4>
-      <div class="dr-row"><label>Enabled</label>
-        <button class="dr-btn sm" id="gr-toggle" onclick="toggleGuardrails()">Toggle</button>
+    </details>
+    <details class="dr-det">
+      <summary><span class="mi-out" style="font-size:16px">shield</span> 安全护栏</summary>
+      <div class="body">
+        <div class="dr-row"><label>启用状态</label><button class="dr-btn sm" onclick="toggleGR()">切换</button></div>
+        <div class="dr-row"><label>统计</label><span id="gr-detail" style="font-size:12px;color:var(--t2)">--</span></div>
+        <div class="dr-row"><button class="dr-btn sm sec" onclick="resetGR()">重置统计</button></div>
       </div>
-      <div class="dr-row"><label>Stats</label><span id="gr-detail" style="font-size:12px;color:var(--t2)">--</span></div>
-      <div class="dr-row"><button class="dr-btn sm sec" onclick="resetGuardrails()">Reset Stats</button></div>
-    </div>
+    </details>
+    <details class="dr-det">
+      <summary><span class="mi-out" style="font-size:16px">vpn_key</span> API 密钥</summary>
+      <div class="body">
+        <div class="dr-row" style="flex-direction:column;align-items:stretch">
+          <label style="margin-bottom:4px">DeepSeek API Key</label>
+          <input class="dr-input" id="cfg-deepseek" type="password" placeholder="sk-..." onchange="saveSetting('deepseekKey',this.value)">
+        </div>
+        <div class="dr-row" style="flex-direction:column;align-items:stretch">
+          <label style="margin-bottom:4px">通义千问 API Key</label>
+          <input class="dr-input" id="cfg-qwen" type="password" placeholder="sk-..." onchange="saveSetting('qwenKey',this.value)">
+        </div>
+        <div class="dr-row" style="flex-direction:column;align-items:stretch">
+          <label style="margin-bottom:4px">硅基流动 API Key</label>
+          <input class="dr-input" id="cfg-silicon" type="password" placeholder="sk-..." onchange="saveSetting('siliconKey',this.value)">
+        </div>
+        <div class="dr-row" style="flex-direction:column;align-items:stretch">
+          <label style="margin-bottom:4px">自定义 API 地址</label>
+          <input class="dr-input" id="cfg-apiurl" placeholder="https://api.example.com/v1" onchange="saveSetting('customApiUrl',this.value)">
+        </div>
+        <div class="dr-row" style="flex-direction:column;align-items:stretch">
+          <label style="margin-bottom:4px">自定义 API Key</label>
+          <input class="dr-input" id="cfg-apikey" type="password" placeholder="sk-..." onchange="saveSetting('customApiKey',this.value)">
+        </div>
+      </div>
+    </details>
   </div>
 </div>
 
-<!-- Knowledge Base Drawer -->
+<!-- ===== 知识库面板 ===== -->
 <div class="drawer" id="dr-kb">
-  <div class="dr-hdr"><h3>Knowledge Base</h3><button class="dr-close" onclick="closeDrawer()">&times;</button></div>
+  <div class="dr-hdr"><h3><span class="mi-out">menu_book</span> 知识库</h3><button class="dr-close" onclick="closeDrawer()">&times;</button></div>
   <div class="dr-body">
     <div class="dr-section">
-      <h4>Import</h4>
-      <div class="dr-row"><input class="dr-input" id="kb-url" placeholder="Enter URL to import..."><button class="dr-btn sm" onclick="importKBUrl()">Import</button></div>
+      <h4>导入文档</h4>
+      <div class="dr-row"><input class="dr-input" id="kb-url" placeholder="输入 URL 导入..."><button class="dr-btn sm" onclick="importKBUrl()">导入</button></div>
     </div>
     <div class="dr-section">
-      <h4>Search</h4>
-      <div class="dr-row"><input class="dr-input" id="kb-query" placeholder="Search knowledge..." onkeydown="if(event.key==='Enter')searchKB()"><button class="dr-btn sm" onclick="searchKB()">Search</button></div>
+      <h4>搜索知识库</h4>
+      <div class="dr-row"><input class="dr-input" id="kb-query" placeholder="搜索..." onkeydown="if(event.key==='Enter')searchKB()"><button class="dr-btn sm" onclick="searchKB()">搜索</button></div>
       <div id="kb-results" style="margin-top:10px"></div>
     </div>
     <div class="dr-section">
-      <h4>Documents</h4>
+      <h4>文档列表</h4>
       <div id="kb-docs" class="dr-list"></div>
     </div>
     <div class="dr-section">
-      <h4>Stats</h4>
+      <h4>统计</h4>
       <div id="kb-stats" class="dr-empty">--</div>
     </div>
   </div>
 </div>
 
-<!-- Memory Drawer -->
+<!-- ===== 记忆面板 ===== -->
 <div class="drawer" id="dr-mem">
-  <div class="dr-hdr"><h3>Memory</h3><button class="dr-close" onclick="closeDrawer()">&times;</button></div>
+  <div class="dr-hdr"><h3><span class="mi-out">psychology</span> 记忆</h3><button class="dr-close" onclick="closeDrawer()">&times;</button></div>
   <div class="dr-body">
     <div class="dr-section">
-      <h4>Add Memory</h4>
-      <div class="dr-row"><textarea class="dr-textarea" id="mem-input" placeholder="Enter a memory..." style="min-height:60px"></textarea></div>
-      <div class="dr-row"><input class="dr-input" id="mem-tags" placeholder="Tags (comma separated)" style="flex:1"><button class="dr-btn sm" onclick="addMem()">Add</button></div>
+      <h4>添加记忆</h4>
+      <textarea class="dr-textarea" id="mem-input" placeholder="记录一条记忆..." style="min-height:60px"></textarea>
+      <div class="dr-row" style="margin-top:6px"><input class="dr-input" id="mem-tags" placeholder="标签（逗号分隔）" style="flex:1"><button class="dr-btn sm" onclick="addMem()">添加</button></div>
     </div>
     <div class="dr-section">
-      <h4>Search</h4>
-      <div class="dr-row"><input class="dr-input" id="mem-query" placeholder="Search memories..." onkeydown="if(event.key==='Enter')searchMem()"><button class="dr-btn sm" onclick="searchMem()">Search</button></div>
+      <h4>搜索记忆</h4>
+      <div class="dr-row"><input class="dr-input" id="mem-query" placeholder="搜索..." onkeydown="if(event.key==='Enter')searchMem()"><button class="dr-btn sm" onclick="searchMem()">搜索</button></div>
     </div>
     <div class="dr-section">
-      <h4>Memories</h4>
+      <h4>记忆列表</h4>
       <div id="mem-list" class="dr-list"></div>
     </div>
     <div class="dr-section">
-      <h4>Profile</h4>
-      <div id="mem-profile" style="font-size:13px;color:var(--t2)"></div>
+      <h4>用户画像</h4>
+      <div id="mem-profile" style="font-size:13px;color:var(--t2)">--</div>
     </div>
     <div class="dr-section">
-      <h4>Stats</h4>
-      <div id="mem-stats" style="font-size:12px;color:var(--t2)"></div>
+      <h4>统计</h4>
+      <div id="mem-stats" style="font-size:12px;color:var(--t2)">--</div>
     </div>
   </div>
 </div>
 
-<!-- Tools Drawer -->
+<!-- ===== 工具面板 ===== -->
 <div class="drawer" id="dr-tools">
-  <div class="dr-hdr"><h3>Tools</h3><button class="dr-close" onclick="closeDrawer()">&times;</button></div>
+  <div class="dr-hdr"><h3><span class="mi-out">build</span> 工具集</h3><button class="dr-close" onclick="closeDrawer()">&times;</button></div>
   <div class="dr-body">
     <div class="dr-section">
-      <h4>Execute Tool</h4>
-      <div class="dr-row"><label>Tool</label>
-        <select id="tool-select" onchange="showToolSchema()"><option value="">-- Select --</option></select>
+      <h4>执行工具</h4>
+      <div class="dr-row"><label>选择工具</label>
+        <select id="tool-select" onchange="showToolSchema()" style="flex:1"><option value="">-- 选择 --</option></select>
       </div>
       <div id="tool-params" style="margin-top:8px"></div>
-      <div class="dr-row" style="margin-top:8px"><button class="dr-btn" onclick="executeTool()">Execute</button></div>
+      <div class="dr-row" style="margin-top:8px"><button class="dr-btn" onclick="executeTool()">执行</button></div>
       <div id="tool-result" style="margin-top:12px;font-size:13px;white-space:pre-wrap;color:var(--t2);max-height:300px;overflow-y:auto"></div>
     </div>
     <div class="dr-section">
-      <h4>Available Tools</h4>
+      <h4>可用工具</h4>
       <div id="tool-list" class="dr-list"></div>
     </div>
   </div>
 </div>
 
-<button id="scroll-bot" onclick="scrollToBot()">&#8595;</button>
+<!-- ===== 提示词面板 ===== -->
+<div class="drawer" id="dr-prompts">
+  <div class="dr-hdr"><h3><span class="mi-out">format_list_bulleted</span> 提示词库</h3><button class="dr-close" onclick="closeDrawer()">&times;</button></div>
+  <div class="dr-body">
+    <div class="dr-section">
+      <h4>添加提示词</h4>
+      <input class="dr-input" id="prompt-name" placeholder="名称" style="margin-bottom:6px">
+      <textarea class="dr-textarea" id="prompt-text" placeholder="提示词内容..."></textarea>
+      <div class="dr-row" style="margin-top:6px"><button class="dr-btn sm" onclick="addPrompt()">保存</button></div>
+    </div>
+    <div class="dr-section">
+      <h4>已保存</h4>
+      <div id="prompt-list" class="dr-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 角色面板 ===== -->
+<div class="drawer" id="dr-roles">
+  <div class="dr-hdr"><h3><span class="mi-out">theaters</span> 角色预设</h3><button class="dr-close" onclick="closeDrawer()">&times;</button></div>
+  <div class="dr-body">
+    <div class="dr-section">
+      <h4>选择角色</h4>
+      <div id="role-list" class="dr-list"></div>
+    </div>
+    <div class="dr-section">
+      <h4>自定义角色</h4>
+      <input class="dr-input" id="role-name" placeholder="角色名称" style="margin-bottom:6px">
+      <textarea class="dr-textarea" id="role-desc" placeholder="角色描述和系统指令..."></textarea>
+      <div class="dr-row" style="margin-top:6px"><button class="dr-btn sm" onclick="addRole()">保存</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Context menu -->
+<div class="ctx-menu" id="ctx-menu" style="display:none"></div>
 
 <script>
+// ===== State =====
 var ws=null,msgId=1,pending={},curSid=null,sessions=[],msgs=[],streaming=false,sBuf='',sEl=null,reconnT=null,reconnD=1000;
-var appConfig={provider:'ollama',model:'',temperature:0.7,systemInstruction:''};
+var modes={webSearch:false,deepThink:false,stream:true,agent:false};
+var ttsOn=false,voiceRec=null;
+var filter='all';
+var appConfig={};
+var toolDefs=[];
+var savedPrompts=[];
+var roles=[
+  {name:'通用助手',desc:'你是一个通用AI助手，善于回答各类问题，提供清晰准确的回答。'},
+  {name:'代码专家',desc:'你是一个高级软件工程师，精通多种编程语言和框架，善于代码设计、调试和优化。'},
+  {name:'文案写作',desc:'你是一个专业文案，善于撰写各类文章、报告、营销文案，文风灵活。'},
+  {name:'金融分析',desc:'你是一个金融分析师，善于分析市场数据、趋势和投资策略。'},
+  {name:'知识库问答',desc:'你是一个知识库问答专家，基于提供的知识内容给出准确回答，并注明来源。'}
+];
+var activeRole=null;
 
-// ===== WS =====
-function connect(){var p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host);
-ws.onopen=function(){reconnD=1000;setSt(true,'Connected');loadSessions();loadConfig();loadGRStats()};
-ws.onmessage=function(e){var m=JSON.parse(e.data);if(m.id&&pending[m.id]){var c=pending[m.id];delete pending[m.id];m.type==='error'?c.reject(new Error(m.payload?m.payload.error:'err')):c.resolve(m.payload);return}handleEv(m)};
-ws.onclose=function(){setSt(false,'Disconnected');schedReconn()};
-ws.onerror=function(){setSt(false,'Error')}}
-
-function schedReconn(){if(reconnT)return;reconnT=setTimeout(function(){reconnT=null;setSt(false,'Reconnecting...');connect()},reconnD);reconnD=Math.min(reconnD*1.5,10000)}
-
-function send(t,p){return new Promise(function(ok,no){if(!ws||ws.readyState!==1){no(new Error('disconnected'));return}var id=msgId++;pending[id]={resolve:ok,reject:no};setTimeout(function(){if(pending[id]){delete pending[id];no(new Error('timeout'))}},15000);ws.send(JSON.stringify({id:id,type:t,payload:p||{}}))})}
-
-function setSt(c,t){document.getElementById('sdot').className='dot'+(c?' on':'');document.getElementById('stxt').textContent=t;document.getElementById('send-btn').disabled=!c}
-
+// ===== WebSocket =====
+function connect(){
+  var p=location.protocol==='https:'?'wss:':'ws:';
+  ws=new WebSocket(p+'//'+location.host);
+  ws.onopen=function(){reconnD=1000;setSt(true,'已连接');loadSessions();loadConfig();loadGRStats()};
+  ws.onmessage=function(e){
+    var m=JSON.parse(e.data);
+    if(m.id&&pending[m.id]){var c=pending[m.id];delete pending[m.id];m.type==='error'?c.reject(new Error(m.payload?m.payload.error||m.error:'错误')):c.resolve(m.payload);return}
+    handleEv(m)
+  };
+  ws.onclose=function(){setSt(false,'已断开');schedReconn()};
+  ws.onerror=function(){setSt(false,'连接错误')}
+}
+function schedReconn(){if(reconnT)return;reconnT=setTimeout(function(){reconnT=null;setSt(false,'重连中...');connect()},reconnD);reconnD=Math.min(reconnD*1.5,10000)}
+function send(t,p){return new Promise(function(ok,no){if(!ws||ws.readyState!==1){no(new Error('未连接'));return}var id=msgId++;pending[id]={resolve:ok,reject:no};setTimeout(function(){if(pending[id]){delete pending[id];no(new Error('超时'))}},30000);ws.send(JSON.stringify({id:id,type:t,payload:p||{}}))})}
+function setSt(c,t){document.getElementById('sdot').className='dot'+(c?' on':'');document.getElementById('stxt').textContent=t;document.getElementById('send-btn').disabled=!c;document.getElementById('status-bar').textContent=c?'已就绪':'未连接'}
 function handleEv(m){var d=m.payload||{};
-if(m.type==='chat.stream'&&d.sessionId===curSid)appendChunk(d.chunk);
-else if(m.type==='chat.complete'&&d.sessionId===curSid)finishStream(d.message,d.knowledgeRefs);
-else if(m.type==='chat.error'&&d.sessionId===curSid)finishStream(null,null,d.error);
-else if(m.type==='event.status')toast(d.message);
-else if(m.type==='connected')document.getElementById('model-badge').textContent='v'+(d.version||'1.0')}
+  if(m.type==='chat.stream'&&d.sessionId===curSid)appendChunk(d.chunk);
+  else if(m.type==='chat.complete'&&d.sessionId===curSid)finishStream(d.message,null);
+  else if(m.type==='chat.error'&&d.sessionId===curSid)finishStream(null,d.error);
+  else if(m.type==='event.status')toast(d.message);
+  else if(m.type==='event.notification')toast(d.title||d.body||'通知');
+  else if(m.type==='event.typing'&&d.sessionId===curSid)setStatus(d.isTyping?'正在输入...':'已就绪');
+}
 
 // ===== Config =====
-async function loadConfig(){try{var d=await send('config.get');var c=d.config||{};appConfig.provider=c.defaultProvider||'ollama';appConfig.model=c.defaultModel||'';appConfig.temperature=c.temperature||0.7;appConfig.systemInstruction=c.systemInstruction||'';
-document.getElementById('cfg-provider').value=appConfig.provider;document.getElementById('cfg-model').value=appConfig.model;document.getElementById('cfg-temp').value=appConfig.temperature;document.getElementById('temp-val').textContent=appConfig.temperature;document.getElementById('cfg-sysprompt').value=appConfig.systemInstruction}catch(e){}}
-
+async function loadConfig(){try{var d=await send('config.get');appConfig=d.config||{};
+  if(appConfig.defaultProvider)document.getElementById('cfg-provider').value=appConfig.defaultProvider;
+  if(appConfig.defaultModel)document.getElementById('cfg-model').value=appConfig.defaultModel;
+  if(appConfig.temperature!=null){document.getElementById('cfg-temp').value=appConfig.temperature;document.getElementById('temp-val').textContent=appConfig.temperature}
+  if(appConfig.systemInstruction)document.getElementById('cfg-sysprompt').value=appConfig.systemInstruction;
+  if(appConfig.fontSize){document.getElementById('cfg-font').value=appConfig.fontSize;document.getElementById('font-val').textContent=appConfig.fontSize;document.body.style.fontSize=appConfig.fontSize+'px'}
+}catch(e){}}
 async function saveSetting(k,v){var d={};d[k]=v;try{await send('config.set',{delta:d})}catch(e){}}
 
 // ===== Guardrails =====
-async function loadGRStats(){try{var d=await send('guardrails.stats');document.getElementById('gr-stats').innerHTML='<span>B:'+d.blocked+'</span><span>W:'+d.warnings+'</span><span>P:'+d.passed+'</span>';document.getElementById('gr-detail').textContent='Blocked:'+d.blocked+' Warn:'+d.warnings+' Pass:'+d.passed}catch(e){}}
-async function toggleGuardrails(){try{await send('guardrails.toggle');toast('Guardrails toggled');loadGRStats()}catch(e){}}
-async function resetGuardrails(){try{await send('guardrails.reset');toast('Stats reset');loadGRStats()}catch(e){}}
+async function loadGRStats(){try{var d=await send('guardrails.stats');document.getElementById('gr-detail').textContent='拦截: '+(d.blocked||0)+' | 警告: '+(d.warnings||0)+' | 通过: '+(d.passed||0)}catch(e){}}
+async function toggleGR(){try{await send('guardrails.toggle');toast('安全护栏已切换');loadGRStats()}catch(e){}}
+async function resetGR(){try{await send('guardrails.reset');toast('统计已重置');loadGRStats()}catch(e){}}
 
 // ===== Sessions =====
 async function loadSessions(){try{var d=await send('session.list');sessions=d.sessions||[];renderSessions();if(sessions.length>0&&!curSid)switchSession(sessions[0].id)}catch(e){}}
+function renderSessions(){
+  var l=document.getElementById('session-list');
+  var q=document.getElementById('session-search').value.trim().toLowerCase();
+  var list=sessions;
+  if(q)list=list.filter(function(s){return(s.name||'').toLowerCase().indexOf(q)>=0});
+  if(filter!=='all'){var now=new Date();var today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    if(filter==='today')list=list.filter(function(s){return s.updatedAt&&new Date(s.updatedAt)>=today});
+    else if(filter==='yesterday'){var yd=new Date(today);yd.setDate(yd.getDate()-1);list=list.filter(function(s){return s.updatedAt&&new Date(s.updatedAt)>=yd&&new Date(s.updatedAt)<today})}
+    else if(filter==='week'){var wk=new Date(today);wk.setDate(wk.getDate()-wk.getDay());list=list.filter(function(s){return s.updatedAt&&new Date(s.updatedAt)>=wk})}
+  }
+  if(!list.length){l.innerHTML='<div class="dr-empty">暂无会话</div>';return}
+  var h='';for(var i=0;i<list.length;i++){var s=list[i],a=s.id===curSid?' act':'';
+    var tm=s.updatedAt?timeAgo(new Date(s.updatedAt)):'';
+    h+='<div class="si'+a+'" onclick="switchSession(\''+s.id+'\')" oncontextmenu="showCtxMenu(event,\''+s.id+'\')"><span class="nm">'+esc(s.name||'新对话')+'</span><span class="tm">'+tm+'</span><button class="del" onclick="event.stopPropagation();delSession(\''+s.id+'\')">&times;</button></div>'}
+  l.innerHTML=h}
+function filterSessions(){renderSessions()}
+function setFilter(f){filter=f;document.querySelectorAll('.sb-filters button').forEach(function(b){b.className=b.dataset.f===f?'act':''});renderSessions()}
+function timeAgo(d){var s=Math.floor((Date.now()-d)/1000);if(s<60)return'刚刚';if(s<3600)return Math.floor(s/60)+'分钟前';if(s<86400)return Math.floor(s/3600)+'小时前';if(s<604800)return Math.floor(s/86400)+'天前';return d.toLocaleDateString()}
 
-function renderSessions(){var l=document.getElementById('session-list');if(!sessions.length){l.innerHTML='<div class="dr-empty">No sessions</div>';return}
-var h='';for(var i=0;i<sessions.length;i++){var s=sessions[i],a=s.id===curSid?' act':'';h+='<div class="si'+a+'" onclick="switchSession(\''+s.id+'\')"><span class="nm">'+esc(s.name||'New Chat')+'</span><button class="del" onclick="event.stopPropagation();delSession(\''+s.id+'\')">&times;</button></div>'}l.innerHTML=h}
-
-async function createSession(){try{var d=await send('session.create',{name:'New Chat'});if(d&&d.session){sessions.unshift(d.session);renderSessions();switchSession(d.session.id)}}catch(e){}closeSidebar()}
-
+async function createSession(){try{var d=await send('session.create',{name:'新对话'});if(d&&d.session){sessions.unshift(d.session);renderSessions();switchSession(d.session.id)}}catch(e){}closeSidebar()}
 async function switchSession(id){curSid=id;msgs=[];renderMsgs();renderSessions();
-for(var i=0;i<sessions.length;i++)if(sessions[i].id===id){document.getElementById('hdr-title').textContent=sessions[i].name||'New Chat';break}
-try{var d=await send('session.get',{id:id});if(d&&d.session&&d.session.messages){msgs=d.session.messages;renderMsgs()}send('session.switch',{id:id})}catch(e){}closeSidebar()}
-
-async function delSession(id){if(!confirm('Delete this session?'))return;try{await send('session.delete',{id:id});sessions=sessions.filter(function(s){return s.id!==id});if(curSid===id){curSid=null;msgs=[];renderMsgs();if(sessions.length)switchSession(sessions[0].id)}renderSessions()}catch(e){}}
+  for(var i=0;i<sessions.length;i++)if(sessions[i].id===id){document.getElementById('hdr-title').textContent=sessions[i].name||'新对话';break}
+  try{var d=await send('session.get',{id:id});if(d&&d.session&&d.session.messages){msgs=d.session.messages;renderMsgs()}send('session.switch',{id:id})}catch(e){}closeSidebar()}
+async function delSession(id){if(!confirm('确定删除此会话？'))return;try{await send('session.delete',{id:id});sessions=sessions.filter(function(s){return s.id!==id});if(curSid===id){curSid=null;msgs=[];renderMsgs();if(sessions.length)switchSession(sessions[0].id)}renderSessions()}catch(e){}}
+async function renameSession(id){var name=prompt('重命名会话:',sessionName(id));if(!name)return;try{await send('session.update',{id:id,delta:{name:name}});for(var i=0;i<sessions.length;i++)if(sessions[i].id===id)sessions[i].name=name;renderSessions();if(id===curSid)document.getElementById('hdr-title').textContent=name}catch(e){}}
+function sessionName(id){for(var i=0;i<sessions.length;i++)if(sessions[i].id===id)return sessions[i].name||'新对话';return''}
 
 // ===== Messages =====
-function renderMsgs(){var c=document.getElementById('chat'),w=document.getElementById('welcome');if(!msgs.length){c.innerHTML='';c.appendChild(w);w.style.display='';return}w.style.display='none';var h='';
-for(var i=0;i<msgs.length;i++){var m=msgs[i];if(m.role==='system')continue;
-if(m.role==='user')h+='<div class="message msg-user"><div class="mb">'+esc(m.content)+'</div></div>';
-else{var agentTag=m.agent?'<span class="agent-tag">'+esc(m.agent)+'</span>':'';h+='<div class="message msg-ai"><div class="av">AI</div><div class="mb">'+agentTag+renderMd(m.content)+'</div></div>'}}c.innerHTML=h;c.appendChild(w);scrollToBot()}
+function renderMsgs(){
+  var c=document.getElementById('chat'),w=document.getElementById('welcome');
+  if(!msgs.length){c.innerHTML='';c.appendChild(w);w.style.display='';return}
+  w.style.display='none';var h='';
+  for(var i=0;i<msgs.length;i++){var m=msgs[i];if(m.role==='system')continue;
+    if(m.role==='user')h+='<div class="message msg-user"><div class="mb">'+esc(m.content)+'</div></div>';
+    else{var tag=m.agent?'<span class="agent-tag">'+esc(m.agent)+'</span>':'';h+='<div class="message msg-ai"><div class="av">AI</div><div class="mb">'+tag+renderMd(m.content)+'</div></div>'}}
+  c.innerHTML=h;c.appendChild(w);hlAll();scrollToBot()}
 
-function appendChunk(ch){if(!streaming){streaming=true;sBuf='';var c=document.getElementById('chat');var d=document.createElement('div');d.className='message msg-ai';d.innerHTML='<div class="av">AI</div><div class="mb"><div class="typing"><span></span><span></span><span></span></div></div>';c.appendChild(d);sEl=d.querySelector('.mb');scrollToBot()}sBuf+=ch;sEl.innerHTML=renderMd(sBuf);scrollToBot()}
+function appendChunk(ch){
+  if(!streaming){streaming=true;sBuf='';var c=document.getElementById('chat');var d=document.createElement('div');d.className='message msg-ai';d.innerHTML='<div class="av">AI</div><div class="mb"><div class="typing"><span></span><span></span><span></span></div></div>';c.appendChild(d);sEl=d.querySelector('.mb');scrollToBot();setStatus('正在生成...')}
+  sBuf+=ch;sEl.innerHTML=renderMd(sBuf);hlEl(sEl);scrollToBot()}
 
-function finishStream(msg,kbRef,error){streaming=false;if(error){if(sEl)sEl.innerHTML='<p style="color:var(--err)">'+esc(error)+'</p>';sBuf='';sEl=null;return}if(msg&&msg.content){msgs.push(msg);if(sEl)sEl.innerHTML=renderMd(msg.content)}sBuf='';sEl=null;scrollToBot();loadSessions();loadGRStats()}
+function finishStream(msg,error){
+  streaming=false;setStatus('已就绪');
+  if(error){if(sEl)sEl.innerHTML='<p style="color:var(--err)">'+esc(error)+'</p>';sBuf='';sEl=null;return}
+  if(msg&&msg.content){msgs.push(msg);if(sEl){sEl.innerHTML=renderMd(msg.content);addCopyBtns(sEl)}hlEl(sEl)}
+  sBuf='';sEl=null;scrollToBot();loadSessions();loadGRStats();
+  if(ttsOn&&msg&&msg.content)speak(msg.content)}
 
-async function sendMessage(){var inp=document.getElementById('msg-input'),t=inp.value.trim();if(!t||streaming)return;inp.value='';autoResize(inp);msgs.push({role:'user',content:t});renderMsgs();
-try{var opts={text:t,sessionId:curSid};if(appConfig.provider)opts.provider=appConfig.provider;if(appConfig.model)opts.model=appConfig.model;if(appConfig.temperature)opts.temperature=appConfig.temperature;if(appConfig.systemInstruction)opts.systemInstruction=appConfig.systemInstruction;await send('chat.send',opts)}catch(e){finishStream(null,null,e.message)}}
+async function sendMessage(){
+  var inp=document.getElementById('msg-input'),t=inp.value.trim();if(!t||streaming)return;
+  inp.value='';autoResize(inp);msgs.push({role:'user',content:t});renderMsgs();
+  var opts={text:t,sessionId:curSid};
+  var mp=document.getElementById('model-select').value.split(':');
+  opts.provider=mp[0];opts.model=mp.slice(1).join(':');
+  if(appConfig.temperature)opts.temperature=parseFloat(appConfig.temperature);
+  if(appConfig.systemInstruction)opts.systemInstruction=appConfig.systemInstruction;
+  if(modes.deepThink)opts.isDeepThink=true;
+  if(modes.agent)opts.isAgent=true;
+  if(modes.webSearch)opts.webSearch=true;
+  if(activeRole)opts.systemInstruction=activeRole.desc+(opts.systemInstruction?'\n'+opts.systemInstruction:'');
+  try{await send('chat.send',opts)}catch(e){finishStream(null,e.message)}}
 
 function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}}
 function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,150)+'px';document.getElementById('send-btn').disabled=!el.value.trim()||streaming}
+function setStatus(t){document.getElementById('status-bar').textContent=t}
+
+// ===== Markdown =====
+function renderMd(t){if(!t)return'';if(typeof marked!=='undefined'){marked.setOptions({breaks:true,gfm:true});var html=marked.parse(t);if(typeof DOMPurify!=='undefined')html=DOMPurify.sanitize(html);return html}
+  var s=t;s=s.replace(/```(\w*)\n([\s\S]*?)```/g,function(_,l,c){return'<pre><code>'+esc(c.trim())+'</code></pre>'});
+  s=s.replace(/`([^`\n]+)`/g,'<code>$1</code>');s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');s=s.replace(/\*(.+?)\*/g,'<em>$1</em>');
+  s=s.replace(/^#### (.+)$/gm,'<h4>$1</h4>');s=s.replace(/^### (.+)$/gm,'<h3>$1</h3>');s=s.replace(/^## (.+)$/gm,'<h2>$1</h2>');s=s.replace(/^# (.+)$/gm,'<h1>$1</h1>');
+  s=s.replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>');
+  s=s.replace(/^[-*] (.+)$/gm,'<li>$1</li>');s=s.replace(/((?:<li>.*<\/li>\n?)+)/g,'<ul>$1</ul>');
+  s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+  s=s.replace(/\n\n/g,'</p><p>');s=s.replace(/\n/g,'<br>');s='<p>'+s+'</p>';
+  return s}
+function hlAll(){if(typeof hljs!=='undefined')document.querySelectorAll('#chat pre code').forEach(function(b){try{hljs.highlightElement(b)}catch(e){}});addCopyBtns(document.getElementById('chat'))}
+function hlEl(el){if(typeof hljs!=='undefined'&&el)el.querySelectorAll('pre code').forEach(function(b){try{hljs.highlightElement(b)}catch(e){}})}
+function addCopyBtns(container){if(!container)return;container.querySelectorAll('pre').forEach(function(pre){if(pre.querySelector('.copy-btn'))return;var btn=document.createElement('button');btn.className='copy-btn';btn.textContent='复制';btn.onclick=function(){navigator.clipboard.writeText(pre.textContent.replace('复制','').trim());toast('已复制')};pre.style.position='relative';pre.appendChild(btn)})}
+
+// ===== Modes =====
+function toggleMode(m){modes[m]=!modes[m];var btnId=m==='webSearch'?'btn-search':m==='deepThink'?'btn-deep':m==='stream'?'btn-stream':'btn-agent';
+  var btn=document.getElementById(btnId);if(btn){if(modes[m])btn.classList.add('active');else btn.classList.remove('active')}
+  var labels={webSearch:'联网搜索',deepThink:'深度思考',stream:'流式输出',agent:'Agent 模式'};toast(labels[m]+(modes[m]?' 已开启':' 已关闭'))}
+
+// ===== Voice =====
+function toggleVoice(){
+  if(!('webkitSpeechRecognition' in window||'SpeechRecognition' in window)){toast('浏览器不支持语音识别');return}
+  if(voiceRec){voiceRec.stop();voiceRec=null;document.getElementById('btn-voice').classList.remove('active');toast('语音输入已关闭');return}
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;voiceRec=new SR();voiceRec.lang='zh-CN';voiceRec.continuous=true;voiceRec.interimResults=true;
+  voiceRec.onresult=function(e){var t='';for(var i=e.resultIndex;i<e.results.length;i++)t+=e.results[i][0].transcript;document.getElementById('msg-input').value+=t;autoResize(document.getElementById('msg-input'))};
+  voiceRec.onerror=function(){toast('语音识别错误')};voiceRec.onend=function(){voiceRec=null;document.getElementById('btn-voice').classList.remove('active')};
+  voiceRec.start();document.getElementById('btn-voice').classList.add('active');toast('语音输入已开启')}
+
+// ===== TTS =====
+function toggleTTS(){ttsOn=!ttsOn;var btn=document.getElementById('btn-tts');if(ttsOn)btn.classList.add('active');else btn.classList.remove('active');toast('朗读回复'+(ttsOn?' 已开启':' 已关闭'))}
+function speak(text){if(!text||!('speechSynthesis' in window))return;var u=new SpeechSynthesisUtterance(text.replace(/[#*`>\[\]()]/g,''));u.lang='zh-CN';u.rate=1;speechSynthesis.speak(u)}
 
 // ===== KB =====
-async function loadKBDocs(){try{var d=await send('kb.list');var docs=d.documents||[];var el=document.getElementById('kb-docs');if(!docs.length){el.innerHTML='<div class="dr-empty">No documents</div>';return}
-var h='';for(var i=0;i<docs.length;i++){var dc=docs[i];h+='<div class="dr-item"><div class="info"><div class="title">'+esc(dc.fileName)+'</div><div class="sub">'+dc.chunkCount+' chunks | '+dc.uploadedAt.substring(0,10)+'</div></div><div class="actions"><button class="dr-btn sm danger" onclick="delKBDoc(\''+dc.id+'\')">&times;</button></div></div>'}el.innerHTML=h}catch(e){}}
-
-async function importKBUrl(){var url=document.getElementById('kb-url').value.trim();if(!url)return;toast('Importing...');try{var d=await send('kb.importUrl',{url:url});if(d.success){toast('Imported: '+d.fileName);document.getElementById('kb-url').value='';loadKBDocs();loadKBStats()}else toast('Failed: '+d.error)}catch(e){toast('Error: '+e.message)}}
-
-async function searchKB(){var q=document.getElementById('kb-query').value.trim();if(!q)return;try{var d=await send('kb.search',{query:q,topK:5});var el=document.getElementById('kb-results');var r=d.results||[];if(!r.length){el.innerHTML='<div class="dr-empty">No results</div>';return}
-var h='';for(var i=0;i<r.length;i++){h+='<div class="dr-item" style="flex-direction:column;align-items:flex-start;gap:4px"><div class="info"><div class="title">'+esc(r[i].fileName)+'</div></div><div style="font-size:12px;color:var(--t2);line-height:1.4">'+esc(r[i].text.substring(0,200))+'</div></div>'}el.innerHTML=h}catch(e){toast(e.message)}}
-
-async function delKBDoc(id){if(!confirm('Delete document?'))return;try{await send('kb.delete',{docId:id});loadKBDocs();loadKBStats();toast('Deleted')}catch(e){toast(e.message)}}
-
-async function loadKBStats(){try{var d=await send('kb.stats');document.getElementById('kb-stats').innerHTML='Docs: '+d.totalDocs+' | Chunks: '+d.totalChunks+' | Mode: '+d.searchMode+(d.embeddingAvailable?' | Embedding: ready':'')}catch(e){}}
+async function loadKBDocs(){try{var d=await send('kb.list');var docs=d.documents||d.docs||[];var el=document.getElementById('kb-docs');if(!docs.length){el.innerHTML='<div class="dr-empty">暂无文档</div>';return}
+  var h='';for(var i=0;i<docs.length;i++){var dc=docs[i];h+='<div class="dr-item"><div class="info"><div class="title">'+esc(dc.fileName||dc.name)+'</div><div class="sub">'+(dc.chunkCount||0)+' 个片段 | '+(dc.uploadedAt?dc.uploadedAt.substring(0,10):'')+'</div></div><div class="actions"><button class="dr-btn sm danger" onclick="delKBDoc(\''+dc.id+'\')">&times;</button></div></div>'}el.innerHTML=h}catch(e){}}
+async function importKBUrl(){var url=document.getElementById('kb-url').value.trim();if(!url)return;toast('导入中...');try{var d=await send('kb.importUrl',{url:url});if(d.success){toast('导入成功: '+(d.fileName||''));document.getElementById('kb-url').value='';loadKBDocs();loadKBStats()}else toast('导入失败: '+(d.error||'未知错误'))}catch(e){toast('错误: '+e.message)}}
+async function searchKB(){var q=document.getElementById('kb-query').value.trim();if(!q)return;try{var d=await send('kb.search',{query:q,topK:5});var el=document.getElementById('kb-results');var r=d.results||[];if(!r.length){el.innerHTML='<div class="dr-empty">未找到相关内容</div>';return}
+  var h='';for(var i=0;i<r.length;i++){h+='<div class="dr-item" style="flex-direction:column;align-items:flex-start;gap:4px"><div class="info"><div class="title">'+esc(r[i].fileName||r[i].source||'')+'</div></div><div style="font-size:12px;color:var(--t2);line-height:1.4">'+esc((r[i].text||'').substring(0,200))+'</div></div>'}el.innerHTML=h}catch(e){toast(e.message)}}
+async function delKBDoc(id){if(!confirm('确定删除此文档？'))return;try{await send('kb.delete',{docId:id});loadKBDocs();loadKBStats();toast('已删除')}catch(e){toast(e.message)}}
+async function loadKBStats(){try{var d=await send('kb.stats');document.getElementById('kb-stats').innerHTML='文档: '+(d.totalDocs||0)+' | 片段: '+(d.totalChunks||0)+(d.searchMode?' | 模式: '+d.searchMode:'')+(d.embeddingAvailable?' | 嵌入: 就绪':'')}catch(e){}}
 
 // ===== Memory =====
-async function loadMemList(){try{var d=await send('memory.list',{limit:30});var m=d.memories||[];var el=document.getElementById('mem-list');if(!m.length){el.innerHTML='<div class="dr-empty">No memories</div>';return}
-var h='';for(var i=0;i<m.length;i++){var t=m[i].tags?'<span class="dr-tag">'+esc(m[i].tags)+'</span>':'';h+='<div class="dr-item"><div class="info"><div class="title">'+esc(m[i].content)+'</div><div class="sub">'+t+(m[i].created_at?' | '+new Date(m[i].created_at*1000).toLocaleDateString():'')+'</div></div><div class="actions"><button class="dr-btn sm danger" onclick="delMem('+m[i].id+')">&times;</button></div></div>'}el.innerHTML=h}catch(e){}}
-
-async function addMem(){var c=document.getElementById('mem-input').value.trim(),t=document.getElementById('mem-tags').value.trim();if(!c)return;try{await send('memory.add',{content:c,tags:t});document.getElementById('mem-input').value='';document.getElementById('mem-tags').value='';loadMemList();loadMemStats();toast('Memory added')}catch(e){toast(e.message)}}
-
-async function delMem(id){try{await send('memory.delete',{id:id});loadMemList();loadMemStats()}catch(e){toast(e.message)}}
-
-async function searchMem(){var q=document.getElementById('mem-query').value.trim();if(!q){loadMemList();return}try{var d=await send('memory.search',{query:q,limit:10});var m=d.results||[];var el=document.getElementById('mem-list');if(!m.length){el.innerHTML='<div class="dr-empty">No results</div>';return}
-var h='';for(var i=0;i<m.length;i++){h+='<div class="dr-item"><div class="info"><div class="title">'+esc(m[i].content)+'</div><div class="sub">'+(m[i].tags||'')+'</div></div></div>'}el.innerHTML=h}catch(e){}}
-
-async function loadMemStats(){try{var d=await send('memory.getStats');document.getElementById('mem-stats').textContent='Total: '+d.total+' memories | Tags: '+JSON.stringify(d.tags)}catch(e){}}
-
-async function loadMemProfile(){try{var d=await send('memory.getProfile');var p=d.profile||{};var el=document.getElementById('mem-profile');var keys=Object.keys(p).filter(function(k){return k!=='updated_at'});if(!keys.length){el.textContent='No profile yet';return}
-var h='';keys.forEach(function(k){h+='<div style="margin-bottom:4px"><strong>'+k+':</strong> '+(typeof p[k]==='object'?JSON.stringify(p[k]):p[k])+'</div>'});el.innerHTML=h}catch(e){}}
+async function loadMemList(){try{var d=await send('memory.list',{limit:30});var m=d.memories||[];var el=document.getElementById('mem-list');if(!m.length){el.innerHTML='<div class="dr-empty">暂无记忆</div>';return}
+  var h='';for(var i=0;i<m.length;i++){var t=m[i].tags?'<span class="dr-tag">'+esc(m[i].tags)+'</span>':'';h+='<div class="dr-item"><div class="info"><div class="title">'+esc(m[i].content)+'</div><div class="sub">'+t+(m[i].created_at?' | '+new Date(m[i].created_at*1000).toLocaleDateString():'')+'</div></div><div class="actions"><button class="dr-btn sm danger" onclick="delMem('+m[i].id+')">&times;</button></div></div>'}el.innerHTML=h}catch(e){}}
+async function addMem(){var c=document.getElementById('mem-input').value.trim(),t=document.getElementById('mem-tags').value.trim();if(!c)return;try{await send('memory.add',{content:c,tags:t});document.getElementById('mem-input').value='';document.getElementById('mem-tags').value='';loadMemList();loadMemStats();toast('记忆已添加')}catch(e){toast(e.message)}}
+async function delMem(id){try{await send('memory.delete',{id:id});loadMemList();loadMemStats();toast('已删除')}catch(e){toast(e.message)}}
+async function searchMem(){var q=document.getElementById('mem-query').value.trim();if(!q){loadMemList();return}try{var d=await send('memory.search',{query:q,limit:10});var m=d.results||[];var el=document.getElementById('mem-list');if(!m.length){el.innerHTML='<div class="dr-empty">未找到相关记忆</div>';return}
+  var h='';for(var i=0;i<m.length;i++){h+='<div class="dr-item"><div class="info"><div class="title">'+esc(m[i].content)+'</div><div class="sub">'+(m[i].tags||'')+'</div></div></div>'}el.innerHTML=h}catch(e){}}
+async function loadMemStats(){try{var d=await send('memory.getStats');document.getElementById('mem-stats').textContent='共 '+(d.total||0)+' 条记忆 | 标签: '+JSON.stringify(d.tags||{})}catch(e){}}
+async function loadMemProfile(){try{var d=await send('memory.getProfile');var p=d.profile||{};var el=document.getElementById('mem-profile');var keys=Object.keys(p).filter(function(k){return k!=='updated_at'});if(!keys.length){el.textContent='暂无画像';return}
+  var h='';keys.forEach(function(k){h+='<div style="margin-bottom:4px"><strong>'+k+':</strong> '+(typeof p[k]==='object'?JSON.stringify(p[k]):p[k])+'</div>'});el.innerHTML=h}catch(e){}}
 
 // ===== Tools =====
-var toolDefs=[];
-async function loadTools(){try{var d=await send('tool.definitions');toolDefs=d.definitions||[];var sel=document.getElementById('tool-select');var h='<option value="">-- Select --</option>';for(var i=0;i<toolDefs.length;i++)h+='<option value="'+toolDefs[i].function.name+'">'+esc(toolDefs[i].function.name)+' - '+esc(toolDefs[i].function.description)+'</option>';sel.innerHTML=h;
-var el=document.getElementById('tool-list');h='';for(var i=0;i<toolDefs.length;i++){var f=toolDefs[i].function;h+='<div class="dr-item"><div class="info"><div class="title">'+esc(f.name)+'</div><div class="sub">'+esc(f.description)+'</div></div></div>'}el.innerHTML=h}catch(e){}}
-
+async function loadTools(){try{var d=await send('tool.definitions');toolDefs=d.definitions||[];var sel=document.getElementById('tool-select');var h='<option value="">-- 选择 --</option>';for(var i=0;i<toolDefs.length;i++)h+='<option value="'+toolDefs[i].function.name+'">'+esc(toolDefs[i].function.name)+' - '+esc(toolDefs[i].function.description)+'</option>';sel.innerHTML=h;
+  var el=document.getElementById('tool-list');h='';for(var i=0;i<toolDefs.length;i++){var f=toolDefs[i].function;h+='<div class="dr-item"><div class="info"><div class="title">'+esc(f.name)+'</div><div class="sub">'+esc(f.description)+'</div></div></div>'}el.innerHTML=h}catch(e){}}
 function showToolSchema(){var name=document.getElementById('tool-select').value;var el=document.getElementById('tool-params');if(!name){el.innerHTML='';return}
-for(var i=0;i<toolDefs.length;i++){if(toolDefs[i].function.name===name){var params=toolDefs[i].function.parameters;var props=params.properties||{};var req=params.required||[];var h='';var keys=Object.keys(props);for(var j=0;j<keys.length;j++){var k=keys[j],p=props[k];var isReq=req.indexOf(k)>=0;h+='<div class="dr-row"><label>'+esc(k)+(isReq?' *':'')+'</label><input class="dr-input" data-param="'+k+'" placeholder="'+esc(p.description||'')+'" style="flex:1"></div>'}el.innerHTML=h;return}}el.innerHTML=''}
+  for(var i=0;i<toolDefs.length;i++){if(toolDefs[i].function.name===name){var params=toolDefs[i].function.parameters;var props=(params&&params.properties)||{};var req=(params&&params.required)||[];var h='';var keys=Object.keys(props);for(var j=0;j<keys.length;j++){var k=keys[j],p=props[k];var isReq=req.indexOf(k)>=0;h+='<div class="dr-row"><label>'+esc(k)+(isReq?' *':'')+'</label><input class="dr-input" data-param="'+k+'" placeholder="'+esc(p.description||'')+'" style="flex:1"></div>'}el.innerHTML=h;return}}el.innerHTML=''}
+async function executeTool(){var name=document.getElementById('tool-select').value;if(!name){toast('请先选择工具');return}var inputs=document.querySelectorAll('#tool-params input[data-param]');var args={};inputs.forEach(function(inp){if(inp.value.trim())args[inp.dataset.param]=inp.value.trim()});
+  document.getElementById('tool-result').textContent='执行中...';try{var d=await send('tool.execute',{name:name,arguments:args});document.getElementById('tool-result').textContent=d.result||JSON.stringify(d,null,2)}catch(e){document.getElementById('tool-result').textContent='错误: '+e.message}}
 
-async function executeTool(){var name=document.getElementById('tool-select').value;if(!name){toast('Select a tool');return}var inputs=document.querySelectorAll('#tool-params input[data-param]');var args={};inputs.forEach(function(inp){if(inp.value.trim())args[inp.dataset.param]=inp.value.trim()});
-document.getElementById('tool-result').textContent='Executing...';try{var d=await send('tool.execute',{name:name,arguments:args});document.getElementById('tool-result').textContent=d.result||JSON.stringify(d,null,2)}catch(e){document.getElementById('tool-result').textContent='Error: '+e.message}}
+// ===== Prompts =====
+function loadPrompts(){try{var s=localStorage.getItem('ai-prompts');if(s)savedPrompts=JSON.parse(s)}catch(e){}renderPrompts()}
+function renderPrompts(){var el=document.getElementById('prompt-list');if(!savedPrompts.length){el.innerHTML='<div class="dr-empty">暂无提示词</div>';return}
+  var h='';for(var i=0;i<savedPrompts.length;i++){h+='<div class="dr-item"><div class="info"><div class="title">'+esc(savedPrompts[i].name)+'</div><div class="sub">'+esc(savedPrompts[i].text.substring(0,60))+'</div></div><div class="actions"><button class="dr-btn sm sec" onclick="usePrompt('+i+')">使用</button><button class="dr-btn sm danger" onclick="delPrompt('+i+')">&times;</button></div></div>'}el.innerHTML=h}
+function addPrompt(){var n=document.getElementById('prompt-name').value.trim(),t=document.getElementById('prompt-text').value.trim();if(!n||!t){toast('请填写名称和内容');return}savedPrompts.push({name:n,text:t});try{localStorage.setItem('ai-prompts',JSON.stringify(savedPrompts))}catch(e){}document.getElementById('prompt-name').value='';document.getElementById('prompt-text').value='';renderPrompts();toast('提示词已保存')}
+function usePrompt(i){document.getElementById('msg-input').value=savedPrompts[i].text;autoResize(document.getElementById('msg-input'));closeDrawer();toast('已填入提示词')}
+function delPrompt(i){savedPrompts.splice(i,1);try{localStorage.setItem('ai-prompts',JSON.stringify(savedPrompts))}catch(e){}renderPrompts()}
+
+// ===== Roles =====
+function renderRoles(){var el=document.getElementById('role-list');var h='';for(var i=0;i<roles.length;i++){var r=roles[i],act=activeRole&&activeRole.name===r.name;h+='<div class="dr-item'+(act?' style="border-color:var(--pri)"':'')+'"><div class="info"><div class="title">'+esc(r.name)+'</div><div class="sub">'+esc(r.desc.substring(0,50))+'</div></div><div class="actions"><button class="dr-btn sm'+(act?'':' sec')+'" onclick="setRole('+i+')">'+(act?'使用中':'选用')+'</button></div></div>'}el.innerHTML=h}
+function setRole(i){if(activeRole&&activeRole.name===roles[i].name){activeRole=null;toast('已取消角色')}else{activeRole=roles[i];toast('已切换角色: '+roles[i].name)}renderRoles()}
+function addRole(){var n=document.getElementById('role-name').value.trim(),d=document.getElementById('role-desc').value.trim();if(!n||!d){toast('请填写名称和描述');return}roles.push({name:n,desc:d});document.getElementById('role-name').value='';document.getElementById('role-desc').value='';renderRoles();toast('角色已保存')}
+
+// ===== Export =====
+async function exportSession(){if(!curSid||!msgs.length){toast('当前会话为空');return}
+  var name=sessionName(curSid);var text='# '+name+'\n\n';
+  for(var i=0;i<msgs.length;i++){var m=msgs[i];if(m.role==='user')text+='## 用户\n'+m.content+'\n\n';else if(m.role==='assistant')text+='## AI\n'+m.content+'\n\n'}
+  var blob=new Blob([text],{type:'text/markdown;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'.md';a.click();toast('导出成功')}
+
+// ===== Apps Menu =====
+function toggleApps(){var p=document.getElementById('apps-panel');p.classList.toggle('open')}
 
 // ===== Drawer =====
 var openDr=null;
 function openDrawer(name){if(openDr)closeDrawer();openDr=name;document.getElementById('dr-'+name).classList.add('open');document.getElementById('dr-ov').classList.add('open');
-if(name==='kb'){loadKBDocs();loadKBStats()}
-if(name==='mem'){loadMemList();loadMemStats();loadMemProfile()}
-if(name==='tools')loadTools();
-if(name==='settings'){loadConfig();loadGRStats()}}
-
+  if(name==='kb'){loadKBDocs();loadKBStats()}
+  if(name==='mem'){loadMemList();loadMemStats();loadMemProfile()}
+  if(name==='tools')loadTools();
+  if(name==='settings'){loadConfig();loadGRStats()}
+  if(name==='prompts')loadPrompts();
+  if(name==='roles')renderRoles();
+  document.getElementById('apps-panel').classList.remove('open')}
 function closeDrawer(){if(!openDr)return;document.getElementById('dr-'+openDr).classList.remove('open');document.getElementById('dr-ov').classList.remove('open');openDr=null}
+
+// ===== Context Menu =====
+function showCtxMenu(e,sid){e.preventDefault();e.stopPropagation();var m=document.getElementById('ctx-menu');
+  m.innerHTML='<button onclick="renameSession(\''+sid+'\');hideCtxMenu()"><span class="mi-out">edit</span>重命名</button>'+
+    '<button onclick="switchSession(\''+sid+'\');hideCtxMenu()"><span class="mi-out">open_in_new</span>打开</button>'+
+    '<div class="sep"></div>'+
+    '<button onclick="exportCtx(\''+sid+'\');hideCtxMenu()"><span class="mi-out">download</span>导出 Markdown</button>'+
+    '<div class="sep"></div>'+
+    '<button onclick="delSession(\''+sid+'\');hideCtxMenu()"><span class="mi-out">delete</span>删除</button>';
+  m.style.display='block';m.style.left=Math.min(e.clientX,window.innerWidth-180)+'px';m.style.top=Math.min(e.clientY,window.innerHeight-200)+'px';
+  document.addEventListener('click',hideCtxMenu,{once:true})}
+function hideCtxMenu(){document.getElementById('ctx-menu').style.display='none'}
+async function exportCtx(sid){try{var d=await send('session.get',{id:sid});if(d&&d.session&&d.session.messages){var text='# '+(d.session.name||'会话')+'\n\n';d.session.messages.forEach(function(m){if(m.role!=='system')text+='## '+(m.role==='user'?'用户':'AI')+'\n'+m.content+'\n\n'});var blob=new Blob([text],{type:'text/markdown;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(d.session.name||'会话')+'.md';a.click();toast('导出成功')}}catch(e){toast(e.message)}}
+
+// ===== Model =====
+function onModelChange(){var v=document.getElementById('model-select').value;var parts=v.split(':');appConfig.provider=parts[0];appConfig.model=parts.slice(1).join(':');saveSetting('defaultProvider',appConfig.provider);saveSetting('defaultModel',appConfig.model)}
 
 // ===== Sidebar =====
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('overlay').classList.toggle('open')}
@@ -415,33 +740,22 @@ function closeSidebar(){document.getElementById('sidebar').classList.remove('ope
 // ===== Scroll =====
 var chatEl=document.getElementById('chat');
 chatEl.addEventListener('scroll',function(){var d=chatEl.scrollHeight-chatEl.scrollTop-chatEl.clientHeight;var b=document.getElementById('scroll-bot');d>120?b.classList.add('vis'):b.classList.remove('vis')});
-function scrollToBot(){document.getElementById('chat').scrollTop=document.getElementById('chat').scrollHeight}
+function scrollToBot(){chatEl.scrollTop=chatEl.scrollHeight}
 
 // ===== Utils =====
-function esc(s){if(!s)return '';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
-
-function renderMd(t){if(!t)return '';var s=t;
-s=s.replace(/```(\w*)\n([\s\S]*?)```/g,function(_,l,c){return '<pre><code>'+esc(c.trim())+'</code></pre>'});
-s=s.replace(/`([^`\n]+)`/g,'<code>$1</code>');
-s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-s=s.replace(/\*(.+?)\*/g,'<em>$1</em>');
-s=s.replace(/^#### (.+)$/gm,'<h4>$1</h4>');s=s.replace(/^### (.+)$/gm,'<h3>$1</h3>');s=s.replace(/^## (.+)$/gm,'<h2>$1</h2>');s=s.replace(/^# (.+)$/gm,'<h1>$1</h1>');
-s=s.replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>');
-s=s.replace(/^[-*] (.+)$/gm,'<li>$1</li>');s=s.replace(/((?:<li>.*<\/li>\n?)+)/g,'<ul>$1</ul>');
-s=s.replace(/^\d+\. (.+)$/gm,'<li>$1</li>');
-s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" style="color:var(--pri)">$1</a>');
-s=s.replace(/\n\n/g,'</p><p>');s=s.replace(/\n/g,'<br>');s='<p>'+s+'</p>';
-s=s.replace(/<p>\s*<\/p>/g,'');s=s.replace(/<p>\s*(<h[1-6]>)/g,'$1');s=s.replace(/(<\/h[1-6]>)\s*<\/p>/g,'$1');
-s=s.replace(/<p>\s*(<pre>)/g,'$1');s=s.replace(/(<\/pre>)\s*<\/p>/g,'$1');
-s=s.replace(/<p>\s*(<ul>)/g,'$1');s=s.replace(/(<\/ul>)\s*<\/p>/g,'$1');
-s=s.replace(/<p>\s*(<blockquote>)/g,'$1');s=s.replace(/(<\/blockquote>)\s*<\/p>/g,'$1');
-return s}
-
+function esc(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function toast(msg){var d=document.createElement('div');d.className='toast';d.textContent=msg;document.body.appendChild(d);setTimeout(function(){d.remove()},3000)}
 
 // ===== Init =====
 window.addEventListener('load',function(){connect();document.getElementById('msg-input').focus();
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){})});
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});
+  document.addEventListener('click',function(e){if(!e.target.closest('#apps-panel')&&!e.target.closest('[onclick*="toggleApps"]'))document.getElementById('apps-panel').classList.remove('open')});
+  document.addEventListener('keydown',function(e){
+    if(e.ctrlKey&&e.key==='n'){e.preventDefault();createSession()}
+    if(e.ctrlKey&&e.key==='/'){e.preventDefault();openDrawer('settings')}
+    if(e.key==='Escape'){closeDrawer();hideCtxMenu();if(streaming){try{send('chat.cancel',{sessionId:curSid})}catch(ex){}}}
+  });
+});
 </script>
 </body>
 </html>
