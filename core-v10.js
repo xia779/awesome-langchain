@@ -1775,7 +1775,7 @@ Core.renderMarkdown = function(text) {
     // 创建转发面板
     var overlay = document.createElement('div');
     overlay.id = 'forwardOverlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:5000;display:flex;justify-content:center;align-items:center;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:5000;display:flex;justify-content:center;align-items:center;';
     
     var panel = document.createElement('div');
     panel.style.cssText = 'background:#1e1e1e;border:1px solid #2a2a2a;border-radius:16px;width:360px;max-height:500px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5);';

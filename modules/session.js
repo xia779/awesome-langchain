@@ -801,15 +801,13 @@ function renderMessages(id, ensureMsgIndex) {
     }
   }
   
-  // ===== 原子化渲染：禁止入场动画 → 一次性替换 DOM → 恢复动画 =====
+  // ===== 原子化渲染：禁止入场动画 → 一次性替换 DOM → 设置滚动 → 恢复动画 =====
   container.classList.add('batch-render');
 
-  // 预设滚动到底部（在替换前设置，避免新内容先显示在顶部再跳到底部）
-  container.scrollTop = container.scrollHeight;
-
+  // 原子替换 DOM（replaceChildren 是单次同步操作，浏览器不会在中间绘制空白帧）
   container.replaceChildren(fragment);
 
-  // 确保滚动位置正确（布局已更新，scrollHeight 反映新内容）
+  // 替换后立即设置滚动到底部（与 replaceChildren 同步执行，浏览器不会在中间绘制，用户直接看到新内容在正确位置）
   container.scrollTop = container.scrollHeight;
 
   // 批量添加代码按钮（单次 setTimeout 替代逐条 setTimeout 100ms）
