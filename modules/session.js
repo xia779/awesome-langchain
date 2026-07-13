@@ -659,12 +659,14 @@ function switchSession(id) {
     var isGenerating = apiState && apiState.isGenerating;
     if (Core.dom.sendBtn) {
       if (isGenerating) {
-        Core.dom.sendBtn.textContent = '⏹';
+        Core.dom.sendBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">stop</span>';
         Core.dom.sendBtn.style.background = '#ef4444';
+        Core.dom.sendBtn.title = '停止生成';
         Core.dom.sendBtn.disabled = false;
       } else {
-        Core.dom.sendBtn.textContent = '↑';
+        Core.dom.sendBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">arrow_upward</span>';
         Core.dom.sendBtn.style.background = '';
+        Core.dom.sendBtn.title = '发送';
         Core.dom.sendBtn.disabled = false;
       }
     }
@@ -1282,7 +1284,12 @@ function deleteSessionWithChildren(id) {
     for (var i = 0; i < childrenIds.length; i++) { deleteSessionWithChildren(childrenIds[i]); }
     delete sessions[id];
     
-    // 🔧 从所有可能的目录删除（动态计算路径）
+    // 🔧 从 SQLite 删除（loadSessions 优先从 SQLite 加载，不删 DB 行会导致删除的会话重启后重新出现）
+    if (Core.db && Core.db.deleteSession) {
+      try { Core.db.deleteSession(id); } catch(e) { console.warn('⚠️ SQLite 删除会话失败:', e.message); }
+    }
+    
+    // 🔧 从所有可能的目录删除 JSON 文件（动态计算路径）
     var deleted = false;
     var globalRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
     var possibleDirs = [
@@ -1297,8 +1304,6 @@ function deleteSessionWithChildren(id) {
         fs.unlinkSync(filePath);
         deleted = true;
       }
-    }
-    if (!deleted) {
     }
   } catch (err) { console.error('❌ 删除会话失败:', err.message); }
   var ids = Object.keys(sessions).filter(function(k) { return !sessions[k].parentId; });

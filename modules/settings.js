@@ -1358,6 +1358,9 @@ function _setDarkThemeVars(root) {
 function _loadColorInputs() {
   var c = Core.config || {};
   var map = {
+    bgInput: c.chatBackground || '#0d0d0d',
+    bubbleUserInput: c.chatBubbleUser || '#3b82f6',
+    bubbleAIInput: c.chatBubbleAI || '#1a1a1a',
     sidebarColorInput: c.sidebarColor || '#141414',
     panelColorInput: c.panelColor || '#141414',
     accentColorInput: c.accentColor || '#3b82f6',
@@ -1373,24 +1376,43 @@ function _applyCustomColors(skipSave) {
   var root = document.documentElement;
   var c = Core.config || {};
   // 优先读 DOM 输入框（用户正在拖动色盘时取实时值），否则回退到 config
+  var bg = document.getElementById('bgInput');
+  var bubbleUser = document.getElementById('bubbleUserInput');
+  var bubbleAI = document.getElementById('bubbleAIInput');
   var sidebar = document.getElementById('sidebarColorInput');
   var panel = document.getElementById('panelColorInput');
   var accent = document.getElementById('accentColorInput');
   var textColor = document.getElementById('textColorInput');
 
+  var bgVal = (bg && bg.value) || c.chatBackground || '#0d0d0d';
+  var bubbleUserVal = (bubbleUser && bubbleUser.value) || c.chatBubbleUser || '#3b82f6';
+  var bubbleAIVal = (bubbleAI && bubbleAI.value) || c.chatBubbleAI || '#1a1a1a';
   var sidebarVal = (sidebar && sidebar.value) || c.sidebarColor || '#141414';
   var panelVal = (panel && panel.value) || c.panelColor || '#141414';
   var accentVal = (accent && accent.value) || c.accentColor || '#3b82f6';
   var textVal = (textColor && textColor.value) || c.textColor || '#e8e8e8';
 
+  // 聊天背景
+  root.style.setProperty('--bubble-user', bubbleUserVal);
+  root.style.setProperty('--bubble-ai', bubbleAIVal);
   root.style.setProperty('--sidebar-bg', sidebarVal);
   root.style.setProperty('--panel', panelVal);
   root.style.setProperty('--primary', accentVal);
   root.style.setProperty('--text', textVal);
 
+  // 聊天容器背景 — 实时预览
+  var chatContainer = document.getElementById('chatContainer');
+  if (chatContainer && bgVal.startsWith('#')) {
+    chatContainer.style.background = bgVal;
+    chatContainer.style.backgroundImage = 'none';
+  }
+
   // skipSave=true 时只更新 CSS（颜色拖动期间的实时预览），不触发 saveConfig/configChanged 级联
   if (!skipSave) {
     Core.saveConfig({
+      chatBackground: bgVal,
+      chatBubbleUser: bubbleUserVal,
+      chatBubbleAI: bubbleAIVal,
       sidebarColor: sidebarVal,
       panelColor: panelVal,
       accentColor: accentVal,
@@ -1484,7 +1506,7 @@ module.exports = {
     }
 
     // ===== 自定义颜色：input 仅更新 CSS（实时预览），change 持久化到 config =====
-    var colorPickers = ['sidebarColorInput', 'panelColorInput', 'accentColorInput', 'textColorInput'];
+    var colorPickers = ['bgInput', 'bubbleUserInput', 'bubbleAIInput', 'sidebarColorInput', 'panelColorInput', 'accentColorInput', 'textColorInput'];
     colorPickers.forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {

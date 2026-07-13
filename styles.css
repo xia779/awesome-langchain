@@ -36,6 +36,11 @@
       --overlay-light: rgba(255,255,255,0.1);
       --primary-overlay: rgba(59,130,246,0.1);
       --primary-overlay-strong: rgba(59,130,246,0.3);
+      /* 气泡颜色变量 */
+      --bubble-user: #3b82f6;
+      --bubble-ai: #1a1a1a;
+      --bubble-user-text: #ffffff;
+      --bubble-ai-text: #e8e8e8;
     }
 
     /* ===== 通用工具类（从内联样式提取） ===== */
@@ -917,15 +922,15 @@
 
     .msg.user {
       align-self: flex-end;
-      background: var(--primary);
-      color: var(--white);
+      background: var(--bubble-user);
+      color: var(--bubble-user-text);
       border-bottom-right-radius: 4px;
       min-width: 100px;
     }
     .msg.ai {
       align-self: flex-start;
-      background: var(--bg-secondary);
-      color: var(--text);
+      background: var(--bubble-ai);
+      color: var(--bubble-ai-text);
       border-bottom-left-radius: 4px;
       border: 1px solid var(--border);
       box-shadow: 0 1px 3px rgba(0,0,0,0.2);
@@ -1750,6 +1755,18 @@
     #send:active { transform: scale(0.92); }
     #send:disabled { opacity: 0.3; cursor: not-allowed; transform: none; background: #555; }
 
+    /* 语音按钮 — 位于 .input-row 中，发送键左侧 */
+    #voiceBtn {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--text-secondary);
+    }
+    #voiceBtn:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+    #voiceBtn .material-icons-outlined { font-size: 20px; }
+
     /* 语音录制状态 */
     #voiceBtn.recording {
       background: rgba(239,68,68,0.15) !important;
@@ -2223,8 +2240,8 @@
       background: linear-gradient(180deg, var(--bg) 0%, var(--text-dark) 100%);
     }
     body.dark-theme .msg.ai {
-      background: var(--text-dark);
-      color: var(--text);
+      background: var(--bubble-ai);
+      color: var(--bubble-ai-text);
       border-color: var(--border-alt);
     }
     body.dark-theme .msg.ai .msg-timestamp {
@@ -2866,9 +2883,9 @@
       background: #f8fafc;
     }
     body.light-theme .msg.ai {
-      background: #ffffff;
+      background: var(--bubble-ai);
       border-color: #e2e8f0;
-      color: var(--text);
+      color: var(--bubble-ai-text);
     }
     body.light-theme .chat-item {
       color: #64748b;

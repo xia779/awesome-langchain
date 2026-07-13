@@ -36,7 +36,7 @@ function applyTheme() {
     container.style.backgroundSize = 'cover';
     container.style.backgroundPosition = 'center';
   } else {
-    container.style.background = '#141425';
+    container.style.background = '#0d0d0d';
     container.style.backgroundImage = 'none';
   }
   Core.emit('themeApplied', c);
@@ -44,8 +44,8 @@ function applyTheme() {
 
 function toggle() {
   const c = Core.config;
-  const current = c.chatBackground || '#141425';
-  c.chatBackground = current === '#141425' ? '#f0f0f0' : '#141425';
+  const current = c.chatBackground || '#0d0d0d';
+  c.chatBackground = current === '#0d0d0d' ? '#f0f0f0' : '#0d0d0d';
   if (Core.saveConfig) Core.saveConfig({ chatBackground: c.chatBackground });
   applyTheme();
 }

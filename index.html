@@ -162,7 +162,6 @@
         <button id="agentModeBtn" class="icon-btn mode-tag" title="Agent 模式 — 启用后 AI 可自主调用工具完成复杂任务"><span class="material-icons-outlined">smart_toy</span></button>
       </div>
       <div class="input-right-actions">
-        <button id="voiceBtn" class="icon-btn" title="语音输入"><span class="material-icons-outlined">mic</span></button>
         <button id="speakBtn" class="icon-btn" title="朗读回复"><span class="material-icons-outlined">volume_up</span></button>
         <button id="imageBtn" class="icon-btn" title="上传图片"><span class="material-icons-outlined">image</span></button>
         <button id="screenshotBtn" class="icon-btn" title="截图分析 (Ctrl+Shift+S)"><span class="material-icons-outlined">screenshot_monitor</span></button>
@@ -201,6 +200,7 @@
         </select>
       </div>
       <textarea id="input" placeholder="输入消息，Shift+Enter换行..." rows="1"></textarea>
+      <button id="voiceBtn" class="icon-btn" title="语音输入"><span class="material-icons-outlined">mic</span></button>
       <button id="send" title="发送" onclick="if(window.Core&&Core.api&&Core.api.sendMessage)Core.api.sendMessage()"><span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">arrow_upward</span></button>
     </div>
     <div id="status">✅ 已就绪</div>
@@ -287,17 +287,19 @@
       <div class="api-group">
         <label>应用名称</label>
         <input id="appNameInput" value="AI智能体" />
-        <label>聊天背景（图片路径或颜色）</label>
-        <input id="bgInput" placeholder="#f8fafc 或图片路径" />
       </div>
       <div class="api-group color-row">
+        <div class="color-item">
+          <label>聊天背景</label>
+          <input id="bgInput" type="color" value="#0d0d0d" />
+        </div>
         <div class="color-item">
           <label>用户气泡</label>
           <input id="bubbleUserInput" type="color" value="#3b82f6" />
         </div>
         <div class="color-item">
           <label>AI 气泡</label>
-          <input id="bubbleAIInput" type="color" value="#f1f5f9" />
+          <input id="bubbleAIInput" type="color" value="#1a1a1a" />
         </div>
       </div>
       <div class="api-group color-row">

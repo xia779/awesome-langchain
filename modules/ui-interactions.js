@@ -133,21 +133,22 @@ function handleDroppedFile(file) {
       }
     };
     reader.readAsDataURL(file);
-  } else if (/\.(pdf|docx|doc|xlsx|xls|csv|pptx|ppt)$/i.test(file.name)) {
-    // 📄 文档格式：保存为附件，用户发送时 AI 可直接读取文件
+  } else if (/\.(pdf|docx|doc|xlsx|xls|csv|pptx|ppt|txt|md|json|js|py|css|html|xml|yaml|yml|log|sql|sh|bat|ps1|java|c|cpp|h|hpp|go|rs|rb|php|ts|tsx|jsx|vue|svelte|toml|ini|conf|cfg|env)$/i.test(file.name) || file.type.startsWith('text/')) {
+    // 📄 文档/文本格式：统一保存为附件，用户发送时 AI 可直接读取文件内容
     var icon = '📄';
     var ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
     if (ext === '.pdf') icon = '📕';
     else if (ext === '.docx' || ext === '.doc') icon = '📘';
     else if (ext === '.xlsx' || ext === '.xls' || ext === '.csv') icon = '📗';
     else if (ext === '.pptx' || ext === '.ppt') icon = '📙';
+    else if (ext === '.md' || ext === '.txt') icon = '📝';
 
     // 保存到临时目录
     var tmpDir = path.join(Core.DATA_ROOT || Core._globalDataRoot || '.', 'tmp');
     if (!fs.existsSync(tmpDir)) { try { fs.mkdirSync(tmpDir, { recursive: true }); } catch(e) { console.warn('[UI] Failed to create tmp dir:', e.message); } }
     var tmpPath = path.join(tmpDir, file.name);
 
-    Core.dom.status.textContent = icon + ' 正在保存文档 ' + file.name + '...';
+    Core.dom.status.textContent = icon + ' 正在保存文件 ' + file.name + '...';
     var reader = new FileReader();
     reader.onload = function(e) {
       fs.writeFileSync(tmpPath, Buffer.from(e.target.result));
@@ -163,18 +164,6 @@ function handleDroppedFile(file) {
       setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 3000);
     };
     reader.readAsArrayBuffer(file);
-  } else if (file.type.startsWith('text/') || /\.(md|txt|json|js|py|css|html|xml|yaml|yml)$/i.test(file.name)) {
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var input = document.getElementById('input');
-      var prefix = '📄 文件「' + file.name + '」内容:\n\\`\\`\\`\\n';
-      var suffix = '\\n\\`\\`\\`\\n';
-      input.value = (input.value ? input.value + '\\n\\n' : '') + prefix + e.target.result + suffix;
-      input.focus();
-      Core.dom.status.textContent = '✅ 文件「' + file.name + '」已载入';
-      setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 2000);
-    };
-    reader.readAsText(file);
   } else {
     var input = document.getElementById('input');
     input.value = (input.value ? input.value + '\n' : '') + '📎 文件「' + file.name + '」(' + (file.size / 1024).toFixed(1) + ' KB)';

@@ -28,16 +28,17 @@ function setGeneratingState(generating, sessionId) {
   var state = getSessionState(sessionId);
   state.isGenerating = generating;
   
-  // 按钮只有一个，总是更新当前可见的按钮
   const sendBtn = Core.dom.sendBtn;
   if (sendBtn) {
     if (generating) {
-      sendBtn.textContent = '⏹';
+      sendBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">stop</span>';
       sendBtn.style.background = '#ef4444';
+      sendBtn.title = '停止生成';
       sendBtn.disabled = false;
     } else {
-      sendBtn.textContent = '↑';
+      sendBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">arrow_upward</span>';
       sendBtn.style.background = '';
+      sendBtn.title = '发送';
       sendBtn.disabled = false;
     }
   }
@@ -56,11 +57,11 @@ function stopGeneration(sessionId) {
   }
   state.isGenerating = false;
   
-  // 按钮只有一个，总是更新当前可见的按钮
   const sendBtn = Core.dom.sendBtn;
   if (sendBtn) {
-    sendBtn.textContent = '↑';
+    sendBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">arrow_upward</span>';
     sendBtn.style.background = '';
+    sendBtn.title = '发送';
     sendBtn.disabled = false;
   }
   if (Core.dom.deepThinkBtn) Core.dom.deepThinkBtn.disabled = false;
