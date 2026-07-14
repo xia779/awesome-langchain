@@ -820,6 +820,15 @@ try {
         if (users.length === 0) {
           overlay.style.display = 'flex';
           overlay.classList.remove('hidden');
+        } else {
+          // 🔧 自动登录：如果 lastUser 存在且用户列表中包含该用户，直接登录
+          var lastUser = (Core.config && Core.config.lastUser) ? Core.config.lastUser : null;
+          if (lastUser && users.indexOf(lastUser) >= 0) {
+            loginUser(lastUser);
+          } else {
+            overlay.style.display = 'flex';
+            overlay.classList.remove('hidden');
+          }
         }
       } else {
         overlay.style.display = 'flex';

@@ -165,11 +165,12 @@
         radial-gradient(circle at 30% 40%, rgba(59,130,246,0.12) 0%, transparent 40%),
         radial-gradient(circle at 70% 60%, rgba(139,92,246,0.1) 0%, transparent 40%),
         radial-gradient(circle at 50% 80%, rgba(59,130,246,0.06) 0%, transparent 40%);
+      background-size: 110% 110%;
       animation: bgFloat 15s ease-in-out infinite;
     }
     @keyframes bgFloat {
-      0%, 100% { transform: translate(0, 0); }
-      50% { transform: translate(-20px, 10px); }
+      0%, 100% { background-position: 0% 0%; }
+      50% { background-position: 3% 2%; }
     }
 
     /* 网格背景 */
@@ -217,8 +218,8 @@
       pointer-events: none;
     }
     @keyframes loginAppear {
-      from { opacity: 0; transform: translateY(40px) scale(0.95); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     .login-logo {
@@ -908,8 +909,8 @@
       transform: translateY(-1px);
     }
     @keyframes messageIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
     /* 会话切换时禁止入场动画，避免所有消息同时淡入造成的闪烁 */
     #chatContainer.batch-render .msg {
