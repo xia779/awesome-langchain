@@ -58,7 +58,10 @@ function getChildrenIds(parentId) {
       var bRole = sessions[b].roleType;
       if (aRole === 'chat' && bRole !== 'chat') return -1;
       if (aRole !== 'chat' && bRole === 'chat') return 1;
-      return a.localeCompare(b);
+      // 同类型按创建时间倒序（新的在前）
+      var aTime = sessions[a].timestamp || 0;
+      var bTime = sessions[b].timestamp || 0;
+      return bTime - aTime;
     });
 }
 
@@ -1324,9 +1327,15 @@ function newChat(roleType, parentId) {
   else if (roleType === 'writer') title = '✍️ 创意写手';
   else if (roleType === 'analyst') title = '📊 数据分析师';
   else if (roleType === 'teacher') title = '🎓 学习导师';
+  // 没有指定 parentId 时，自动挂到 master 节点下（避免成为根节点排到列表最底部）
+  if (!parentId && roleType !== 'master') {
+    var masterIds = Object.keys(sessions).filter(function(sid) { return sessions[sid].roleType === 'master'; });
+    if (masterIds.length > 0) parentId = masterIds[0];
+  }
   sessions[id] = {
     title: title, messages: [], pinned: false, temperature: defaultTemp,
-    roleType: roleType || 'chat', parentId: parentId || null, collapsed: false, _manuallyRenamed: false
+    roleType: roleType || 'chat', parentId: parentId || null, collapsed: false, _manuallyRenamed: false,
+    timestamp: Date.now()
   };
   immediateSave(id);
   currentSessionId = id;
