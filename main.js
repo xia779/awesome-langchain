@@ -219,6 +219,23 @@ async function startWebServer() {
           }
           break;
 
+        case 'searxng':
+          // SearXNG — 自托管或公共实例，JSON API
+          try {
+            const searxngUrl = (apiKeys.searxngBaseUrl || 'https://searx.be').replace(/\/+$/, '');
+            const searxngResp = await fetch(searxngUrl + '/search?q=' + encodeURIComponent(query) + '&format=json&pageno=1', {
+              headers: { 'Accept': 'application/json' },
+              signal: AbortSignal.timeout(15000)
+            });
+            if (searxngResp.ok) {
+              const searxngData = await searxngResp.json();
+              if (searxngData.results && searxngData.results.length > 0) {
+                results = searxngData.results.slice(0, 5).map(r => `${r.title || ''}\n${r.content || ''}\n${r.url || ''}`).join('\n\n');
+              }
+            }
+          } catch (e) { console.warn('SearXNG failed:', e.message); }
+          break;
+
         case 'bocha':
         default:
           if (apiKeys.bochaApiKey) {

@@ -311,26 +311,6 @@ try {
       }
     }
 
-    const speakBtn = document.getElementById('speakBtn');
-    if (speakBtn && window.voice) {
-      speakBtn.addEventListener('click', () => {
-        if (window.voice.isSpeaking()) {
-          window.voice.stopSpeaking();
-          speakBtn.textContent = '🔊 朗读';
-          return;
-        }
-        const messages = document.querySelectorAll('.msg-ai .msg-content');
-        if (messages.length === 0) return;
-        const lastMessage = messages[messages.length - 1];
-        const text = lastMessage.textContent || '';
-        if (!text.trim()) return;
-        speakBtn.textContent = '⏹️ 停止';
-        window.voice.speak(text, {
-          onend: () => { speakBtn.textContent = '🔊 朗读'; }
-        });
-      });
-    }
-
     const imageBtn = document.getElementById('imageBtn');
     const imageInput = document.createElement('input');
     imageInput.type = 'file';

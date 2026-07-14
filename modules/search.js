@@ -73,6 +73,9 @@ async function webSearchWithMeta(query) {
       case 'tavily':
         items = await searchTavilyStructured(query);
         break;
+      case 'searxng':
+        items = await searchSearXNGStructured(query);
+        break;
       case 'bocha':
       default:
         items = await searchBochaStructured(query);
@@ -155,6 +158,32 @@ async function searchDuckDuckGoStructured(query) {
   return [];
 }
 
+// ----- SearXNG 结构化（通过后端代理）-----
+async function searchSearXNGStructured(query) {
+  try {
+    var searxngBaseUrl = Core.config.searxngBaseUrl || 'https://searx.be';
+    var resp = await fetch('http://127.0.0.1:8080/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query, engine: 'searxng', apiKeys: { searxngBaseUrl: searxngBaseUrl } }),
+      signal: AbortSignal.timeout(25000)
+    });
+    if (resp.ok) {
+      var data = await resp.json();
+      if (data.results && typeof data.results === 'string' && data.results.length > 20) {
+        var blocks = data.results.split('\n\n');
+        return blocks.map(function(block) {
+          var lines = block.split('\n');
+          return { title: lines[0] || '', snippet: lines[1] || '', url: lines[2] || '' };
+        }).filter(function(item) { return item.title || item.snippet; });
+      }
+    }
+  } catch (e) {
+    console.warn('SearXNG 后端搜索失败:', e.message);
+  }
+  return [];
+}
+
 // ----- 博查结构化 -----
 async function searchBochaStructured(query) {
   var apiKey = Core.config.bochaApiKey;
@@ -231,6 +260,9 @@ async function webSearchDirect(query, engine) {
       case 'tavily':
         results = await searchTavilyDirect(query);
         break;
+      case 'searxng':
+        results = await searchSearXNGDirect(query);
+        break;
       case 'bocha':
       default:
         results = await searchBochaDirect(query);
@@ -280,6 +312,28 @@ async function searchBingDirect(query) {
     }
   } catch (e) {
     console.warn('Bing direct failed:', e.message);
+  }
+  return '';
+}
+
+// ----- SearXNG 直接请求（通过后端代理）-----
+async function searchSearXNGDirect(query) {
+  try {
+    var searxngBaseUrl = Core.config.searxngBaseUrl || 'https://searx.be';
+    var resp = await fetch('http://127.0.0.1:8080/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query, engine: 'searxng', apiKeys: { searxngBaseUrl: searxngBaseUrl } }),
+      signal: AbortSignal.timeout(25000)
+    });
+    if (resp.ok) {
+      var data = await resp.json();
+      if (data.results && typeof data.results === 'string' && data.results.length > 20) {
+        return data.results;
+      }
+    }
+  } catch (e) {
+    console.warn('SearXNG direct failed:', e.message);
   }
   return '';
 }

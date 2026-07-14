@@ -45,6 +45,7 @@ function loadSettingsToUI() {
     safeSet('searchEngineSelect', c.searchEngine || 'bocha');
     safeSet('bochaApiKey', c.bochaApiKey);
     safeSet('tavilyApiKey', c.tavilyApiKey);
+    safeSet('searxngBaseUrl', c.searxngBaseUrl || 'https://searx.be');
     const rolePreset = document.getElementById('rolePresetSelect');
     if (rolePreset) rolePreset.value = c.rolePreset || '';
     // 图像生成设置
@@ -131,6 +132,7 @@ function saveSettings() {
       searchEngine: safeVal('searchEngineSelect') || 'bocha',
       bochaApiKey: safeKey('bochaApiKey'),
       tavilyApiKey: safeKey('tavilyApiKey'),
+      searxngBaseUrl: safeVal('searxngBaseUrl') || 'https://searx.be',
       rolePreset: rolePreset,
     };
     // 检测 API Key 是否变更，清除 OpenAI 客户端缓存（P5: 统一 API 调用）
@@ -162,6 +164,7 @@ function toggleKeyInputsVisibility() {
   const groups = {
     bocha: document.getElementById('bochaKeyGroup'),
     tavily: document.getElementById('tavilyKeyGroup'),
+    searxng: document.getElementById('searxngUrlGroup'),
   };
   Object.keys(groups).forEach(key => {
     if (groups[key]) {
@@ -1451,7 +1454,7 @@ module.exports = {
       saveBtn.addEventListener('click', saveSettings);
     }
 
-    // 备份恢复 — 使用 querySelectorAll 确保所有备份/恢复按钮都绑定
+    // 备份恢复
     var backupBtns = document.querySelectorAll('#backupBtn');
     backupBtns.forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -1459,14 +1462,6 @@ module.exports = {
         else showToast('❌ 备份模块未加载', 'error');
       });
     });
-    // 工具栏备份按钮也绑定
-    var toolbarBackupBtn = document.getElementById('toolbarBackupBtn');
-    if (toolbarBackupBtn) {
-      toolbarBackupBtn.addEventListener('click', function() {
-        if (Core.backup && typeof Core.backup.backupData === 'function') Core.backup.backupData();
-        else showToast('❌ 备份模块未加载', 'error');
-      });
-    }
     var restoreBtn = document.getElementById('restoreBtn');
     if (restoreBtn) {
       restoreBtn.addEventListener('click', function() {

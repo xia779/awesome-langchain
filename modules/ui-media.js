@@ -228,51 +228,9 @@ function initTextToSpeech() {
 }
 
 var _currentUtterance = null;
+// 🔧 TTS 按钮已移至 quick-actions 行（继续/总结/翻译/解释/举例/朗读），不再使用浮动按钮
 function addTTSButton(aiMsgDiv) {
-  // 延迟500ms添加按钮，避免与流式输出冲突
-  setTimeout(function() {
-    if (aiMsgDiv.querySelector('.tts-btn')) return;
-    // 创建按钮容器（放在消息div外部，不干扰内容）
-    var wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:relative;';
-    // 将消息div放入wrapper
-    if (aiMsgDiv.parentNode) {
-      aiMsgDiv.parentNode.insertBefore(wrapper, aiMsgDiv);
-      wrapper.appendChild(aiMsgDiv);
-    }
-    // 创建按钮
-    var btn = document.createElement('button');
-    btn.className = 'tts-btn';
-    btn.innerHTML = '🔊';
-    btn.title = '朗读';
-    btn.style.cssText = 'position:absolute;top:6px;right:6px;background:rgba(255,255,255,0.8);border:1px solid var(--border);border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s;z-index:10;';
-    btn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      if (window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); btn.innerHTML = '🔊'; return; }
-      // 🔧 获取文本时排除时间戳、按钮和 msg-actions
-      var btnClone = btn.cloneNode(true);
-      btn.parentNode.removeChild(btn);
-      var contentClone = aiMsgDiv.cloneNode(true);
-      var timestamps = contentClone.querySelectorAll('.msg-timestamp');
-      for (var t = 0; t < timestamps.length; t++) timestamps[t].remove();
-      var actions = contentClone.querySelectorAll('.msg-actions-inline, .msg-actions');
-      for (var a = 0; a < actions.length; a++) actions[a].remove();
-      var text = contentClone.textContent.replace(/```[\s\S]*?```/g, '（代码）').replace(/\s+/g, ' ').trim();
-      wrapper.appendChild(btnClone);
-      if (text.length > 500) text = text.substring(0, 500) + '...';
-      if (!text) return;
-      var utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'zh-CN';
-      utterance.rate = 1.0;
-      btnClone.innerHTML = '⏹';
-      utterance.onend = function() { btnClone.innerHTML = '🔊'; };
-      utterance.onerror = function() { btnClone.innerHTML = '🔊'; };
-      window.speechSynthesis.speak(utterance);
-    });
-    wrapper.appendChild(btn);
-    wrapper.addEventListener('mouseenter', function() { btn.style.opacity = '1'; });
-    wrapper.addEventListener('mouseleave', function() { btn.style.opacity = '0'; });
-  }, 500);
+  // no-op: TTS handled by quick-action-btn with data-action="tts" in session.js delegation
 }
 
 // ===== 方向C2：Mermaid图表 =====

@@ -254,7 +254,7 @@ function listKeybindings() {
 
 // ===== 工具栏布局 =====
 var DEFAULT_TOOLBAR_LEFT = ['appsMenuBtn', 'webSearchBtn', 'deepThinkBtn', 'streamBtn', 'agentModeBtn'];
-var DEFAULT_TOOLBAR_RIGHT = ['voiceBtn', 'speakBtn', 'imageBtn', 'screenshotBtn', 'promptBtn', 'roleBtn'];
+var DEFAULT_TOOLBAR_RIGHT = ['voiceBtn', 'imageBtn', 'screenshotBtn', 'promptBtn', 'roleBtn'];
 var toolbarLayout = { left: null, right: null, hidden: [] };
 
 function loadToolbar() {

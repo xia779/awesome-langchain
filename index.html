@@ -90,7 +90,6 @@
       <input type="file" id="importFileInput" accept=".json" style="display:none;">
       <button id="uploadBtn" class="icon-btn" title="上传文件"><span class="material-icons-outlined">upload_file</span></button>
       <button id="exportBtn" class="icon-btn" title="导出会话"><span class="material-icons-outlined">download</span></button>
-      <button id="toolbarBackupBtn" class="icon-btn" title="备份数据"><span class="material-icons-outlined">backup</span></button>
       <button id="importBtn" class="icon-btn" title="导入数据"><span class="material-icons-outlined">file_open</span></button>
       <button id="checkUpdateBtn" class="icon-btn" title="检查更新"><span class="material-icons-outlined">update</span></button>
       <button id="switchUserBtn" class="icon-btn" title="切换用户"><span class="material-icons-outlined">person</span></button>
@@ -162,7 +161,6 @@
         <button id="agentModeBtn" class="icon-btn mode-tag" title="Agent 模式 — 启用后 AI 可自主调用工具完成复杂任务"><span class="material-icons-outlined">smart_toy</span></button>
       </div>
       <div class="input-right-actions">
-        <button id="speakBtn" class="icon-btn" title="朗读回复"><span class="material-icons-outlined">volume_up</span></button>
         <button id="imageBtn" class="icon-btn" title="上传图片"><span class="material-icons-outlined">image</span></button>
         <button id="screenshotBtn" class="icon-btn" title="截图分析 (Ctrl+Shift+S)"><span class="material-icons-outlined">screenshot_monitor</span></button>
         <button id="promptBtn" class="icon-btn" title="提示词库"><span class="material-icons-outlined">format_list_bulleted</span></button>
@@ -403,6 +401,9 @@
         <select id="searchEngineSelect">
           <option value="bocha" selected>博查 (Bocha)</option>
           <option value="tavily">Tavily (AI搜索)</option>
+          <option value="searxng">SearXNG (自托管/公共实例)</option>
+          <option value="bing">Bing (免费)</option>
+          <option value="duckduckgo">DuckDuckGo (免费)</option>
         </select>
       </div>
       <div class="api-group" id="bochaKeyGroup" style="display:none;">
@@ -412,6 +413,10 @@
       <div class="api-group" id="tavilyKeyGroup" style="display:none;">
         <label>Tavily API Key</label>
         <input id="tavilyApiKey" type="password" placeholder="Tavily Key（在 tavily.com 免费获取）" />
+      </div>
+      <div class="api-group" id="searxngUrlGroup" style="display:none;">
+        <label>SearXNG 实例地址</label>
+        <input id="searxngBaseUrl" placeholder="https://searx.be 或 http://localhost:8080" />
       </div>
     </div>
   </details>

@@ -105,7 +105,7 @@ function init(_Core) {
   };
 
   setupPerformanceOptimizations();
-  setupTTSDelegation();
+  // 🔧 TTS 委托已移至 session.js 的 quick-action 统一处理，不再需要独立委托
   startMemoryCleanup();
   setupCrashRecovery();
   setupPerfMonitoring();

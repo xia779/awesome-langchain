@@ -1062,13 +1062,15 @@ function renderSingleMessage(msg, index, container) {
       { icon: 'summarize', text: '总结', prompt: '请总结以上内容' },
       { icon: 'translate', text: '翻译', prompt: '请将以上内容翻译成中文' },
       { icon: 'help_outline', text: '解释', prompt: '请详细解释以上内容' },
-      { icon: 'lightbulb', text: '举例', prompt: '请举例说明' }
+      { icon: 'lightbulb', text: '举例', prompt: '请举例说明' },
+      { icon: 'volume_up', text: '朗读', action: 'tts' }
     ];
 
     actions.forEach(function(action) {
       var btn = document.createElement('button');
       btn.className = 'quick-action-btn';
-      btn.dataset.prompt = action.prompt;
+      if (action.prompt) btn.dataset.prompt = action.prompt;
+      if (action.action) btn.dataset.action = action.action;
       btn.innerHTML = '<span class="material-icons-outlined">' + action.icon + '</span>' + action.text;
       quickActions.appendChild(btn);
     });
@@ -1564,13 +1566,45 @@ function init(core) {
     chatContainer.addEventListener('click', function(e) {
       // 快速操作按钮（继续/总结/翻译/解释/举例）
       var qaBtn = e.target.closest('.quick-action-btn');
-      if (qaBtn && qaBtn.dataset.prompt) {
+      if (qaBtn) {
         e.stopPropagation();
-        if (Core.dom && Core.dom.input) {
-          Core.dom.input.value = qaBtn.dataset.prompt;
-          if (Core.api && Core.api.sendMessage) Core.api.sendMessage();
+        // 朗读按钮 — 使用语音模块朗读该条消息
+        if (qaBtn.dataset.action === 'tts') {
+          var aiMsg = qaBtn.closest('.msg.ai');
+          if (!aiMsg) return;
+          // 停止正在进行的朗读
+          if (window.voice && window.voice.isSpeaking && window.voice.isSpeaking()) {
+            window.voice.stopSpeaking();
+            return;
+          }
+          if (window.speechSynthesis && window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            return;
+          }
+          // 提取纯文本（排除时间戳、操作按钮等）
+          var contentClone = aiMsg.cloneNode(true);
+          var toRemove = contentClone.querySelectorAll('.msg-timestamp, .msg-actions-inline, .msg-actions, .quick-actions, .tts-btn, .copy-code-btn, .fold-code-btn');
+          toRemove.forEach(function(el) { el.remove(); });
+          var text = contentClone.textContent.replace(/```[\s\S]*?```/g, '（代码）').replace(/\s+/g, ' ').trim();
+          if (text.length > 2000) text = text.substring(0, 2000) + '...';
+          if (!text) return;
+          if (window.voice && window.voice.speak) {
+            window.voice.speak(text);
+          } else if (window.speechSynthesis) {
+            var utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'zh-CN';
+            window.speechSynthesis.speak(utter);
+          }
+          return;
         }
-        return;
+        // 提示词按钮 — 发送预设提示词
+        if (qaBtn.dataset.prompt) {
+          if (Core.dom && Core.dom.input) {
+            Core.dom.input.value = qaBtn.dataset.prompt;
+            if (Core.api && Core.api.sendMessage) Core.api.sendMessage();
+          }
+          return;
+        }
       }
 
       // 代码复制按钮
