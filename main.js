@@ -989,6 +989,21 @@ ipcMain.on('restore-data', (event) => {
 });
 
 // ===== 应用生命周期 =====
+// 🔧 单实例锁：防止同时打开多个应用实例（桌面快捷方式 + start.bat 同时打开会产生重复进程）
+const _gotSingleLock = app.requestSingleInstanceLock();
+if (!_gotSingleLock) {
+  console.log('⚠️ 检测到已有实例运行，退出当前实例');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 app.whenReady().then(async () => {
 
   // 🔧 条件性清理 GPU/Code 缓存：仅在上次崩溃或版本变更时清理
