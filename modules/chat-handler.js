@@ -302,6 +302,14 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
     injectedSystemPrompt += '\n\n【知识库参考】\n以下是与用户问题相关的知识片段，请据此回答：\n' + knowledgeContext + '\n【知识库参考结束】';
   }
 
+  // 📝 备忘录上下文注入：将用户备忘录内容提供给 AI 读取
+  if (Core.memo && Core.memo.getContext) {
+    var memoContext = Core.memo.getContext();
+    if (memoContext) {
+      injectedSystemPrompt += '\n\n' + memoContext;
+    }
+  }
+
   // 🔧 消息引用：如果有引用，附加到 prompt 中
   var quote = Core.getQuote ? Core.getQuote() : null;
   var quoteText = promptForAPI;

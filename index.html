@@ -92,7 +92,6 @@
       <button id="exportBtn" class="icon-btn" title="导出会话"><span class="material-icons-outlined">download</span></button>
       <button id="importBtn" class="icon-btn" title="导入数据"><span class="material-icons-outlined">file_open</span></button>
       <button id="checkUpdateBtn" class="icon-btn" title="检查更新"><span class="material-icons-outlined">update</span></button>
-      <button id="memoBtn" class="icon-btn" title="备忘录"><span class="material-icons-outlined">edit_note</span></button>
       <button id="switchUserBtn" class="icon-btn" title="切换用户"><span class="material-icons-outlined">person</span></button>
       <button id="openSettingsBtn" class="icon-btn" title="设置"><span class="material-icons-outlined">settings</span></button>
     </div>
@@ -105,28 +104,26 @@
   <div id="chatContainer">
 </div>
 
-  <!-- ===== 备忘录面板 ===== -->
-  <div id="memoPanel" style="display:none;">
+  <!-- ===== 备忘录浮动窗口 ===== -->
+  <div id="memoPanel" class="memo-float-window" style="display:none;">
     <input type="file" id="memoFileInput" multiple style="display:none;">
-    <div class="memo-sidebar">
-      <div class="memo-sidebar-header">
-        <span class="material-icons-outlined" style="font-size:20px;">edit_note</span>
-        <span style="margin-left:4px;">备忘录</span>
-        <button id="memoNewBtn" class="memo-icon-btn" title="新建备忘"><span class="material-icons-outlined" style="font-size:18px;">add</span></button>
+    <div class="memo-float-header" id="memoFloatHeader">
+      <span class="material-icons-outlined" style="font-size:18px;">sticky_note_2</span>
+      <span style="margin-left:4px;font-weight:600;">备忘录</span>
+      <div style="margin-left:auto;display:flex;gap:2px;">
+        <button id="memoNewBtn" class="memo-icon-btn" title="新建"><span class="material-icons-outlined" style="font-size:16px;">add</span></button>
+        <button id="memoAttachBtn" class="memo-icon-btn" title="添加附件"><span class="material-icons-outlined" style="font-size:16px;">attach_file</span></button>
+        <button id="memoDeleteBtn" class="memo-icon-btn" title="删除"><span class="material-icons-outlined" style="font-size:16px;">delete</span></button>
+        <button id="memoCloseBtn" class="memo-icon-btn" title="关闭"><span class="material-icons-outlined" style="font-size:16px;">close</span></button>
       </div>
-      <div id="memoList" class="memo-list"></div>
     </div>
-    <div id="memoEditor" class="memo-editor" style="display:none;">
-      <div class="memo-editor-header">
-        <input id="memoTitleInput" type="text" class="memo-title-input" placeholder="备忘标题..." />
-        <div class="memo-editor-actions">
-          <button id="memoAttachBtn" class="memo-icon-btn" title="添加附件"><span class="material-icons-outlined" style="font-size:18px;">attach_file</span></button>
-          <button id="memoDeleteBtn" class="memo-icon-btn" title="删除备忘"><span class="material-icons-outlined" style="font-size:18px;">delete</span></button>
-          <button id="memoCloseBtn" class="memo-icon-btn" title="关闭备忘录"><span class="material-icons-outlined" style="font-size:18px;">close</span></button>
-        </div>
+    <div class="memo-float-body">
+      <div id="memoList" class="memo-list"></div>
+      <div id="memoEditor" class="memo-editor" style="display:none;">
+        <input id="memoTitleInput" type="text" class="memo-title-input" placeholder="标题..." />
+        <textarea id="memoContentInput" class="memo-content-input" placeholder="写点什么..."></textarea>
+        <div id="memoFileList" class="memo-file-list"></div>
       </div>
-      <textarea id="memoContentInput" class="memo-content-input" placeholder="写点什么..." ></textarea>
-      <div id="memoFileList" class="memo-file-list"></div>
     </div>
   </div>
 
@@ -237,9 +234,9 @@
       <button class="apps-menu-close" id="appsMenuClose">&times;</button>
     </div>
     <div class="apps-menu-grid">
-      <div class="apps-menu-item" role="button" tabindex="0" data-action="new-chat">
-        <span class="material-icons-outlined">add_circle</span>
-        <span>新建对话</span>
+      <div class="apps-menu-item" role="button" tabindex="0" data-action="memo">
+        <span class="material-icons-outlined">sticky_note_2</span>
+        <span>备忘录</span>
       </div>
       <div class="apps-menu-item" role="button" tabindex="0" data-action="knowledge">
         <span class="material-icons-outlined">menu_book</span>

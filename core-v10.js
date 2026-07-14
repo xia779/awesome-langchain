@@ -755,8 +755,8 @@ Core.renderMarkdown = function(text) {
       item.addEventListener('click', function() {
         var action = item.getAttribute('data-action');
         appsPanel.classList.remove('active');
-        if (action === 'new-chat') {
-          if (Core.session && Core.session.newChat) Core.session.newChat('chat', null);
+        if (action === 'memo') {
+          if (Core.memo && Core.memo.open) Core.memo.open();
         } else if (action === 'knowledge') {
           if (Core.dom.openSettingsBtn) Core.dom.openSettingsBtn.click();
         } else if (action === 'agent') {

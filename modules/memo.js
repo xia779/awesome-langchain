@@ -244,6 +244,70 @@ var memoDir = '';
     renderMemoList();
   }
 
+  // ===== 返回备忘录上下文摘要，供对话角色(AI)读取 =====
+  function getContext() {
+    var ids = Object.keys(memos);
+    if (ids.length === 0) return '';
+    ids.sort(function (a, b) {
+      return (memos[b].updatedAt || 0) - (memos[a].updatedAt || 0);
+    });
+    var parts = [];
+    parts.push('=== 备忘录 (' + ids.length + ' \u6761) ===');
+    for (var i = 0; i < ids.length; i++) {
+      var m = memos[ids[i]];
+      var title = m.title || '\u672a\u547d\u540d';
+      var content = (m.content || '').trim();
+      var fileNames = '';
+      if (m.files && m.files.length > 0) {
+        fileNames = ' [\u9644\u4ef6: ' + m.files.map(function (f) { return f.name; }).join(', ') + ']';
+      }
+      var time = m.updatedAt ? new Date(m.updatedAt).toLocaleString('zh-CN') : '';
+      parts.push('[' + (i + 1) + '] ' + title + (time ? ' (' + time + ')' : '') + fileNames);
+      if (content) parts.push(content);
+    }
+    parts.push('=== \u5907\u5fd5\u5f55\u7ed3\u675f ===');
+    return parts.join('\n');
+  }
+
+  // ===== 拖拽浮动窗口 =====
+  function makeDraggable(panel, handle) {
+    var isDragging = false;
+    var startX = 0, startY = 0;
+    var panelX = 0, panelY = 0;
+
+    handle.addEventListener('mousedown', function (e) {
+      if (e.target.closest('button')) return;
+      isDragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      var rect = panel.getBoundingClientRect();
+      panelX = rect.left;
+      panelY = rect.top;
+      panel.style.transition = 'none';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!isDragging) return;
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+      var newX = panelX + dx;
+      var newY = panelY + dy;
+      newX = Math.max(0, Math.min(newX, window.innerWidth - panel.offsetWidth));
+      newY = Math.max(0, Math.min(newY, window.innerHeight - 40));
+      panel.style.left = newX + 'px';
+      panel.style.top = newY + 'px';
+      panel.style.right = 'auto';
+    });
+
+    document.addEventListener('mouseup', function () {
+      if (isDragging) {
+        isDragging = false;
+        panel.style.transition = '';
+      }
+    });
+  }
+
   function init() {
     loadMemos();
     var panel = document.getElementById('memoPanel');
@@ -323,16 +387,11 @@ var memoDir = '';
       });
     }
 
-    var sidebarBtn = document.getElementById('memoBtn');
-    if (sidebarBtn) {
-      sidebarBtn.addEventListener('click', function () {
-        var p = document.getElementById('memoPanel');
-        if (p && p.style.display === 'flex') {
-          closeMemo();
-        } else {
-          openMemo();
-        }
-      });
+    // 拖拽浮动窗口
+    var floatHeader = document.getElementById('memoFloatHeader');
+    var floatPanel = document.getElementById('memoPanel');
+    if (floatHeader && floatPanel) {
+      makeDraggable(floatPanel, floatHeader);
     }
 
     Core.memo = {
@@ -342,7 +401,8 @@ var memoDir = '';
       saveMemo: saveMemo,
       deleteMemo: deleteMemo,
       loadMemos: loadMemos,
-      getMemos: function () { return memos; }
+      getMemos: function () { return memos; },
+      getContext: getContext
     };
 
     console.log('\u2705 \u5907\u5fd5\u5f55\u6a21\u5757\u5df2\u52a0\u8f7d');

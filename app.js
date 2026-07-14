@@ -573,8 +573,8 @@ try {
 
         if (action === 'export-all') {
           showExportSelector();
-        } else if (action === 'new-chat') {
-          if (window.Core && Core.session && Core.session.newChat) Core.session.newChat();
+        } else if (action === 'memo') {
+          if (window.Core && Core.memo && Core.memo.open) Core.memo.open();
         } else if (action === 'knowledge') {
           // 打开设置面板并滚动到知识库区域
           var settingsModal = document.getElementById('settingsModal');
