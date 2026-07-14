@@ -799,6 +799,20 @@
       justify-content: center;
       flex-wrap: wrap;
     }
+    /* 侧边栏底部图标栏：缩小按钮让7个图标排进一行 */
+    .sidebar-footer .icon-bar {
+      gap: 1px;
+      flex-wrap: nowrap;
+      overflow: visible;
+    }
+    .sidebar-footer .icon-bar .icon-btn {
+      width: 30px;
+      height: 30px;
+      flex-shrink: 0;
+    }
+    .sidebar-footer .icon-bar .icon-btn .material-icons-outlined {
+      font-size: 17px;
+    }
 
     /* ===== 用户显示 ===== */
     .user-display {
