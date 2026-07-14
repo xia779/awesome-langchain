@@ -45,7 +45,7 @@ function loadSettingsToUI() {
     safeSet('searchEngineSelect', c.searchEngine || 'bocha');
     safeSet('bochaApiKey', c.bochaApiKey);
     safeSet('tavilyApiKey', c.tavilyApiKey);
-    safeSet('searxngBaseUrl', c.searxngBaseUrl || 'https://searx.be');
+    safeSet('searxngBaseUrl', c.searxngBaseUrl || 'http://localhost:8888');
     const rolePreset = document.getElementById('rolePresetSelect');
     if (rolePreset) rolePreset.value = c.rolePreset || '';
     // 图像生成设置
@@ -132,7 +132,7 @@ function saveSettings() {
       searchEngine: safeVal('searchEngineSelect') || 'bocha',
       bochaApiKey: safeKey('bochaApiKey'),
       tavilyApiKey: safeKey('tavilyApiKey'),
-      searxngBaseUrl: safeVal('searxngBaseUrl') || 'https://searx.be',
+      searxngBaseUrl: safeVal('searxngBaseUrl') || 'http://localhost:8888',
       rolePreset: rolePreset,
     };
     // 检测 API Key 是否变更，清除 OpenAI 客户端缓存（P5: 统一 API 调用）
