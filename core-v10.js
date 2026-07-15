@@ -229,7 +229,14 @@ const Core = {
     this.config.currentService = service;
     this.saveConfig({ currentService: service });
   },
-  getCurrentService() { return this.currentService || 'ollama'; },
+  getCurrentService() {
+    // 优先从模型选择器读取当前服务的 provider
+    if (this.dom && this.dom.modelSelect && this.dom.modelSelect.value) {
+      var val = this.dom.modelSelect.value;
+      if (val.includes(':')) return val.substring(0, val.indexOf(':'));
+    }
+    return this.currentService || 'ollama';
+  },
 
   loadConfig() {
     if (!this.CONFIG_FILE) this.setCurrentUser('admin');

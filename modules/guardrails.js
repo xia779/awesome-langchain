@@ -128,13 +128,17 @@ function checkToolExecution(action, params) {
           return { safe: false, reason: msg, command: DANGEROUS_COMMANDS[i] };
         }
       }
-      // Check protected dirs
-      for (var j = 0; j < PROTECTED_DIRS.length; j++) {
-        if (cmdLower.indexOf(PROTECTED_DIRS[j].toLowerCase()) !== -1) {
-          stats.warnings++;
-          var wmsg = '[Guardrails] 警告：命令涉及受保护目录 ' + PROTECTED_DIRS[j];
-          console.warn(wmsg);
-          return { safe: true, warning: wmsg };
+      // Check protected dirs (skip warning for read-only search commands)
+      var readOnlySearchPrefixes = ['where', 'find ', 'findstr', 'get-childitem', 'dir ', 'type ', 'cat ', 'more ', 'select-string'];
+      var isReadOnlySearch = readOnlySearchPrefixes.some(function(p) { return cmdLower.trim().startsWith(p); });
+      if (!isReadOnlySearch) {
+        for (var j = 0; j < PROTECTED_DIRS.length; j++) {
+          if (cmdLower.indexOf(PROTECTED_DIRS[j].toLowerCase()) !== -1) {
+            stats.warnings++;
+            var wmsg = '[Guardrails] 警告：命令涉及受保护目录 ' + PROTECTED_DIRS[j];
+            console.warn(wmsg);
+            return { safe: true, warning: wmsg };
+          }
         }
       }
     }

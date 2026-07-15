@@ -305,6 +305,7 @@ async function sendToAgent(task, isDeepThink) {
 
   // 🔧 标记生成开始，按钮变为停止
   Core._setGeneratingState(true);
+  Core._agentRunning = true;
   Core.emit('typingStart');
 
   // 创建 Agent 消息div
@@ -815,6 +816,7 @@ async function sendToAgent(task, isDeepThink) {
 
   // 🔧 标记生成结束，按钮恢复
   Core._setGeneratingState(false);
+  Core._agentRunning = false;
   Core.emit('typingEnd');
   Core.dom.status.textContent = `✅ Agent 完成 (${step}步${isDeepThink ? ' · 深度' : ''})`;
   return { success: true, reply: finalAnswer || '', steps: step };

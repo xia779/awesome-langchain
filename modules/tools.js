@@ -197,9 +197,11 @@ const tools = {
         if (!check.allowed) return '⛔ ' + check.reason;
       }
       // 用户确认（全权模式下也确认，询问模式由 permissions 模块处理）
-      if (!Core || !Core.permissions || Core.permissions.getMode() === 'full') {
+      //  Agent 自动执行时跳过确认对话框，避免阻塞
+      var isInAgentLoop = !!(Core && Core._agentRunning);
+      if (!isInAgentLoop && (!Core || !Core.permissions || Core.permissions.getMode() === 'full')) {
         if (!confirm(`是否执行命令？\n${command}`)) {
-          return '⛔ 用户取消执行';
+          return ' 用户取消执行';
         }
       }
       return new Promise((resolve) => {
