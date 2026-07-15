@@ -174,7 +174,7 @@ const tools = {
     }
   },
   run_command: {
-    description: '执行一条系统命令（需用户确认）',
+    description: '执行系统命令（分级权限：安全命令自动执行，中高危需确认）',
     parameters: {
       type: 'object',
       properties: {
@@ -184,32 +184,127 @@ const tools = {
     },
     handler: async (params) => {
       const { command } = params;
-      // 严格白名单限制
-      const allowedPrefixes = ['echo', 'ls', 'dir', 'whoami', 'date', 'time', 'python --version',
-        'where', 'find', 'type ', 'tasklist', 'systeminfo', 'ipconfig', 'netstat', 'hostname',
-        'ver', 'wmic ', 'powershell -Command', 'cmd /c echo'];
-      if (!allowedPrefixes.some(p => command.trim().startsWith(p))) {
-        return `❌ 错误：命令 "${command}" 不在白名单中（仅允许：${allowedPrefixes.join(', ')}）`;
-      }
-      // 🔧 权限检查（询问模式 + 审计日志）
-      if (Core && Core.permissions && Core.permissions.checkCommandExec) {
-        var check = Core.permissions.checkCommandExec(command);
-        if (!check.allowed) return '⛔ ' + check.reason;
-      }
-      // 用户确认（全权模式下也确认，询问模式由 permissions 模块处理）
-      //  Agent 自动执行时跳过确认对话框，避免阻塞
-      var isInAgentLoop = !!(Core && Core._agentRunning);
-      if (!isInAgentLoop && (!Core || !Core.permissions || Core.permissions.getMode() === 'full')) {
-        if (!confirm(`是否执行命令？\n${command}`)) {
-          return ' 用户取消执行';
+      const cmdTrimmed = command.trim();
+      const cmdLower = cmdTrimmed.toLowerCase().replace(/\\/g, '/');
+
+      // ===== 分级权限系统 =====
+      // 第一级：安全命令（只读/信息查询，自动执行）
+      const SAFE_PREFIXES = [
+        'echo ', 'echo.', 'dir ', 'dir\n', 'ls ', 'ls\n', 'ls -',
+        'type ', 'cat ', 'more ', 'find ', 'findstr ', 'where ', 'where.exe ',
+        'tasklist', 'systeminfo', 'ipconfig', 'netstat ', 'hostname', 'ver',
+        'whoami', 'date', 'time', 'wmic ', 'quser', 'query user',
+        'python --version', 'python -c ', 'python3 --version', 'node --version', 'npm --version',
+        'git status', 'git log', 'git diff', 'git branch', 'git remote',
+        'Get-ChildItem', 'Get-Content', 'Get-Process', 'Get-Service', 'Get-Location',
+        'Get-Item', 'Get-ItemProperty', 'Select-String', 'Where-Object', 'Measure-Object',
+        'Get-Host', 'Get-Command', 'Get-Help', 'Test-Path', 'Get-FileHash',
+        'ping ', 'tracert ', 'pathping ', 'nslookup ', 'curl -L ', 'curl -I ',
+        'schtasks /query', 'sc query', 'net user', 'net localgroup', 'net view',
+        'fsutil fsinfo', 'diskpart /?', 'chkdsk', 'defrag /?',
+      ];
+      // 第二级：中等风险（写入/创建/安装，非Agent模式需确认）
+      const MEDIUM_PREFIXES = [
+        'copy ', 'xcopy ', 'robocopy ', 'move ', 'ren ', 'rename ',
+        'mkdir ', 'md ', 'rmdir ', 'rd ', 'del ', 'erase ',
+        'pip install', 'npm install', 'npm run', 'winget install', 'choco install',
+        'sc start', 'sc stop', 'sc config', 'net start', 'net stop', 'net use',
+        'taskkill ', 'start ', 'explorer ', 'cmd /c ', 'cmd /k ',
+        'powershell -Command', 'powershell -File',
+        'Set-Content', 'Add-Content', 'New-Item', 'Remove-Item', 'Rename-Item', 'Move-Item', 'Copy-Item',
+        'Invoke-Item', 'Start-Process', 'Stop-Process',
+        'git add', 'git commit', 'git push', 'git pull', 'git checkout', 'git merge',
+        'schtasks /create', 'schtasks /delete', 'sc create', 'sc delete',
+      ];
+      // 第三级：高危操作（始终需要确认）
+      const HIGH_RISK_PREFIXES = [
+        'format ', 'diskpart', 'fdisk', 'mkfs',
+        'shutdown', 'reboot', 'restart', 'logoff',
+        'reg add', 'reg delete', 'reg edit', 'bcdedit',
+        'cipher /w', 'cipher /e', 'takeown', 'icacls',
+        'netsh ', 'route add', 'route delete',
+        'ipconfig /release', 'ipconfig /renew', 'ipconfig /flushdns',
+        'rm -rf', 'del /s /q', 'rmdir /s /q',
+        'taskkill /f', 'tskill',
+        'powershell.*invoke-expression', 'powershell.*invoke-webrequest',
+        'chmod 777', 'chown -R',
+      ];
+
+      // 检查是否匹配任何已知命令
+      var riskLevel = 'unknown'; // unknown, safe, medium, high
+      for (var i = 0; i < HIGH_RISK_PREFIXES.length; i++) {
+        if (cmdLower.startsWith(HIGH_RISK_PREFIXES[i].toLowerCase()) || cmdLower.indexOf(HIGH_RISK_PREFIXES[i].toLowerCase()) !== -1) {
+          riskLevel = 'high'; break;
         }
       }
+      if (riskLevel !== 'high') {
+        for (var j = 0; j < MEDIUM_PREFIXES.length; j++) {
+          if (cmdLower.startsWith(MEDIUM_PREFIXES[j].toLowerCase())) {
+            riskLevel = 'medium'; break;
+          }
+        }
+      }
+      if (riskLevel !== 'high' && riskLevel !== 'medium') {
+        for (var k = 0; k < SAFE_PREFIXES.length; k++) {
+          if (cmdLower.startsWith(SAFE_PREFIXES[k].toLowerCase())) {
+            riskLevel = 'safe'; break;
+          }
+        }
+      }
+
+      // 未知命令：默认视为中等风险
+      if (riskLevel === 'unknown') riskLevel = 'medium';
+
+      // 权限检查（permissions 模块的硬阻止）
+      if (Core && Core.permissions && Core.permissions.checkCommandExec) {
+        var permCheck = Core.permissions.checkCommandExec(command);
+        if (!permCheck.allowed) return '⛔ ' + permCheck.reason;
+      }
+
+      // 确认逻辑
+      var isInAgentLoop = !!(Core && Core._agentRunning);
+      var needConfirm = false;
+      var confirmMsg = '';
+
+      if (riskLevel === 'high') {
+        // 高危操作：始终需要确认
+        needConfirm = true;
+        confirmMsg = '⚠️ 高危操作确认\n\n该命令可能修改系统设置或删除数据：\n' + command + '\n\n是否继续执行？';
+      } else if (riskLevel === 'medium') {
+        if (isInAgentLoop) {
+          // Agent 模式：中等风险自动执行（已信任 Agent）
+          needConfirm = false;
+        } else {
+          // 手动模式：中等风险需确认
+          needConfirm = true;
+          confirmMsg = '是否执行此命令？\n' + command;
+        }
+      }
+      // safe: 自动执行，无需确认
+
+      if (needConfirm) {
+        if (!confirm(confirmMsg)) {
+          return '⛔ 用户取消执行';
+        }
+      }
+
+      // 执行命令（超时 30 秒）
       return new Promise((resolve) => {
-        exec(command, { timeout: 10000 }, (error, stdout, stderr) => {
+        exec(command, { timeout: 30000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
           if (error) {
-            resolve(`❌ 执行失败：${error.message}\n${stderr}`);
+            // 翻译常见英文错误为中文
+            var errMsg = error.message || '';
+            if (errMsg.includes('Command failed')) errMsg = errMsg.replace('Command failed', '命令执行失败');
+            if (errMsg.includes('not recognized')) errMsg = errMsg.replace(/'[^']*' is not recognized as an internal or external command,.*?/g, '"$1" 不是内部或外部命令，也不是可运行的程序');
+            if (errMsg.includes('ENOENT')) errMsg = '找不到指定的文件或目录';
+            if (errMsg.includes('ETIMEDOUT') || errMsg.includes('timeout')) errMsg = '命令执行超时（30秒）';
+            if (errMsg.includes('access denied') || errMsg.includes('Access is denied')) errMsg = '访问被拒绝，可能需要管理员权限';
+            if (errMsg.includes('is not recognized')) errMsg = errMsg.replace(/'[^']*' is not recognized.*/g, '命令未找到，请检查是否已安装该程序');
+            resolve('❌ 执行失败：' + errMsg + (stderr ? '\n错误输出：' + stderr : ''));
           } else {
-            resolve(`✅ 执行结果：\n${stdout || stderr}`);
+            var output = stdout || stderr || '';
+            if (!output) output = '（命令执行成功，无输出）';
+            resolve('✅ 执行成功：\n' + output);
           }
         });
       });

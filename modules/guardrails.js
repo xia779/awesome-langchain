@@ -95,13 +95,22 @@ function checkOutput(text) {
 
 // ===== Layer 3: 工具执行检测 — 危险命令 =====
 var DANGEROUS_COMMANDS = [
+  // 磁盘/文件系统破坏
   'rm -rf /', 'rm -rf /*', 'format', 'fdisk', 'mkfs',
   'dd if=', ':(){', 'fork bomb',
+  // 系统关机/重启
   'shutdown', 'reboot', 'halt', 'poweroff', 'init 0', 'init 6',
+  // 强制终止/删除
   'net stop', 'taskkill /f /im', 'del /s /q',
+  // 注册表/引导修改
   'reg delete', 'bcdedit', 'cipher /w',
+  // 远程代码执行
   'curl.*|.*sh', 'wget.*|.*sh', 'powershell.*invoke-expression',
   'chmod 777 /', 'chown -R',
+  // 新增：网络攻击/提权
+  'nc -l', 'ncat -l', 'nmap -sS', 'hydra ', 'metasploit',
+  // 新增：数据销毁
+  'sdelete', 'shred', 'wipe',
 ];
 
 var PROTECTED_DIRS = [
