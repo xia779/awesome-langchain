@@ -215,6 +215,7 @@ async function _executeAgentActionRaw(action, params) {
       }
     }
     if (['read_file', 'write_file', 'list_dir', 'read_url', 'search_files', 'edit_file', 'file_info',
+         'run_command',
          'browser_navigate', 'browser_screenshot', 'browser_click', 'browser_type', 'browser_extract', 'browser_wait',
          'github_pr', 'github_issue', 'github_repo', 'github_release',
          'image_search', 'image_download'].includes(action)) {

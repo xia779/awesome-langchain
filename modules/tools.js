@@ -185,7 +185,9 @@ const tools = {
     handler: async (params) => {
       const { command } = params;
       // 严格白名单限制
-      const allowedPrefixes = ['echo', 'ls', 'dir', 'whoami', 'date', 'time', 'python --version'];
+      const allowedPrefixes = ['echo', 'ls', 'dir', 'whoami', 'date', 'time', 'python --version',
+        'where', 'find', 'type ', 'tasklist', 'systeminfo', 'ipconfig', 'netstat', 'hostname',
+        'ver', 'wmic ', 'powershell -Command', 'cmd /c echo'];
       if (!allowedPrefixes.some(p => command.trim().startsWith(p))) {
         return `❌ 错误：命令 "${command}" 不在白名单中（仅允许：${allowedPrefixes.join(', ')}）`;
       }
