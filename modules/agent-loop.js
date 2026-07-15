@@ -16,8 +16,9 @@ const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主�
 【错误恢复规则 - 必须遵守】
 5. 如果工具执行返回错误（包含 ❌、错误、error、failed、未找到、not found 等），你必须分析错误原因并尝试不同策略
 6. 禁止用完全相同的参数重复调用同一个失败的工具
-7. 替代策略示例：read_file失败→用list_dir查看目录；browser_click失败→用browser_execute执行JS；web_search无结果→换关键词或尝试read_url
+7. 替代策略示例：read_file失败→用list_dir查看目录；browser_click失败→用browser_execute执行JS
 8. 如果连续两次工具失败，考虑用 run_python 编写脚本来完成任务，或向用户 ask_user 确认参数
+9. web_search 可能不可用（返回"未启用"），此时应优先使用本地工具（run_command、run_python、read_file等）完成任务，不要反复尝试搜索
 
 你可以使用以下工具（action名称）：
 - web_search: 联网搜索，获取最新信息、实时数据、新闻
@@ -76,11 +77,11 @@ const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主�
 【回复格式 - 每次只能输出这个JSON，前后不要有任何文字】
 {"action": "工具名", "params": {"参数": "值"}}
 
-【示例 - 用户问"北京天气"，你的回复必须是】
-{"action": "web_search", "params": {"query": "北京今天天气"}}
+【示例 - 用户问"查看桌面有哪些文件"，你的回复必须是】
+{"action": "run_command", "params": {"command": "dir %USERPROFILE%\\Desktop"}}
 
-【获取搜索结果后，你的回复必须是】
-{"action": "complete", "params": {"answer": "根据搜索结果，北京今天天气晴朗，气温25-32度..."}}`;
+【获取结果后，你的回复必须是】
+{"action": "complete", "params": {"answer": "你的桌面上有以下文件：..."}}`;
 
 
 // ===== JSON提取（多重容错 + 调试）=====
@@ -458,7 +459,7 @@ async function sendToAgent(task, isDeepThink) {
           agentModel = selVal.substring(colonIdx + 1);
         }
       }
-      const data = await Core.api.callAPI(prompt, agentPrompt, 0.7, agentModel, agentProvider);
+      const data = await Core.api.callAPI(prompt, agentPrompt, 0.7, agentModel, agentProvider, null, { disableTools: true });
       reply = (data.message && data.message.content) || data.response || '';
     } catch (err) {
       finalAnswer = '❌ Agent 执行出错：' + err.message + '\n\n可能原因：\n1. 模型服务未启动或 API Key 未配置\n2. 当前选择的模型不可用\n\n建议：检查设置中的模型配置，或切换到其他可用模型。';
@@ -645,7 +646,7 @@ async function sendToAgent(task, isDeepThink) {
           _agentModel2 = selVal2.substring(ci2 + 1);
         }
       }
-      var _retryData = await Core.api.callAPI(_retryPrompt, AGENT_SYSTEM_PROMPT, 0.7, _agentModel2, _agentProvider2);
+      var _retryData = await Core.api.callAPI(_retryPrompt, AGENT_SYSTEM_PROMPT, 0.7, _agentModel2, _agentProvider2, null, { disableTools: true });
       var _retryReply = (_retryData.message && _retryData.message.content) || _retryData.response || "";
       var _retryAction = extractJSONFromText(_retryReply);
       if (_retryAction && _retryAction.action === "complete") {

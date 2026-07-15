@@ -315,7 +315,7 @@ function _buildHistoryMessages(currentSession, currentSessionId) {
 }
 
 // ===== 核心 API 调用（非流式）=====
-async function callAPI(prompt, systemMsg, temperature, model, provider, messagesOverride = null) {
+async function callAPI(prompt, systemMsg, temperature, model, provider, messagesOverride = null, options = null) {
   
   if (provider !== 'ollama' && Core.cloudApi) {
     // 🔧 修复：当 messagesOverride 存在时（后台任务/子会话），直接构建消息并禁用 function calling
@@ -332,7 +332,7 @@ async function callAPI(prompt, systemMsg, temperature, model, provider, messages
       var bgContent = extractReply(bgCompletion);
       return { message: { content: bgContent, role: 'assistant' } };
     }
-    const completion = await Core.cloudApi.callCloudAPI(prompt, systemMsg, temperature, model, provider);
+    const completion = await Core.cloudApi.callCloudAPI(prompt, systemMsg, temperature, model, provider, options || {});
     // 统一返回格式为 Ollama 兼容格式
     const content = extractReply(completion);
     return { message: { content: content, role: 'assistant' } };

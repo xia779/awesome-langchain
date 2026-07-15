@@ -245,6 +245,15 @@ function buildToolsPayload() {
 // 支持 Function Calling 的提供商
 const FUNCTION_CALLING_PROVIDERS = ['deepseek', 'qwen', 'custom', 'silicon'];
 
+// 🔧 过滤 DeepSeek 流式响应中的 DSML 标记（如 || DSML || tool_calls>）
+// 这些标记是 DeepSeek 内部用于标识 function calling 的特殊文本，不应显示给用户
+var DSML_MARKER_RE = /\|{1,3}\s*DSML\s*\|{1,3}\s*\w*[>]?\s*/g;
+function stripDSMLMarkers(text) {
+  if (!text) return text;
+  // 仅移除标记，不 trim —— 避免拼接时丢失空格导致词语粘连
+  return text.replace(DSML_MARKER_RE, '');
+}
+
 // ===== 处理工具调用并生成后续消息 =====
 async function handleToolCalls(toolCalls, messages, apiKey, baseURL, model, temperature) {
   if (!toolCalls || toolCalls.length === 0) return null;
@@ -480,7 +489,9 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
         try {
           const data = JSON.parse(trimmed.substring(6));
           const delta = data.choices?.[0]?.delta;
-          const content = delta?.content || data.choices?.[0]?.text || '';
+          const rawContent = delta?.content || data.choices?.[0]?.text || '';
+          // 🔧 过滤 DSML 标记，防止 || DSML || tool_calls> 等原始文本显示在聊天中
+          const content = stripDSMLMarkers(rawContent);
           if (content) {
             fullText += content;
             onChunk(content, fullText);
@@ -516,7 +527,8 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
       try {
         const data = JSON.parse(trimmed.substring(6));
         const delta = data.choices?.[0]?.delta;
-        const content = delta?.content || '';
+        const rawContent = delta?.content || '';
+        const content = stripDSMLMarkers(rawContent);
         if (content) {
           fullText += content;
           onChunk(content, fullText);
@@ -545,8 +557,13 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
   // 🔧 F12: 处理流式 tool_calls — 执行工具后发起后续请求
   const validToolCalls = accumulatedToolCalls.filter(tc => tc && tc.id);
   if (validToolCalls.length > 0) {
+    // 🔧 检测到工具调用，重置 fullText — 初始流中的 DSML 标记和前导文本不显示给用户
+    // 只保留后续请求的最终回复作为聊天内容
+    fullText = '';
+    onChunk('', fullText);  // 清空聊天显示
+
     // 构建包含 tool_calls 的消息历史
-    messages.push({ role: 'assistant', content: fullText || null, tool_calls: validToolCalls });
+    messages.push({ role: 'assistant', content: null, tool_calls: validToolCalls });
     for (const tc of validToolCalls) {
       const fnName = tc.function?.name;
       let fnArgs = {};
@@ -593,7 +610,8 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
           if (fTrimmed.startsWith('data: ')) {
             try {
               const fData = JSON.parse(fTrimmed.substring(6));
-              const fContent = fData.choices?.[0]?.delta?.content || '';
+              const fRawContent = fData.choices?.[0]?.delta?.content || '';
+              const fContent = stripDSMLMarkers(fRawContent);
               if (fContent) {
                 fullText += fContent;
                 onChunk(fContent, fullText);
@@ -605,6 +623,14 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
         }
       }
     }
+  }
+  
+  // 🔧 最终安全清理：确保返回的文本不包含任何 DSML 标记
+  fullText = stripDSMLMarkers(fullText).trim();
+  
+  // 🔧 如果执行了工具调用但后续回复为空，提供兜底提示
+  if (validToolCalls && validToolCalls.length > 0 && !fullText) {
+    fullText = '✅ 工具调用已完成';
   }
   
   return fullText;
