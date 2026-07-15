@@ -318,7 +318,7 @@ async function sendToAgent(task, isDeepThink) {
   // 状态行 + 取消按钮
   var statusRow = document.createElement('div');
   statusRow.className = 'agent-status-row';
-  statusRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+  statusRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;padding-right:110px;';
   var statusSpan = document.createElement('span');
   statusSpan.className = 'typing-cursor';
   statusSpan.style.cssText = 'flex:1;';
@@ -445,10 +445,21 @@ async function sendToAgent(task, isDeepThink) {
         var memCtx = Core.memoryEnhance.getEnhancedContext(task);
         if (memCtx) agentPrompt += '\n\n' + memCtx;
       }
-      const data = await Core.api.callAPI(prompt, agentPrompt, 0.7, null, 'ollama');
+      // 🔧 使用用户当前选择的模型/提供商，而非硬编码 ollama
+      var agentProvider = 'ollama';
+      var agentModel = null;
+      if (Core.dom && Core.dom.modelSelect && Core.dom.modelSelect.value) {
+        var selVal = Core.dom.modelSelect.value;
+        if (selVal.includes(':')) {
+          var colonIdx = selVal.indexOf(':');
+          agentProvider = selVal.substring(0, colonIdx);
+          agentModel = selVal.substring(colonIdx + 1);
+        }
+      }
+      const data = await Core.api.callAPI(prompt, agentPrompt, 0.7, agentModel, agentProvider);
       reply = (data.message && data.message.content) || data.response || '';
     } catch (err) {
-      finalAnswer = '❌ Agent 执行出错：' + err.message + '\n\n可能原因：\n1. Ollama 服务未启动（http://127.0.0.1:11434）\n2. 本地模型未加载\n\n建议：使用普通聊天模式，或确保 Ollama 已启动。';
+      finalAnswer = '❌ Agent 执行出错：' + err.message + '\n\n可能原因：\n1. 模型服务未启动或 API Key 未配置\n2. 当前选择的模型不可用\n\n建议：检查设置中的模型配置，或切换到其他可用模型。';
       break;
     }
 
@@ -622,7 +633,17 @@ async function sendToAgent(task, isDeepThink) {
     console.log("[self-eval] quality issue: " + _evalResult.reason + ", retrying once");
     var _retryPrompt = "task: " + task + "\n\nhistory: " + (context || "(none)") + "\n\n[system-eval] your previous answer failed quality check: " + _evalResult.reason + ". please give a high-quality final answer using the complete action. do NOT output tool call JSON.";
     try {
-      var _retryData = await Core.api.callAPI(_retryPrompt, AGENT_SYSTEM_PROMPT, 0.7, null, "ollama");
+      var _agentProvider2 = 'ollama';
+      var _agentModel2 = null;
+      if (Core.dom && Core.dom.modelSelect && Core.dom.modelSelect.value) {
+        var selVal2 = Core.dom.modelSelect.value;
+        if (selVal2.includes(':')) {
+          var ci2 = selVal2.indexOf(':');
+          _agentProvider2 = selVal2.substring(0, ci2);
+          _agentModel2 = selVal2.substring(ci2 + 1);
+        }
+      }
+      var _retryData = await Core.api.callAPI(_retryPrompt, AGENT_SYSTEM_PROMPT, 0.7, _agentModel2, _agentProvider2);
       var _retryReply = (_retryData.message && _retryData.message.content) || _retryData.response || "";
       var _retryAction = extractJSONFromText(_retryReply);
       if (_retryAction && _retryAction.action === "complete") {
