@@ -134,8 +134,23 @@ async function testConnection(provider) {
 // 构建消息列表
 function buildMessages(prompt, systemMsg) {
   // 提取图片并构建多模态 content（OpenAI Vision 格式）
+  // 🔧 净化文本：移除会导致 JSON 序列化/DeepSeek 解析失败的非法字符
+  function sanitizeForJSON(str) {
+    if (!str || typeof str !== 'string') return str || '';
+    return str
+      // 移除控制字符（保留 \n \r \t）
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+      // 移除 lone surrogates（U+D800-U+DFFF 中未配对的）
+      .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '\uFFFD')
+      .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD')
+      // 移除 BOM 和零宽字符（可选，防止干扰）
+      .replace(/\uFEFF/g, '');
+  }
+
   function buildContent(content) {
     if (!content || typeof content !== 'string') return content || '';
+    // 🔧 净化内容，防止非法字符导致 API 400 错误
+    content = sanitizeForJSON(content);
     var images = [];
     var text = content;
     // 提取 base64 图片

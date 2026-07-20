@@ -750,7 +750,18 @@ async function sendMessage() {
         // 🔧 纯文本格式：直接用 fs.readFileSync 读取
         if (TEXT_EXTS.indexOf(ext) >= 0) {
           try {
-            var textContent = fs.readFileSync(pf.path, 'utf8');
+            var rawBuf = fs.readFileSync(pf.path);
+            var textContent = rawBuf.toString('utf8');
+            // 检测是否为GBK编码（UTF-8读取后大量替换字符说明编码不对）
+            var replacementCount = (textContent.match(/\uFFFD/g) || []).length;
+            if (replacementCount > textContent.length * 0.1) {
+              // 尝试用 latin1 保留原始字节，比乱码好
+              textContent = rawBuf.toString('latin1');
+              console.log('📄 文件疑似GBK编码，使用latin1解码:', pf.name);
+            }
+            // 净化：移除控制字符（保留换行/制表符）+ 限制长度
+            textContent = textContent.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+            if (textContent.length > 30000) textContent = textContent.substring(0, 30000) + '\n\n...(内容过长，已截取前30000字符)';
             return Promise.resolve({ pf: pf, result: { success: true, text: textContent, meta: { numPages: 1 } } });
           } catch (err) {
             console.warn('⚠️ 文本文件读取失败:', pf.name, err.message);

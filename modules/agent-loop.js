@@ -459,7 +459,12 @@ async function sendToAgent(task, isDeepThink) {
     statusSpan.className = 'typing-cursor';
     statusSpan.textContent = '🤔 步骤 ' + step + '/' + maxSteps + '：思考中...';
 
-    const prompt = `任务：${task}\n\n历史执行记录：${context || '（无）'}\n\n请决定下一步行动。注意：只输出纯JSON，不要有任何其他文字。`;
+    // 🔧 限制 context 长度，防止多步累积后 API 请求体过大导致 400 错误
+    var trimmedContext = context || '';
+    if (trimmedContext.length > 12000) {
+      trimmedContext = '...(早期步骤已省略)...\n' + trimmedContext.substring(trimmedContext.length - 12000);
+    }
+    const prompt = `任务：${task}\n\n历史执行记录：${trimmedContext || '（无）'}\n\n请决定下一步行动。注意：只输出纯JSON，不要有任何其他文字。`;
 
     let reply = '';
     try {
