@@ -13,19 +13,21 @@ var _isActive = false;
 var _commandCache = null;
 
 function _getRegisteredCommands() {
-  if (_commandCache) return _commandCache;
   _commandCache = [];
-  if (Core.custom && Core.custom._commands) {
-    for (var name in Core.custom._commands) {
-      var cmd = Core.custom._commands[name];
+  if (Core.custom && Core.custom.commands) {
+    for (var name in Core.custom.commands) {
+      var cmd = Core.custom.commands[name];
+      var displayName = name.startsWith('/') ? name : '/' + name;
+      var rawDesc = cmd.desc || cmd.description || '';
+      var resolvedDesc = (typeof rawDesc === 'object') ? (rawDesc.zh || rawDesc.en || '') : rawDesc;
       _commandCache.push({
-        name: '/' + name,
-        desc: cmd.description || '',
+        name: displayName,
+        desc: resolvedDesc,
         type: 'command'
       });
     }
   }
-  // 内置命令（可能未注册到 _commands）
+  // 内置命令（补充动态注册之外的常用命令）
   var builtins = [
     { name: '/agent', desc: 'Agent 模式（自主调用工具）' },
     { name: '/memory', desc: '记忆管理' },
@@ -55,6 +57,11 @@ function _getRegisteredCommands() {
     { name: '/summary', desc: '会话摘要' },
     { name: '/bookmarks', desc: '书签管理' },
     { name: '/tags', desc: '会话标签' },
+    { name: '/manga', desc: 'AI 漫画工作室' },
+    { name: '/manga-char', desc: '生成角色立绘（ComfyUI）' },
+    { name: '/manga-scene', desc: '生成场景背景（ComfyUI）' },
+    { name: '/manga-gen', desc: '从 JSON 剧本批量生成' },
+    { name: '/manga-status', desc: '查看 ComfyUI 状态' },
   ];
   builtins.forEach(function(b) {
     var exists = _commandCache.some(function(c) { return c.name === b.name; });

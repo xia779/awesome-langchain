@@ -1818,6 +1818,14 @@
       opacity: 1;
       transform: translateX(0);
     }
+    /* 设置面板打开时，聊天区域自动收缩 */
+    body.settings-open #main-container {
+      margin-right: var(--settings-width);
+      transition: margin-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    body.settings-open #input-area {
+      max-width: min(760px, calc(100% - 32px));
+    }
     .settings-modal .close-modal {
       float: right;
       background: none;
@@ -2856,6 +2864,9 @@
       }
       /* 设置面板全宽 */
       .settings-modal { width: 100%; }
+      body.settings-open #main-container {
+        margin-right: 0;
+      }
       /* 聊天区域适配 */
       #chatContainer { padding: 16px; }
       .msg { max-width: 90%; }
@@ -3154,6 +3165,10 @@
       background: #e0f2fe;
       border-color: #3b82f6;
       color: #3b82f6;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
 
   

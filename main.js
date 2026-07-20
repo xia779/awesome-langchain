@@ -398,6 +398,78 @@ async function startWebServer() {
     }
   });
 
+  // ===== Fish Speech 本地 TTS 端点（GPU 加速，支持声音克隆，s1-mini 模型）=====
+  app2.post('/api/tts-fish', async (req, res) => {
+    try {
+      const { text, voice = 'default', speed = 1.0, reference_audio, reference_text } = req.body;
+      if (!text) return res.status(400).json({ success: false, error: '缺少文本' });
+
+      const os = require('os');
+      const outputFile = path.join(os.tmpdir(), `fish_tts_${Date.now()}.wav`);
+      const scriptPath = path.join(__dirname, 'scripts', 'tts_fishspeech.py');
+      const fishEnv = 'E:\\fish-speech-env\\Scripts\\python.exe';
+
+      const { spawn: spawnPy } = require('child_process');
+      const args = [scriptPath, '--text', text, '--speed', String(speed), '--output', outputFile];
+      if (voice && voice !== 'default') args.push('--voice', voice);
+      if (reference_audio) args.push('--reference_audio', reference_audio);
+      if (reference_text) args.push('--reference_text', reference_text);
+
+      const py = spawnPy(fishEnv, args, { timeout: 300000 });
+
+      let stdout = '', stderr = '';
+      py.stdout.on('data', d => stdout += d.toString());
+      py.stderr.on('data', d => { stderr += d.toString(); console.log('[fish-tts]', d.toString().trim()); });
+
+      py.on('close', async (code) => {
+        try {
+          const result = JSON.parse(stdout.trim());
+          if (result.success && result.file) {
+            const audioBuffer = fs.readFileSync(result.file);
+            try { fs.unlinkSync(result.file); } catch (e) {}
+            res.set({
+              'Content-Type': 'audio/wav',
+              'Content-Length': audioBuffer.length,
+              'X-TTS-Engine': 'fish-speech-s1-mini',
+              'X-TTS-Voice': encodeURIComponent(voice || 'default')
+            });
+            res.send(audioBuffer);
+          } else {
+            res.status(500).json({ success: false, error: result.error || 'Fish TTS 失败' });
+          }
+        } catch (e) {
+          console.error('Fish TTS parse error:', stderr, stdout);
+          res.status(500).json({ success: false, error: 'Fish TTS 输出解析失败: ' + e.message });
+        }
+      });
+
+      py.on('error', (err) => {
+        res.status(500).json({ success: false, error: 'Fish TTS Python 启动失败: ' + err.message });
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Fish Speech 音色列表
+  app2.get('/api/tts-fish/voices', async (req, res) => {
+    try {
+      const scriptPath = path.join(__dirname, 'scripts', 'tts_fishspeech.py');
+      const fishEnv = 'E:\\fish-speech-env\\Scripts\\python.exe';
+      const { spawn: spawnPy } = require('child_process');
+      const py = spawnPy(fishEnv, [scriptPath, '--list-voices'], { timeout: 15000 });
+      let stdout = '', stderr = '';
+      py.stdout.on('data', d => stdout += d.toString());
+      py.stderr.on('data', d => stderr += d.toString());
+      py.on('close', () => {
+        try { res.json(JSON.parse(stdout.trim())); } catch (e) {
+          res.status(500).json({ success: false, error: '音色列表解析失败' });
+        }
+      });
+      py.on('error', (err) => { res.status(500).json({ success: false, error: err.message }); });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+  });
+
   // ===== 本地 ASR 端点（faster-whisper，完全离线语音识别）=====
   app2.post('/api/asr', async (req, res) => {
     try {
@@ -508,6 +580,37 @@ async function startWebServer() {
       res.send(buffer);
     } catch (e) {
       res.status(502).json({ error: 'ComfyUI 不可用: ' + e.message });
+    }
+  });
+
+  // ComfyUI 提交任务代理（POST /api/comfyui/prompt）
+  app2.post('/api/comfyui/prompt', async (req, res) => {
+    var baseUrl = 'http://127.0.0.1:8188';
+    try {
+      var resp = await fetch(baseUrl + '/prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body),
+        signal: AbortSignal.timeout(30000),
+      });
+      var data = await resp.json();
+      res.status(resp.status).json(data);
+    } catch (e) {
+      res.status(502).json({ error: 'ComfyUI prompt 提交失败: ' + e.message });
+    }
+  });
+
+  // ComfyUI 查询历史代理（GET /api/comfyui/history/:promptId）
+  app2.get('/api/comfyui/history/:promptId', async (req, res) => {
+    var baseUrl = 'http://127.0.0.1:8188';
+    try {
+      var resp = await fetch(baseUrl + '/history/' + req.params.promptId, {
+        signal: AbortSignal.timeout(10000),
+      });
+      var data = await resp.json();
+      res.json(data);
+    } catch (e) {
+      res.status(502).json({ error: 'ComfyUI history 查询失败: ' + e.message });
     }
   });
 

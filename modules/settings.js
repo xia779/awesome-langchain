@@ -355,6 +355,7 @@ function openSettings() {
   var modal = document.getElementById('settingsModal');
   modal.classList.add('show');
   modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('settings-open');
   // 焦点陷阱
   if (Core.i18n && Core.KEYBOARD_NAV) {
     Core.KEYBOARD_NAV.enableFocusTrap(modal);
@@ -364,6 +365,7 @@ function closeSettings() {
   var modal = document.getElementById('settingsModal');
   modal.classList.remove('show');
   modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('settings-open');
   // 释放焦点陷阱
   if (Core.KEYBOARD_NAV) {
     Core.KEYBOARD_NAV.disableFocusTrap();

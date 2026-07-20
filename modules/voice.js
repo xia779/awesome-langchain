@@ -20,6 +20,7 @@ function init(_Core) {
     asrModel: 'FunAudioLLM/SenseVoiceSmall',
     apiBase: 'https://api.siliconflow.cn/v1',
     localVoice: 'zh-CN-XiaoxiaoNeural',  // edge-tts 默认语音
+    fishVoice: '语音测试01',              // Fish Speech 默认音色（声音克隆）
     localTtsVoices: null,                // 缓存本地语音列表
 
     // ===== 辅助方法 =====
@@ -47,7 +48,7 @@ function init(_Core) {
 
     // ================================================================
     //  TTS 语音合成
-    //  优先级：本地 edge-tts → 云端 SiliconFlow → 浏览器 speechSynthesis
+    //  优先级：Fish Speech 1.5 (本地GPU) → edge-tts → 云端 SiliconFlow → 浏览器 speechSynthesis
     // ================================================================
 
     async speak(text, options) {
@@ -56,24 +57,95 @@ function init(_Core) {
       // 停止之前的朗读
       this.stopSpeaking();
 
-      // 优先：本地 edge-tts（免费神经语音，无需 API Key）
+      // 优先：Fish Speech 1.5 本地 GPU TTS（高质量，支持声音克隆）
+      try {
+        return await this._fishSpeak(text, options);
+      } catch (e) {
+        // 用户主动取消，不继续回退
+        if (e.name === 'AbortError') throw e;
+        console.warn('Fish Speech TTS 失败，回退 edge-tts:', e.message);
+      }
+
+      // 回退 1：本地 edge-tts（免费神经语音，无需 API Key）
       try {
         return await this._localSpeak(text, options);
       } catch (e) {
-        console.warn('⚠️ 本地 TTS 失败，回退云端:', e.message);
+        if (e.name === 'AbortError') throw e;
+        console.warn('本地 TTS 失败，回退云端:', e.message);
       }
 
-      // 回退 1：云端 TTS
+      // 回退 2：云端 TTS
       if (this.isCloudAvailable()) {
         try {
           return await this._cloudSpeak(text, options);
         } catch (e) {
-          console.warn('⚠️ 云端 TTS 失败，回退浏览器:', e.message);
+          if (e.name === 'AbortError') throw e;
+          console.warn('云端 TTS 失败，回退浏览器:', e.message);
         }
       }
 
-      // 回退 2：浏览器 speechSynthesis
+      // 回退 3：浏览器 speechSynthesis
       return this._browserSpeak(text, options);
+    },
+
+    // Fish Speech s1-mini 本地 GPU TTS
+    async _fishSpeak(text, options) {
+      var voice = options.voice || this.fishVoice || 'default';
+      var speed = options.speed || options.rate || 1.0;
+
+      // 创建 AbortController 以支持取消
+      this._fishAbortController = new AbortController();
+
+      var response = await fetch('http://127.0.0.1:8080/api/tts-fish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text, voice: voice, speed: speed }),
+        signal: this._fishAbortController.signal
+      });
+
+      this._fishAbortController = null;
+
+      if (!response.ok) {
+        var errData = {};
+        try { errData = await response.json(); } catch (e2) {}
+        throw new Error('HTTP ' + response.status + ': ' + (errData.error || response.statusText));
+      }
+
+      var arrayBuffer = await response.arrayBuffer();
+      var blob = new Blob([arrayBuffer], { type: 'audio/wav' });
+      var url = URL.createObjectURL(blob);
+
+      var self = this;
+      return new Promise(function(resolve) {
+        self.currentAudio = new Audio(url);
+        self.currentAudio.volume = options.volume !== undefined ? options.volume : 1.0;
+        self.currentAudio.onended = function() {
+          URL.revokeObjectURL(url);
+          self.currentAudio = null;
+          resolve(true);
+        };
+        self.currentAudio.onerror = function(e) {
+          URL.revokeObjectURL(url);
+          self.currentAudio = null;
+          console.warn('Fish audio error:', e);
+          resolve(false);
+        };
+        self.currentAudio.play().catch(function(err) {
+          URL.revokeObjectURL(url);
+          self.currentAudio = null;
+          console.warn('Fish play failed:', err.message);
+          resolve(false);
+        });
+      });
+    },
+
+    // 取消正在进行的 TTS 请求和播放
+    cancelSpeak() {
+      if (this._fishAbortController) {
+        this._fishAbortController.abort();
+        this._fishAbortController = null;
+      }
+      this.stopSpeaking();
     },
 
     // 本地 TTS：POST /api/tts → 返回音频二进制

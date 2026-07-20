@@ -515,6 +515,55 @@ async function handleCommand(text) {
     }
     return true;
   }
+  if (text.startsWith('/voice fish ')) {
+    var fishVoiceName = text.slice(12).trim();
+    if (!Core.voice) { Core.session.addMessage('❌ 语音模块未加载', 'ai'); return true; }
+    Core.voice.fishVoice = fishVoiceName;
+    Core.session.addMessage('🎙️ Fish Speech 音色已设为: ' + fishVoiceName + '\n\n参考音频: E:/fish-speech-models/references/' + fishVoiceName + '.wav', 'ai');
+    return true;
+  }
+  if (text === '/voice fish') {
+    if (!Core.voice) { Core.session.addMessage('❌ 语音模块未加载', 'ai'); return true; }
+    Core.session.addMessage('🎙️ 当前 Fish Speech 音色: ' + (Core.voice.fishVoice || 'default') + '\n\n使用 /voice fish <音色名> 切换\n例如: /voice fish 语音测试01', 'ai');
+    return true;
+  }
+  // ===== /manga — AI 漫剧工作流 =====
+  if (text === '/manga' || text === '/aimanga') {
+    var msg = '🎨 AI 漫剧工作流\n\n';
+    msg += '📌 图像生成（ComfyUI 本地）:\n';
+    msg += '  /manga-char <角色名> <描述>  — 生成角色图\n';
+    msg += '  /manga-scene <场景描述>      — 生成场景图\n';
+    msg += '  /manga-gen <剧本JSON路径>    — 批量生成\n';
+    msg += '  /manga-status                — 查看 ComfyUI 状态\n\n';
+    msg += ' 其他工具:\n';
+    msg += '  /aimanga  — 打开 AI 漫画工作室（网页版）\n\n';
+    msg += '💡 使用流程: 写剧本 → 生成角色/场景图 → 生成语音 → 合成视频';
+
+    // 如果有 manga-comfyui 模块，检查 ComfyUI 状态
+    if (Core.mangaComfyUI) {
+      Core.mangaComfyUI.checkStatus().then(function(status) {
+        if (status.online) {
+          Core.session.addMessage(msg + '\n\n✅ ComfyUI 在线 (' + (status.vram || '') + ')', 'ai');
+        } else {
+          Core.session.addMessage(msg + '\n\n️ ComfyUI 离线，请先启动 ComfyUI', 'ai');
+        }
+      });
+    } else {
+      Core.session.addMessage(msg, 'ai');
+    }
+    return true;
+  }
+  // ===== /aimanga — 打开 AI 漫画工作室网页版 =====
+  if (text === '/aimanga-web') {
+    var url = 'http://127.0.0.1:8080/aimanga';
+    try {
+      if (typeof window !== 'undefined' && window.open) {
+        window.open(url, '_blank');
+      }
+    } catch (e) {}
+    Core.session.addMessage('🎨 AI 漫画工作室已打开\n\n' + url + '\n\n💡 首次使用需在页面内设置 Google Gemini API Key', 'ai');
+    return true;
+  }
   // ===== /vision — 图片理解（分析聊天中最后一张图片）=====
   if (text.startsWith('/vision') || text === '/describe') {
     var mode = text.startsWith('/vision') ? text.slice(8).trim() || 'describe' : 'describe';

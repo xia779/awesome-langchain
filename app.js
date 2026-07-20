@@ -563,69 +563,7 @@ try {
       console.warn('IPC 不可用', err);
     }
 
-    // 应用菜单项点击
-    document.querySelectorAll('.apps-menu-item').forEach(function(item) {
-      item.addEventListener('click', function() {
-        var action = this.dataset.action;
-        // 关闭应用菜单
-        var appsMenu = document.getElementById('appsMenuOverlay');
-        if (appsMenu) appsMenu.style.display = 'none';
-
-        if (action === 'export-all') {
-          showExportSelector();
-        } else if (action === 'memo') {
-          if (window.Core && Core.memo && Core.memo.open) Core.memo.open();
-        } else if (action === 'knowledge') {
-          // 打开设置面板并滚动到知识库区域
-          var settingsModal = document.getElementById('settingsModal');
-          if (settingsModal) {
-            settingsModal.style.display = 'flex';
-            var kbGroup = document.getElementById('knowledgeGroup');
-            if (kbGroup) {
-              setTimeout(function() {
-                kbGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // 展开知识库 details 分组
-                var details = kbGroup.closest('details');
-                if (details) details.open = true;
-              }, 200);
-            }
-          }
-        } else if (action === 'agent') {
-          // 打开 Agent 面板或显示 Agent 状态
-          if (window.Core && Core.agent) {
-            var status = Core.agent.getStatus ? Core.agent.getStatus() : {};
-            if (Core.custom && Core.custom.executeCommand) {
-              Core.custom.executeCommand('/agent');
-            } else if (Core.uxPolish && Core.uxPolish.showToast) {
-              Core.uxPolish.showToast(status.isRunning ? 'Agent 运行中 (' + status.currentStep + '/' + status.maxSteps + ')' : 'Agent 空闲，输入 /plan 或 /agent 开始', 'info');
-            }
-          }
-        } else if (action === 'tools') {
-          // 显示已注册工具列表
-          if (window.Core && Core.toolsRegistry && Core.toolsRegistry.listTools) {
-            var tools = Core.toolsRegistry.listTools();
-            if (Core.custom && Core.custom.executeCommand) {
-              Core.custom.executeCommand('/tools');
-            } else if (Core.uxPolish && Core.uxPolish.showToast) {
-              Core.uxPolish.showToast('已注册工具: ' + (tools ? tools.length : 0) + ' 个', 'info');
-            }
-          } else if (window.Core && Core.uxPolish && Core.uxPolish.showToast) {
-            Core.uxPolish.showToast('工具模块未加载', 'error');
-          }
-        } else if (action === 'history') {
-          // 打开搜索面板（搜索历史记录）
-          var searchInput = document.getElementById('searchInput') || document.getElementById('sessionSearch');
-          if (searchInput) {
-            searchInput.focus();
-            searchInput.click && searchInput.click();
-          } else if (window.Core && Core.custom && Core.custom.executeCommand) {
-            Core.custom.executeCommand('/search');
-          } else if (window.Core && Core.uxPolish && Core.uxPolish.showToast) {
-            Core.uxPolish.showToast('使用 Ctrl+/ 搜索历史会话', 'info');
-          }
-        }
-      });
-    });
+    // 应用菜单项点击已统一由 core-v10.js initAppsMenu() 处理（避免重复绑定）
   })();
 
 

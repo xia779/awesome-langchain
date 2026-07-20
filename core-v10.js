@@ -766,6 +766,15 @@ Core.renderMarkdown = function(text) {
           if (Core.memo && Core.memo.open) Core.memo.open();
         } else if (action === 'knowledge') {
           if (Core.dom.openSettingsBtn) Core.dom.openSettingsBtn.click();
+          // 滚动到知识库区域并展开
+          setTimeout(function() {
+            var kbGroup = document.getElementById('knowledgeGroup');
+            if (kbGroup) {
+              kbGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              var details = kbGroup.closest('details');
+              if (details) details.open = true;
+            }
+          }, 350);
         } else if (action === 'agent') {
           // 切换 Agent 模式按钮
           var agentBtn = document.getElementById('agentModeBtn');
@@ -918,40 +927,14 @@ Core.renderMarkdown = function(text) {
   console.log('✅ Core 启动完成');
 
   // ===== 选项1：消息编辑与重新生成 =====
-  // ===== 选项1：消息操作增强（编辑/复制/重新生成/删除）=====
   // ===== 选项1：消息操作增强（编辑/复制/重新生成/删除/多选/右键菜单）=====
+  // 注意：消息悬停操作按钮已统一由 ux-enhance.js 的 msg-hover-actions（Material Icons）提供
+  // 此处仅保留多选模式和右键菜单功能
   function initMessageActions() {
     var chatContainer = document.getElementById('chatContainer');
     if (!chatContainer) return;
     if (chatContainer._msgActionsInit) return;
     chatContainer._msgActionsInit = true;
-
-    // 使用事件委托：鼠标悬停时显示/隐藏操作按钮
-    chatContainer.addEventListener('mouseover', function(e) {
-      var msgDiv = e.target.closest('.msg');
-      if (!msgDiv) return;
-      
-      var actions = msgDiv.querySelector('.msg-actions-inline');
-      if (!actions) {
-        actions = createMsgActions(msgDiv);
-        msgDiv.appendChild(actions);
-      }
-      actions.style.opacity = '1';
-      actions.style.pointerEvents = 'auto';
-    });
-
-    chatContainer.addEventListener('mouseout', function(e) {
-      var msgDiv = e.target.closest('.msg');
-      if (!msgDiv) return;
-      var related = e.relatedTarget;
-      if (related && msgDiv.contains(related)) return;
-      
-      var actions = msgDiv.querySelector('.msg-actions-inline');
-      if (actions) {
-        actions.style.opacity = '0';
-        actions.style.pointerEvents = 'none';
-      }
-    });
 
     // 初始化多选模式和右键菜单
     initMultiSelect();

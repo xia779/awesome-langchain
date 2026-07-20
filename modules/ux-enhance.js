@@ -429,10 +429,13 @@ var _paletteResults = null;
 function _buildCommandList() {
   var commands = [];
   // 从 Core.custom 获取已注册的命令
-  if (Core.custom && Core.custom._commands) {
-    for (var name in Core.custom._commands) {
-      var cmd = Core.custom._commands[name];
-      commands.push({ type: 'command', name: '/' + name, desc: cmd.description || '', action: function(n) { return function() { _executePaletteCommand('/' + n); }; }(name) });
+  if (Core.custom && Core.custom.commands) {
+    for (var name in Core.custom.commands) {
+      var cmd = Core.custom.commands[name];
+      var displayName = name.startsWith('/') ? name : '/' + name;
+      var rawDesc = cmd.desc || cmd.description || '';
+      var resolvedDesc = (typeof rawDesc === 'object') ? (rawDesc.zh || rawDesc.en || '') : rawDesc;
+      commands.push({ type: 'command', name: displayName, desc: resolvedDesc, action: function(n) { return function() { _executePaletteCommand(n.startsWith('/') ? n : '/' + n); }; }(displayName) });
     }
   }
   // 内置快捷命令

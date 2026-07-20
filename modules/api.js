@@ -3,12 +3,16 @@ const fs = require('fs');
 const path = require('path');
 const { ipcRenderer } = require('electron');
 
-// 🔧 强制 temperature 在 JSON 中始终带小数点（DashScope 严格要求 Float 格式）
+//  强制 temperature 在 JSON 中始终带小数点（DashScope 严格要求 Float 格式）
 function _tempFloat(v) {
   var t = Number(v);
   if (!isFinite(t) || t < 0 || t > 2) t = 0.7;
   t = Math.round(t * 100) / 100;
-  if (Number.isInteger(t)) t += 0.001;
+  if (Number.isInteger(t)) {
+    if (t >= 2) t = 1.999;
+    else if (t <= 0) t = 0.001;
+    else t += 0.001;
+  }
   return t;
 }
 
@@ -431,19 +435,24 @@ async function callAPI(prompt, systemMsg, temperature, model, provider, messages
   return data;
 }
 
-// 🔧 统一提取回复内容（兼容 Ollama 和 OpenAI 格式）
+//  统一提取回复内容（兼容 Ollama 和 OpenAI 格式）
+// 同时过滤 DSML 标记（DeepSeek Function Calling 内部标记）
 function extractReply(data) {
   if (!data) return '';
+  var text = '';
   // Ollama 格式
-  if (data.message && data.message.content) return data.message.content;
-  if (data.response) return data.response;
+  if (data.message && data.message.content) text = data.message.content;
+  else if (data.response) text = data.response;
   // OpenAI SDK 格式
-  if (data.choices && data.choices[0]) {
-    if (data.choices[0].message && data.choices[0].message.content) return data.choices[0].message.content;
-    if (data.choices[0].text) return data.choices[0].text;
-    if (data.choices[0].delta && data.choices[0].delta.content) return data.choices[0].delta.content;
+  else if (data.choices && data.choices[0]) {
+    if (data.choices[0].message && data.choices[0].message.content) text = data.choices[0].message.content;
+    else if (data.choices[0].text) text = data.choices[0].text;
+    else if (data.choices[0].delta && data.choices[0].delta.content) text = data.choices[0].delta.content;
   }
-  return '';
+  // 过滤 DSML 标记（所有模型统一处理，防止内部标记泄露）
+  // 覆盖: <| DSML || tool_calls>、| DSML | tool_calls>、|| DSML || invoke ...> 等所有变体
+  if (text) text = text.replace(/<?\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '');
+  return text;
 }
 
 // ===== 多模态图片提取 =====
@@ -713,9 +722,11 @@ async function sendMessage() {
       var fileDisplayParts = [];  // 显示用：简短引用
       var fileContentParts = [];  // API用：完整内容
       // 并发读取所有文件内容
+      var TEXT_EXTS = ['.txt','.md','.json','.log','.html','.htm','.xml','.yaml','.yml','.ini','.cfg','.conf','.py','.js','.ts','.jsx','.tsx','.bat','.sh','.cmd','.sql','.toml','.env','.gitignore','.editorconfig'];
+      var DOC_EXTS = ['.pdf','.docx','.doc','.xlsx','.xls','.csv','.pptx','.ppt'];
       var fileReadPromises = pendingFiles.map(function(pf, idx) {
         var ext = path.extname(pf.name).toLowerCase();
-        if (Core.docHandler && Core.docHandler.readDocument && ['.pdf','.docx','.doc','.xlsx','.xls','.csv','.pptx','.ppt'].indexOf(ext) >= 0) {
+        if (Core.docHandler && Core.docHandler.readDocument && DOC_EXTS.indexOf(ext) >= 0) {
           Core.dom.status.textContent = '📄 正在读取 ' + pf.name + '...';
           return Core.docHandler.readDocument(pf.path).then(function(result) {
             return { pf: pf, result: result };
@@ -723,6 +734,16 @@ async function sendMessage() {
             console.warn('⚠️ 文件读取失败:', pf.name, err.message);
             return { pf: pf, result: null };
           });
+        }
+        // 🔧 纯文本格式：直接用 fs.readFileSync 读取
+        if (TEXT_EXTS.indexOf(ext) >= 0) {
+          try {
+            var textContent = fs.readFileSync(pf.path, 'utf8');
+            return Promise.resolve({ pf: pf, result: { success: true, text: textContent, meta: { numPages: 1 } } });
+          } catch (err) {
+            console.warn('⚠️ 文本文件读取失败:', pf.name, err.message);
+            return Promise.resolve({ pf: pf, result: { success: false, error: err.message } });
+          }
         }
         return Promise.resolve({ pf: pf, result: null });
       });

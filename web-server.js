@@ -13,12 +13,16 @@ const SENSITIVE_KEY_FIELDS = cryptoUtils.SENSITIVE_KEY_FIELDS;
 const encryptValue = cryptoUtils.encryptValue;
 const decryptValue = cryptoUtils.decryptValue;
 
-// 🔧 强制 temperature 在 JSON 中始终带小数点（DashScope 严格要求 Float 格式）
+//  强制 temperature 在 JSON 中始终带小数点（DashScope 严格要求 Float 格式）
 function _tempFloat(v) {
   var t = Number(v);
   if (!isFinite(t) || t < 0 || t > 2) t = 0.7;
   t = Math.round(t * 100) / 100;
-  if (Number.isInteger(t)) t += 0.001;
+  if (Number.isInteger(t)) {
+    if (t >= 2) t = 1.999;
+    else if (t <= 0) t = 0.001;
+    else t += 0.001;
+  }
   return t;
 }
 
@@ -209,6 +213,64 @@ function setupMobileRoutes(expressApp, dataRoot) {
 
   // 静态资源（CSS/JS/图片等）
   expressApp.use('/m', require('express').static(publicDir, { index: false }));
+
+  // ===== AimangaStudio — AI 漫画/视频创作工具 =====
+  var aimangaDir = path.join(publicDir, 'aimanga');
+  if (fs.existsSync(aimangaDir)) {
+    expressApp.get('/aimanga', function(req, res) {
+      res.sendFile(path.join(aimangaDir, 'index.html'));
+    });
+    expressApp.get('/aimanga/', function(req, res) {
+      res.sendFile(path.join(aimangaDir, 'index.html'));
+    });
+    expressApp.use('/aimanga', require('express').static(aimangaDir, { index: false }));
+    console.log('🎨 AimangaStudio 已部署:', aimangaDir);
+  } else {
+    console.warn('⚠️ AimangaStudio 未找到:', aimangaDir);
+  }
+
+  // ===== ComfyUI 代理路由 =====
+  var COMFYUI_URL = 'http://127.0.0.1:8188';
+  expressApp.get('/api/comfyui/status', function(req, res) {
+    fetch(COMFYUI_URL + '/system_stats', { signal: AbortSignal.timeout(5000) })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('status ' + r.status)); })
+      .then(function(data) { res.json({ online: true, data: data }); })
+      .catch(function(e) { res.json({ online: false, error: e.message }); });
+  });
+  expressApp.get('/api/comfyui/models', function(req, res) {
+    fetch(COMFYUI_URL + '/object_info/CheckpointLoaderSimple', { signal: AbortSignal.timeout(5000) })
+      .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('status ' + r.status)); })
+      .then(function(data) {
+        res.json({ checkpoints: data.CheckpointLoaderSimple.input.required.ckpt_name[0] || [] });
+      })
+      .catch(function(e) { res.json({ checkpoints: [], error: e.message }); });
+  });
+  expressApp.get('/api/comfyui/view', function(req, res) {
+    var url = COMFYUI_URL + '/view?' + new URLSearchParams(req.query).toString();
+    fetch(url, { signal: AbortSignal.timeout(30000) })
+      .then(function(r) {
+        res.set('Content-Type', r.headers.get('content-type') || 'image/png');
+        r.body.pipe(res);
+      })
+      .catch(function(e) { res.status(502).send('ComfyUI proxy error: ' + e.message); });
+  });
+  expressApp.post('/api/comfyui/prompt', function(req, res) {
+    fetch(COMFYUI_URL + '/prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(30000),
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { res.json(data); })
+      .catch(function(e) { res.status(502).json({ error: e.message }); });
+  });
+  expressApp.get('/api/comfyui/history/:promptId', function(req, res) {
+    fetch(COMFYUI_URL + '/history/' + req.params.promptId, { signal: AbortSignal.timeout(10000) })
+      .then(function(r) { return r.json(); })
+      .then(function(data) { res.json(data); })
+      .catch(function(e) { res.status(502).json({ error: e.message }); });
+  });
 
   // ===== 会话列表 =====
   expressApp.get('/api/m/sessions', (req, res) => {

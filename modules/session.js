@@ -1581,9 +1581,25 @@ function init(core) {
         if (qaBtn.dataset.action === 'tts') {
           var aiMsg = qaBtn.closest('.msg.ai');
           if (!aiMsg) return;
+
+          // 如果正在生成中，点击取消
+          if (qaBtn.dataset.loading === 'true') {
+            if (window.voice && window.voice.cancelSpeak) {
+              window.voice.cancelSpeak();
+            }
+            qaBtn.innerHTML = '<span class="material-icons-outlined">volume_up</span>朗读';
+            qaBtn.dataset.loading = '';
+            qaBtn.style.opacity = '';
+            return;
+          }
+
           // 停止正在进行的朗读
           if (window.voice && window.voice.isSpeaking && window.voice.isSpeaking()) {
             window.voice.stopSpeaking();
+            // 恢复按钮状态
+            qaBtn.innerHTML = '<span class="material-icons-outlined">volume_up</span>朗读';
+            qaBtn.dataset.loading = '';
+            qaBtn.style.opacity = '';
             return;
           }
           if (window.speechSynthesis && window.speechSynthesis.speaking) {
@@ -1597,12 +1613,41 @@ function init(core) {
           var text = contentClone.textContent.replace(/```[\s\S]*?```/g, '（代码）').replace(/\s+/g, ' ').trim();
           if (text.length > 2000) text = text.substring(0, 2000) + '...';
           if (!text) return;
+
+          // 显示加载状态（可点击取消）
+          qaBtn.innerHTML = '<span class="material-icons-outlined" style="animation:spin 1s linear infinite">autorenew</span>点击取消';
+          qaBtn.dataset.loading = 'true';
+          qaBtn.style.opacity = '0.7';
+          qaBtn.title = '点击取消朗读';
+
+          var resetBtn = function() {
+            qaBtn.innerHTML = '<span class="material-icons-outlined">volume_up</span>朗读';
+            qaBtn.dataset.loading = '';
+            qaBtn.style.opacity = '';
+            qaBtn.title = '';
+          };
+
           if (window.voice && window.voice.speak) {
-            window.voice.speak(text);
+            window.voice.speak(text).then(function() {
+              resetBtn();
+            }).catch(function(err) {
+              // 如果是用户主动取消，不显示错误
+              if (err.name === 'AbortError') {
+                resetBtn();
+                return;
+              }
+              console.warn('朗读失败:', err.message);
+              qaBtn.innerHTML = '<span class="material-icons-outlined">error_outline</span>失败';
+              setTimeout(resetBtn, 3000);
+            });
           } else if (window.speechSynthesis) {
             var utter = new SpeechSynthesisUtterance(text);
             utter.lang = 'zh-CN';
+            utter.onend = resetBtn;
+            utter.onerror = resetBtn;
             window.speechSynthesis.speak(utter);
+          } else {
+            resetBtn();
           }
           return;
         }

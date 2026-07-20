@@ -152,6 +152,10 @@ function executeCommand(input) {
 function registerCommand(name, desc, action, persist) {
   if (!name.startsWith('/')) name = '/' + name;
   customCommands[name] = { desc, action };
+  // 同步到 Core.custom.commands（init 时是快照，后续注册需手动同步）
+  if (Core && Core.custom && Core.custom.commands) {
+    Core.custom.commands[name] = { desc, action };
+  }
   if (persist !== false) saveCustomCommands();
 }
 

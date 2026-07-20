@@ -148,6 +148,11 @@ function extractJSONFromText(text) {
 function cleanFinalAnswer(text) {
   if (!text) return text;
 
+  // 0. 过滤 DSML 标记（DeepSeek V4 内部标记，可能以多种管道符格式出现）
+  text = text.replace(/<?\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '');
+  text = text.trim();
+  if (!text) return text;
+
   // 1. 如果是JSON，尝试提取 complete.action 字段
   if (text.trim().startsWith('{')) {
     var parsed = extractJSONFromText(text);
@@ -296,7 +301,7 @@ function evaluateAnswer(answer) {
 }
 // ===== Agent 智能体循环 =====
 async function sendToAgent(task, isDeepThink) {
-  const maxSteps = isDeepThink ? 20 : 12;
+  const maxSteps = isDeepThink ? 40 : 20;
   let context = '';
   let step = 0;
   let finalAnswer = '';
@@ -461,6 +466,8 @@ async function sendToAgent(task, isDeepThink) {
       }
       const data = await Core.api.callAPI(prompt, agentPrompt, 0.7, agentModel, agentProvider, null, { disableTools: true });
       reply = (data.message && data.message.content) || data.response || '';
+      // 🔧 立即过滤 DSML 标记（DeepSeek V4 可能在 JSON 前输出 | DSML | tool_calls> 等标记）
+      reply = reply.replace(/<?\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '').trim();
     } catch (err) {
       finalAnswer = '❌ Agent 执行出错：' + err.message + '\n\n可能原因：\n1. 模型服务未启动或 API Key 未配置\n2. 当前选择的模型不可用\n\n建议：检查设置中的模型配置，或切换到其他可用模型。';
       break;

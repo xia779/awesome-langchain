@@ -9,7 +9,12 @@ function _tempFloat(v) {
   var t = Number(v);
   if (!isFinite(t) || t < 0 || t > 2) t = 0.7;
   t = Math.round(t * 100) / 100;
-  if (Number.isInteger(t)) t += 0.001; // 整数加微小 epsilon 强制小数点
+  if (Number.isInteger(t)) {
+    // 边界值处理：2.0 不能加 epsilon 会超上限，0 不能减会低于下限
+    if (t >= 2) t = 1.999;
+    else if (t <= 0) t = 0.001;
+    else t += 0.001;
+  }
   return t;
 }
 
@@ -245,12 +250,12 @@ function buildToolsPayload() {
 // 支持 Function Calling 的提供商
 const FUNCTION_CALLING_PROVIDERS = ['deepseek', 'qwen', 'custom', 'silicon'];
 
-// 🔧 过滤 DeepSeek 流式响应中的 DSML 标记（如 || DSML || tool_calls>）
-// 这些标记是 DeepSeek 内部用于标识 function calling 的特殊文本，不应显示给用户
-var DSML_MARKER_RE = /\|{1,3}\s*DSML\s*\|{1,3}\s*\w*[>]?\s*/g;
+//  过滤 DeepSeek 流式响应中的 DSML 标记
+// 匹配所有格式: <| DSML || tool_calls>、| DSML | tool_calls>、|| DSML || invoke name="web_search">、<|DSML||/invoke> 等
+// 策略: 匹配可选<开头 + 1~3个管道符 + 含DSML的标记段 + 可选>结尾，覆盖所有变体
+var DSML_MARKER_RE = /<?\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi;
 function stripDSMLMarkers(text) {
   if (!text) return text;
-  // 仅移除标记，不 trim —— 避免拼接时丢失空格导致词语粘连
   return text.replace(DSML_MARKER_RE, '');
 }
 
@@ -434,7 +439,9 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
   console.log('[cloud-api] stream request:', JSON.stringify({ model: requestBody.model, temperature: requestBody.temperature, tempType: typeof requestBody.temperature }));
 
   const supportsTools = FUNCTION_CALLING_PROVIDERS.includes(provider);
-  const toolsPayload = supportsTools ? buildToolsPayload() : null;
+  // 如果 prompt 已包含搜索结果，不再注入 web_search 工具（防止模型重复调用并清空回复）
+  const alreadySearched = prompt && prompt.indexOf('【联网搜索结果】') >= 0;
+  const toolsPayload = (supportsTools && !alreadySearched) ? buildToolsPayload() : null;
   if (toolsPayload) {
     requestBody.tools = toolsPayload;
     requestBody.tool_choice = 'auto';

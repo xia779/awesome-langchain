@@ -329,10 +329,30 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       // 优先使用结构化搜索（返回卡片数据）
       var searchMeta = null;
       if (Core.webSearchWithMeta) {
-        searchMeta = await Core.webSearchWithMeta(text);
+        try {
+          searchMeta = await Core.webSearchWithMeta(text);
+        } catch (metaErr) {
+          console.warn('结构化搜索失败，降级:', metaErr.message);
+        }
       }
       var searchResult = searchMeta ? searchMeta.text : await Core.webSearch(text);
-      searchItems = (searchMeta && searchMeta.items) ? searchMeta.items : [];
+      searchItems = (searchMeta && searchMeta.items && searchMeta.items.length > 0) ? searchMeta.items : [];
+
+      // 如果没有结构化数据，从纯文本解析出卡片
+      if (searchItems.length === 0 && searchResult && searchResult.length > 30) {
+        var blocks = searchResult.split(/\n\n+/);
+        for (var bi = 0; bi < blocks.length && searchItems.length < 8; bi++) {
+          var block = blocks[bi].trim();
+          if (!block || block.length < 10) continue;
+          var lines = block.split('\n');
+          var title = lines[0].replace(/^[\d.]+\s*/, '').substring(0, 80);
+          var snippet = lines.slice(1).join(' ').substring(0, 150);
+          var url = '';
+          var urlMatch = block.match(/https?:\/\/[^\s]+/);
+          if (urlMatch) url = urlMatch[0];
+          if (title) searchItems.push({ title: title, snippet: snippet || title, url: url });
+        }
+      }
 
       if (searchResult && searchResult.trim() !== '' && 
           !searchResult.includes('未找到有效的搜索结果') && 
