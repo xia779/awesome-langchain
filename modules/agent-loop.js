@@ -144,6 +144,26 @@ function extractJSONFromText(text) {
 }
 
 
+// ===== Agent 步骤名称中文翻译 =====
+var ACTION_ZH_MAP = {
+  'web_search': '联网搜索',
+  'read_file': '读取文件',
+  'write_file': '写入文件',
+  'list_dir': '列出目录',
+  'search_files': '搜索文件',
+  'run_command': '执行命令',
+  'run_python': '运行Python',
+  'browser_navigate': '浏览网页',
+  'ask_user': '询问用户',
+  'parallel_execute': '并行执行',
+  'complete': '完成任务',
+  'memory_search': '记忆检索',
+  'knowledge_search': '知识检索'
+};
+function translateAction(action) {
+  return ACTION_ZH_MAP[action] || action;
+}
+
 // ===== 最终回答清理（合并 5 个冗余清理块）=====
 function cleanFinalAnswer(text) {
   if (!text) return text;
@@ -557,7 +577,7 @@ async function sendToAgent(task, isDeepThink) {
     _lpStepLabel.textContent = '\u6B65\u9AA4 ' + step;
     var _lpActionLabel = document.createElement('span');
     _lpActionLabel.style.cssText = 'font-weight:500;color:var(--text);margin-left:4px;';
-    _lpActionLabel.textContent = action.action;
+    _lpActionLabel.textContent = translateAction(action.action);
     var _lpStatusIcon = document.createElement('span');
     _lpStatusIcon.style.fontSize = '10px';
     _lpStatusIcon.className = 'typing-cursor';
@@ -685,7 +705,7 @@ async function sendToAgent(task, isDeepThink) {
       if (stepsLog[si].time) totalTime += stepsLog[si].time;
     }
     var totalTimeStr = (totalTime / 1000).toFixed(1);
-    var statsHtml = '<span class="agent-think-arrow">▶</span> 🧠 执行追踪 (' + stepsLog.length + '步';
+    var statsHtml = '<span class="agent-think-arrow">▼</span> 🧠 执行追踪 (' + stepsLog.length + '步';
     if (successCount > 0) statsHtml += ' <span style="color:#22c55e;">✓' + successCount + '</span>';
     if (failCount > 0) statsHtml += ' <span style="color:#ef4444;">✗' + failCount + '</span>';
     statsHtml += '，' + totalTimeStr + 's)';
@@ -737,7 +757,7 @@ async function sendToAgent(task, isDeepThink) {
       var headerRow = document.createElement('div');
       headerRow.className = 'agent-trace-step-header';
       headerRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;cursor:pointer;border-radius:4px;font-size:12px;user-select:none;';
-      headerRow.innerHTML = '<span style="color:' + (sData.success ? '#22c55e' : '#ef4444') + ';font-weight:600;">' + statusIcon + ' 步骤' + sData.step + '</span> <span style="font-weight:500;color:var(--text);">' + sData.action + '</span> <span style="font-size:10px;color:var(--text-secondary);margin-left:auto;">' + timeStr + 's</span> <span class="agent-trace-expand-icon" style="font-size:10px;color:var(--text-secondary);">▶</span>';
+      headerRow.innerHTML = '<span style="color:' + (sData.success ? '#22c55e' : '#ef4444') + ';font-weight:600;">' + statusIcon + ' 步骤' + sData.step + '</span> <span style="font-weight:500;color:var(--text);">' + translateAction(sData.action) + '</span> <span style="font-size:10px;color:var(--text-secondary);margin-left:auto;">' + timeStr + 's</span> <span class="agent-trace-expand-icon" style="font-size:10px;color:var(--text-secondary);">▶</span>';
       var detailRow = document.createElement('div');
       detailRow.className = 'agent-trace-step-detail';
       detailRow.style.cssText = 'display:none;padding:4px 8px 6px 28px;font-size:11px;color:var(--text-secondary);line-height:1.5;';
@@ -761,8 +781,8 @@ async function sendToAgent(task, isDeepThink) {
     }
     stepsContainer.replaceChildren(_traceFrag);
     var panelContent = document.createElement('div');
-    panelContent.className = 'agent-think-content';
-    panelContent.style.cssText = 'max-height:0;overflow:hidden;transition:max-height 0.3s ease;';
+    panelContent.className = 'agent-think-content expanded';
+    panelContent.style.cssText = 'max-height:2000px;overflow:hidden;transition:max-height 0.3s ease;';
     stepsContainer.style.marginTop = '4px';
     panelContent.appendChild(stepsContainer);
     panelWrapper.appendChild(panelToggle);

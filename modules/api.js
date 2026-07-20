@@ -873,7 +873,11 @@ async function sendMessage() {
 
     if (isAgentMode) {
       try {
-        const agentResult = await Core.agentLoop.sendToAgent(agentTask, isDeepThinkActive);
+        // 🔧 先显示用户消息（不要等Agent完成才显示）
+        Core.session.addMessage(agentTask, 'user');
+        // 🔧 如果有文件附件内容，传给Agent（apiText包含完整文件内容）
+        var agentInput = (apiText && apiText !== agentTask) ? apiText : agentTask;
+        const agentResult = await Core.agentLoop.sendToAgent(agentInput, isDeepThinkActive);
         if (agentResult.success) {
           var agentReply = agentResult.reply;
           // Guardrails Layer 2: Agent 回复输出守卫
@@ -884,7 +888,6 @@ async function sendMessage() {
               agentReply = agentOutputCheck.cleaned;
             }
           }
-          Core.session.addMessage(agentTask, 'user');
           Core.session.addMessage(agentReply, 'ai');
         }
       } catch (err) {
