@@ -327,6 +327,7 @@ async function sendToAgent(task, isDeepThink) {
   let finalAnswer = '';
   let stepsLog = [];
   let _agentCancelled = false;
+  let _searchCount = 0;  // 🔧 联网搜索计数，防止无限搜索
   let _stepStartTimes = {};
 
   // 🔧 标记生成开始，按钮变为停止
@@ -637,6 +638,16 @@ async function sendToAgent(task, isDeepThink) {
 
     const stepRecord = `[步骤${step}] 执行 ${action.action}: ${JSON.stringify(action.params || {})}\n结果: ${resultForContext.substring(0, 300)}${resultForContext.length > 300 ? '...' : ''}`;
     context += '\n' + stepRecord;
+
+    // 🔧 联网搜索收敛控制：防止Agent无限搜索不产出答案
+    if (action.action === 'web_search') {
+      _searchCount++;
+      if (_searchCount === 4) {
+        context += '\n⚠️ [系统提示] 你已搜索了4次。请评估当前信息是否足够回答问题。如果足够，请立即使用 complete 动作输出最终答案，不要继续搜索。';
+      } else if (_searchCount >= 6) {
+        context += '\n🚨 [系统强制提示] 你已搜索了' + _searchCount + '次，信息收集阶段必须结束！请立即使用 complete 动作，基于已有信息给出最终答案。禁止再次调用 web_search。';
+      }
+    }
     stepsLog.push({ step: step, action: action.action, params: action.params, result: toolResultStr.substring(0, 500), time: Date.now() - (_stepStartTimes[step] || Date.now()), success: !isToolError });
 
     // 更新步骤行：完成状态（含耗时）— 仅非错误时更新为绿色

@@ -899,7 +899,12 @@ async function sendMessage() {
               agentReply = agentOutputCheck.cleaned;
             }
           }
-          Core.session.addMessage(agentReply, 'ai');
+          // 🔧 只存数据不渲染DOM（agent-loop已经把回答渲染到agentDiv了）
+          var _sid = Core.session.getCurrentId();
+          if (_sid && Core.session.sessions[_sid]) {
+            Core.session.sessions[_sid].messages.push({ role: 'ai', content: agentReply, timestamp: Date.now() });
+            if (Core.session.saveSession) Core.session.saveSession(_sid);
+          }
         }
       } catch (err) {
         console.error('Agent模式错误:', err);
