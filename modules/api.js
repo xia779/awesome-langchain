@@ -416,15 +416,27 @@ async function callAPI(prompt, systemMsg, temperature, model, provider, messages
 
   // 检测是否有工具调用
   if (data.message && data.message.tool_calls && data.message.tool_calls.length > 0) {
+    var _toolDepth = (options && options._toolDepth) || 0;
+    if (_toolDepth >= 3) {
+      console.warn('[callAPI] tool_calls 递归深度超限(3)，跳过工具执行');
+      data.message.content = data.message.content || '工具调用次数过多，已停止。';
+      return data;
+    }
     const toolCall = data.message.tool_calls[0];
     const toolName = toolCall.function.name;
-    const params = JSON.parse(toolCall.function.arguments);
+    let params;
+    try { params = JSON.parse(toolCall.function.arguments); } catch (pe) {
+      console.warn('[callAPI] 工具参数解析失败:', toolCall.function.arguments);
+      data.message.content = '工具参数格式错误: ' + pe.message;
+      return data;
+    }
     if (Core.toolsRegistry && typeof Core.toolsRegistry.executeTool === 'function') {
       try {
         const result = await Core.toolsRegistry.executeTool(toolName, params);
         messages.push({ role: 'assistant', content: data.message.content || '' });
-        messages.push({ role: 'tool', content: result });
-        const finalResponse = await callAPI(null, null, temperature, model, provider, messages);
+        messages.push({ role: 'tool', content: typeof result === 'string' ? result : JSON.stringify(result) });
+        var _recurseOpts = Object.assign({}, options, { _toolDepth: _toolDepth + 1 });
+        const finalResponse = await callAPI(null, null, temperature, model, provider, messages, _recurseOpts);
         return finalResponse;
       } catch (err) {
         console.error('工具执行失败:', err);
@@ -722,7 +734,7 @@ async function sendMessage() {
       var fileDisplayParts = [];  // 显示用：简短引用
       var fileContentParts = [];  // API用：完整内容
       // 并发读取所有文件内容
-      var TEXT_EXTS = ['.txt','.md','.json','.log','.html','.htm','.xml','.yaml','.yml','.ini','.cfg','.conf','.py','.js','.ts','.jsx','.tsx','.bat','.sh','.cmd','.sql','.toml','.env','.gitignore','.editorconfig'];
+      var TEXT_EXTS = ['.txt','.md','.json','.log','.html','.htm','.xml','.yaml','.yml','.ini','.cfg','.conf','.py','.js','.ts','.jsx','.tsx','.bat','.sh','.cmd','.sql','.toml','.env','.gitignore','.editorconfig','.css','.scss','.less','.vue','.svelte','.go','.rs','.java','.c','.cpp','.h','.hpp','.rb','.php','.swift','.kt','.r','.m','.svg','.tsv','.diff','.patch','.properties','.dockerfile','.makefile','.gradle'];
       var DOC_EXTS = ['.pdf','.docx','.doc','.xlsx','.xls','.csv','.pptx','.ppt'];
       var fileReadPromises = pendingFiles.map(function(pf, idx) {
         var ext = path.extname(pf.name).toLowerCase();
@@ -879,7 +891,7 @@ async function sendMessage() {
         console.error('Agent模式错误:', err);
         setGeneratingState(false, Core.session.getCurrentId());
         try {
-          await Core.chatHandler.handleNormalChat(text, knowledgeContext, apiText);
+          await Core.chatHandler.handleNormalChat(text, '', apiText);
         } catch (chatErr) {
           console.error('Agent回退到普通聊天失败:', chatErr);
         }

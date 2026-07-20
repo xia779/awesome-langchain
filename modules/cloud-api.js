@@ -601,34 +601,57 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
       body: JSON.stringify(followUpBody)
     };
     if (signal) followUpOpts.signal = signal;
-    const followUpResp = await fetch(baseURL + '/chat/completions', followUpOpts);
-    if (followUpResp.ok && followUpResp.body) {
-      const fReader = followUpResp.body.getReader();
-      let fBuffer = '';
-      while (true) {
-        const fChunk = await fReader.read();
-        if (fChunk.done) break;
-        fBuffer += decoder.decode(fChunk.value, { stream: true });
-        const fLines = fBuffer.split('\n');
-        fBuffer = fLines.pop() || '';
-        for (const fLine of fLines) {
-          const fTrimmed = fLine.trim();
-          if (!fTrimmed || fTrimmed === 'data: [DONE]') continue;
-          if (fTrimmed.startsWith('data: ')) {
+    try {
+      const followUpResp = await fetch(baseURL + '/chat/completions', followUpOpts);
+      if (followUpResp.ok && followUpResp.body) {
+        const fReader = followUpResp.body.getReader();
+        let fBuffer = '';
+        while (true) {
+          let fChunk;
+          try { fChunk = await fReader.read(); } catch (fReadErr) {
+            if (signal && signal.aborted) break;
+            throw fReadErr;
+          }
+          if (fChunk.done) break;
+          fBuffer += decoder.decode(fChunk.value, { stream: true });
+          const fLines = fBuffer.split('\n');
+          fBuffer = fLines.pop() || '';
+          for (const fLine of fLines) {
+            const fTrimmed = fLine.trim();
+            if (!fTrimmed || fTrimmed === 'data: [DONE]') continue;
+            if (fTrimmed.startsWith('data: ')) {
+              try {
+                const fData = JSON.parse(fTrimmed.substring(6));
+                const fRawContent = fData.choices?.[0]?.delta?.content || '';
+                const fContent = stripDSMLMarkers(fRawContent);
+                if (fContent) {
+                  fullText += fContent;
+                  onChunk(fContent, fullText);
+                }
+              } catch(e) {
+                console.warn('[cloud-api] 流式后续响应数据解析失败:', e.message);
+              }
+            }
+          }
+        }
+        // 🔧 处理缓冲区中剩余的数据（防止最后一个chunk无换行时丢失）
+        if (fBuffer.trim()) {
+          const fTrimmed = fBuffer.trim();
+          if (fTrimmed.startsWith('data: ') && fTrimmed !== 'data: [DONE]') {
             try {
               const fData = JSON.parse(fTrimmed.substring(6));
               const fRawContent = fData.choices?.[0]?.delta?.content || '';
               const fContent = stripDSMLMarkers(fRawContent);
-              if (fContent) {
-                fullText += fContent;
-                onChunk(fContent, fullText);
-              }
-            } catch(e) {
-              console.warn('[cloud-api] 流式后续响应数据解析失败:', e.message);
-            }
+              if (fContent) { fullText += fContent; onChunk(fContent, fullText); }
+            } catch(e) { /* ignore */ }
           }
         }
+      } else {
+        console.warn('[cloud-api] 流式后续请求失败:', followUpResp.status, followUpResp.statusText);
       }
+    } catch (fuErr) {
+      if (signal && signal.aborted) { /* 用户取消，静默 */ }
+      else { console.warn('[cloud-api] 流式后续请求异常:', fuErr.message); }
     }
   }
   

@@ -385,7 +385,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
     searchItems.forEach(function(item) {
       var card = document.createElement('a');
       card.className = 'search-result-card';
-      if (item.url) { card.href = item.url; card.target = '_blank'; }
+      if (item.url && /^https?:\/\//i.test(item.url)) { card.href = item.url; card.target = '_blank'; }
       else { card.style.cursor = 'default'; }
       var titleDiv = document.createElement('div');
       titleDiv.className = 'sr-title';

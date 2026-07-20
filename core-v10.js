@@ -1804,13 +1804,12 @@ Core.renderMarkdown = function(text) {
       item.appendChild(title);
       
       item.addEventListener('click', function() {
-        // 转发消息
-        if (Core.session.addMessage) {
-          Core.session.addMessage(text, 'user');
-        }
-        // 切换会话
+        // 先切换到目标会话，再添加消息（顺序不能反，否则消息会加到当前会话）
         if (Core.session.switchSession) {
           Core.session.switchSession(sid);
+        }
+        if (Core.session.addMessage) {
+          Core.session.addMessage(text, 'user');
         }
         overlay.remove();
         Core.dom.status.textContent = '✅ 已转发到「' + (sess.title || '未命名') + '」';

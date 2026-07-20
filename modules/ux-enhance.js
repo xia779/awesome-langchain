@@ -266,6 +266,10 @@ function createActionBtn(icon, title) {
 }
 
 function getMessageIndex(msgEl) {
+  // 优先使用 session.js 渲染时设置的 data-msg-index（虚拟滚动下DOM位置≠数据索引）
+  if (msgEl.dataset && msgEl.dataset.msgIndex !== undefined) {
+    return parseInt(msgEl.dataset.msgIndex, 10);
+  }
   var container = document.getElementById('chatContainer');
   if (!container) return -1;
   var msgs = Array.from(container.querySelectorAll('.msg'));
@@ -515,6 +519,7 @@ function _openPalette() {
   _createPalette();
   _paletteEl.style.display = 'flex';
   _paletteOpen = true;
+  _paletteSelectedIdx = 0;
   _paletteInput.value = '';
   _paletteInput.focus();
   _updatePaletteResults('');

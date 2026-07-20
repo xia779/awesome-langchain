@@ -968,7 +968,7 @@ function createDateDivider(date) {
   yesterday.setDate(yesterday.getDate() - 1);
   var msgDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   
-  var weekdayNames = ['\u65e5\u671f\u4e00', '\u661f\u671f\u4e00', '\u661f\u671f\u4e8c', '\u661f\u671f\u4e09', '\u661f\u671f\u56db', '\u661f\u671f\u4e94', '\u661f\u671f\u516d'];
+  var weekdayNames = ['\u661f\u671f\u65e5', '\u661f\u671f\u4e00', '\u661f\u671f\u4e8c', '\u661f\u671f\u4e09', '\u661f\u671f\u56db', '\u661f\u671f\u4e94', '\u661f\u671f\u516d'];
   var dateStr = '';
   if (msgDay.getTime() === today.getTime()) {
     dateStr = '\u4eca\u5929';
@@ -1056,7 +1056,7 @@ function renderSingleMessage(msg, index, container) {
   // 代码按钮由 renderMessages 批量添加（避免逐条 setTimeout 引起二次闪烁）
 
   // 🔧 快速操作面板（AI消息）— Material Icons 版
-  if (msg.role === 'assistant' && msg.content && !msg.type) {
+  if ((msg.role === 'assistant' || msg.role === 'ai') && msg.content && !msg.type) {
     var quickActions = document.createElement('div');
     quickActions.className = 'quick-actions';
 
