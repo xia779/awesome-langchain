@@ -366,6 +366,17 @@ function registerEventBridge() {
   Core.on('gateway:device', function(data) {
     broadcast({ type: 'device_update', deviceId: data.deviceId, status: data.status, capabilities: data.capabilities });
   });
+
+  // AI 出错回传：api.js 在 AI 调用失败时 emit 'ai:error'，转发给所有 WS 客户端（修复此前出错静默无响应）
+  Core.on('ai:error', function(data) {
+    broadcast({
+      type: 'error',
+      message: 'AI 处理失败: ' + (data.message || '未知错误'),
+      code: 'AI_ERROR',
+      context: data.context || 'chat',
+      time: Date.now()
+    });
+  });
 }
 
 // ===== 广播工具 =====

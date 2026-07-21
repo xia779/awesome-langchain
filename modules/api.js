@@ -945,6 +945,7 @@ async function sendMessage() {
           await Core.chatHandler.handleNormalChat(text, '', apiText);
         } catch (chatErr) {
           console.error('Agent回退到普通聊天失败:', chatErr);
+          Core.emit('ai:error', { message: chatErr.message || 'Agent 处理失败', context: 'agent', time: Date.now() });
         }
       }
       Core.dom.input.focus();
@@ -1084,6 +1085,7 @@ async function sendMessage() {
     } catch (err) {
       console.error('普通聊天错误:', err);
       Core.dom.status.textContent = '请求失败，请检查配置';
+      Core.emit('ai:error', { message: err.message || '请求失败，请检查配置', context: 'chat', time: Date.now() });
     } finally {
       Core.dom.sendBtn.disabled = false;
     }
@@ -1091,6 +1093,7 @@ async function sendMessage() {
   } catch (err) {
     console.error('sendMessage 全局错误:', err);
     Core.dom.status.textContent = '发送失败: ' + err.message;
+    Core.emit('ai:error', { message: err.message || '发送失败', context: 'send', time: Date.now() });
     Core.dom.sendBtn.disabled = false;
     Core.dom.input.focus();
   } finally {
