@@ -243,8 +243,8 @@ function renderSchedule() {
     });
   }
 
-  h += '<button class="qp-btn" style="width:100%;margin-top:4px" data-action="new-task">＋ 新建定时任务</button>';
-  h += '<div class="qp-hint">💡 也可以直接在对话框说「每天9点分析A股大盘」，我会自动帮你创建定时任务。</div>';
+  h += '<button class="qp-btn" style="width:100%;margin-top:4px" data-action="new-task"><span class="material-icons-outlined" style="font-size:15px;vertical-align:-3px;margin-right:4px;">add</span>新建定时任务</button>';
+  h += '<div class="qp-hint"><span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;margin-right:4px;">lightbulb</span>也可以直接在对话框说「每天9点分析A股大盘」，我会自动帮你创建定时任务。</div>';
   return h;
 }
 

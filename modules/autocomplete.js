@@ -174,9 +174,9 @@ function _showSuggestions(items) {
   items.forEach(function(item, idx) {
     var div = document.createElement('div');
     div.className = 'ac-item' + (idx === _selectedIdx ? ' selected' : '');
-    var icon = item.type === 'command' ? '⚡' : (item.type === 'session' ? '💬' : '💡');
+    var icon = item.type === 'command' ? 'bolt' : (item.type === 'session' ? 'chat' : 'lightbulb');
     var iconSpan = document.createElement('span');
-    iconSpan.className = 'ac-icon';
+    iconSpan.className = 'ac-icon material-icons-outlined';
     iconSpan.textContent = icon;
     var nameSpan = document.createElement('span');
     nameSpan.className = 'ac-name';

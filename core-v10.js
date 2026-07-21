@@ -262,20 +262,20 @@ const Core = {
     activeTheme: 'dark-default',
       // 🔧 P2: 提示词与角色系统
       prompts: [
-        { name: '总结', content: '请总结以下内容的要点，用简洁的语言输出。', icon: '📝' },
-        { name: '翻译', content: '请将以下内容翻译成中文/英文，保持原意不变。', icon: '🌐' },
-        { name: '编程', content: '请帮我编写代码，要求清晰、高效、有注释。', icon: '💻' },
-        { name: '解释', content: '请用通俗易懂的方式解释以下内容，适合初学者理解。', icon: '💡' },
-        { name: '优化', content: '请优化以下内容，使其更加通顺、专业、有说服力。', icon: '✨' },
+        { name: '总结', content: '请总结以下内容的要点，用简洁的语言输出。', icon: 'summarize' },
+        { name: '翻译', content: '请将以下内容翻译成中文/英文，保持原意不变。', icon: 'translate' },
+        { name: '编程', content: '请帮我编写代码，要求清晰、高效、有注释。', icon: 'code' },
+        { name: '解释', content: '请用通俗易懂的方式解释以下内容，适合初学者理解。', icon: 'lightbulb' },
+        { name: '优化', content: '请优化以下内容，使其更加通顺、专业、有说服力。', icon: 'auto_awesome' },
       ],
       roles: [
-        { name: '通用助手', systemMsg: '你是一个 helpful、honest、harmless 的 AI 助手。', icon: '🤖', description: '通用问答和日常对话' },
-        { name: '程序员', systemMsg: '你是一位资深程序员，精通多种编程语言，擅长代码审查、算法优化和架构设计。', icon: '💻', description: '编程、代码审查、技术咨询' },
-        { name: '作家', systemMsg: '你是一位专业作家，擅长各类文体写作，包括小说、散文、剧本、公文等。', icon: '✍️', description: '写作、编辑、文案创作' },
-        { name: '老师', systemMsg: '你是一位经验丰富的教师，善于用通俗易懂的方式解释复杂概念，耐心引导学生学习。', icon: '👨‍🏫', description: '教学、辅导、知识讲解' },
-        { name: '医生', systemMsg: '你是一位专业医生，可以提供健康建议、解释医学知识，但请注意不能替代专业医疗诊断。', icon: '👨‍⚕️', description: '健康咨询、医学知识' },
-        { name: '律师', systemMsg: '你是一位专业律师，可以提供法律知识咨询，但请注意不能替代专业法律服务。', icon: '⚖️', description: '法律咨询、合同审查' },
-        { name: '产品经理', systemMsg: '你是一位资深产品经理，擅长需求分析、用户体验设计和产品规划。', icon: '📊', description: '产品设计、需求分析' },
+        { name: '通用助手', systemMsg: '你是一个 helpful、honest、harmless 的 AI 助手。', icon: 'smart_toy', description: '通用问答和日常对话' },
+        { name: '程序员', systemMsg: '你是一位资深程序员，精通多种编程语言，擅长代码审查、算法优化和架构设计。', icon: 'code', description: '编程、代码审查、技术咨询' },
+        { name: '作家', systemMsg: '你是一位专业作家，擅长各类文体写作，包括小说、散文、剧本、公文等。', icon: 'edit_note', description: '写作、编辑、文案创作' },
+        { name: '老师', systemMsg: '你是一位经验丰富的教师，善于用通俗易懂的方式解释复杂概念，耐心引导学生学习。', icon: 'school', description: '教学、辅导、知识讲解' },
+        { name: '医生', systemMsg: '你是一位专业医生，可以提供健康建议、解释医学知识，但请注意不能替代专业医疗诊断。', icon: 'medical_services', description: '健康咨询、医学知识' },
+        { name: '律师', systemMsg: '你是一位专业律师，可以提供法律知识咨询，但请注意不能替代专业法律服务。', icon: 'balance', description: '法律咨询、合同审查' },
+        { name: '产品经理', systemMsg: '你是一位资深产品经理，擅长需求分析、用户体验设计和产品规划。', icon: 'analytics', description: '产品设计、需求分析' },
       ],
       currentRole: '通用助手',
       systemInstruction: '你是一个 helpful、honest、harmless 的 AI 助手。',
@@ -938,10 +938,10 @@ Core.renderMarkdown = function(text) {
 
   if (Core.dom.refreshModelsBtn) {
     Core.dom.refreshModelsBtn.addEventListener('click', async () => {
-      Core.dom.refreshModelsBtn.textContent = '⏳';
+      Core.dom.refreshModelsBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:16px;">hourglass_empty</span>';
       Core.dom.status.textContent = '🔄 正在获取模型...';
       await refreshModels();
-      Core.dom.refreshModelsBtn.textContent = '↻';
+      Core.dom.refreshModelsBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:16px;">refresh</span>';
       Core.dom.status.textContent = '✅ 模型列表已刷新';
       setTimeout(() => { Core.dom.status.textContent = `✅ 已就绪 (${Core.getCurrentService()})`; }, 2000);
     });
@@ -1727,7 +1727,7 @@ Core.renderMarkdown = function(text) {
     function addItem(icon, text, onClick, danger) {
       var item = document.createElement('div');
       item.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;color:' + (danger ? '#ef4444' : '#e8e8e8') + ';transition:background 0.15s;display:flex;align-items:center;gap:8px;white-space:nowrap;';
-      item.innerHTML = '<span style="font-size:14px;width:20px;text-align:center;">' + icon + '</span><span>' + text + '</span>';
+      item.innerHTML = '<span class="material-icons-outlined" style="font-size:16px;width:20px;text-align:center;">' + icon + '</span><span>' + text + '</span>';
       item.addEventListener('mouseenter', function() { item.style.background = '#2a2a2a'; });
       item.addEventListener('mouseleave', function() { item.style.background = 'transparent'; });
       item.addEventListener('click', function() {
@@ -1740,7 +1740,7 @@ Core.renderMarkdown = function(text) {
     // 🔧 如果有选中的文本，显示"复制选中内容"选项
     var selection = window.getSelection();
     if (selection && selection.toString().trim() && msgDiv.contains(selection.anchorNode)) {
-      addItem('\ud83d\udccb', '复制选中内容', function() {
+      addItem('content_copy', '复制选中内容', function() {
         navigator.clipboard.writeText(selection.toString().trim()).then(function() {
           Core.dom.status.textContent = '✅ 已复制选中内容';
           setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 2000);
@@ -1748,13 +1748,13 @@ Core.renderMarkdown = function(text) {
       });
     }
 
-    addItem('\ud83d\udccb', '复制全部内容', function() {
+    addItem('content_copy', '复制全部内容', function() {
       // 清除选中状态，强制复制全部
       window.getSelection().removeAllRanges();
       copyMessage(msgDiv);
     });
     
-    addItem('\ud83d\udccc', '引用此消息', function() {
+    addItem('push_pin', '引用此消息', function() {
       setQuote(msgDiv);
     });
     
@@ -1774,31 +1774,31 @@ Core.renderMarkdown = function(text) {
       }
     }
     if (canWithdraw) {
-      addItem('\u21a9\ufe0f', '撤回消息', function() {
+      addItem('undo', '撤回消息', function() {
         withdrawMessage(msgDiv);
       });
     }
     
     // 🔧 消息转发
-    addItem('\ud83d\udce4', '转发', function() {
+    addItem('forward', '转发', function() {
       forwardMessage(msgDiv);
     });
     
     if (isUser) {
-      addItem('\u270f\ufe0f', '编辑并重新发送', function() {
+      addItem('edit', '编辑并重新发送', function() {
         enterEditMode(msgDiv);
       });
     } else if (isAI) {
-      addItem('\ud83d\udd01', '重新生成', function() {
+      addItem('refresh', '重新生成', function() {
         regenerateMessage(msgDiv);
       });
     }
     
-    addItem('\ud83d\uddd1\ufe0f', '删除此消息', function() {
+    addItem('delete', '删除此消息', function() {
       if (confirm('删除此消息？')) deleteSingleMessage(msgDiv);
     }, true);
     
-    addItem('\u2611\ufe0f', '进入多选模式', function() {
+    addItem('check_box', '进入多选模式', function() {
       enterMultiSelectMode();
     });
     
@@ -1870,7 +1870,7 @@ Core.renderMarkdown = function(text) {
     
     var header = document.createElement('div');
     header.style.cssText = 'padding:14px 16px;border-bottom:1px solid #2a2a2a;display:flex;justify-content:space-between;align-items:center;';
-    header.innerHTML = '<span style="font-size:15px;font-weight:600;color:#e8e8e8;">📤 转发到</span><button id="forwardClose" style="background:none;border:none;color:#6b7280;font-size:18px;cursor:pointer;padding:0 4px;line-height:1;">×</button>';
+    header.innerHTML = '<span style="font-size:15px;font-weight:600;color:#e8e8e8;display:flex;align-items:center;gap:6px;"><span class="material-icons-outlined" style="font-size:18px;">forward</span>转发到</span><button id="forwardClose" style="background:none;border:none;color:#6b7280;cursor:pointer;padding:0 4px;line-height:1;display:flex;align-items:center;"><span class="material-icons-outlined" style="font-size:18px;">close</span></button>';
     
     var listDiv = document.createElement('div');
     listDiv.style.cssText = 'overflow-y:auto;max-height:380px;padding:8px 0;';
@@ -1891,8 +1891,9 @@ Core.renderMarkdown = function(text) {
       item.addEventListener('mouseleave', function() { item.style.background = 'transparent'; });
       
       var icon = document.createElement('span');
-      icon.textContent = sess.roleType === 'master' ? '👔' : (sess.roleType === 'chat' ? '💬' : '🤖');
-      icon.style.fontSize = '18px';
+      icon.className = 'material-icons-outlined';
+      icon.textContent = sess.roleType === 'master' ? 'work' : (sess.roleType === 'chat' ? 'chat' : 'smart_toy');
+      icon.style.cssText = 'font-size:18px;color:#9ca3af;';
       
       var title = document.createElement('span');
       title.textContent = sess.title || '未命名';
@@ -1953,7 +1954,7 @@ Core.renderMarkdown = function(text) {
     function addItem(icon, text, onClick, danger) {
       var item = document.createElement('div');
       item.style.cssText = 'padding:8px 14px;cursor:pointer;font-size:13px;color:' + (danger ? '#ef4444' : '#e8e8e8') + ';transition:background 0.15s;display:flex;align-items:center;gap:8px;white-space:nowrap;';
-      item.innerHTML = '<span style="font-size:14px;width:20px;text-align:center;">' + icon + '</span><span>' + text + '</span>';
+      item.innerHTML = '<span class="material-icons-outlined" style="font-size:16px;width:20px;text-align:center;">' + icon + '</span><span>' + text + '</span>';
       item.addEventListener('mouseenter', function() { item.style.background = '#2a2a2a'; });
       item.addEventListener('mouseleave', function() { item.style.background = 'transparent'; });
       item.addEventListener('click', function() {
@@ -1963,7 +1964,7 @@ Core.renderMarkdown = function(text) {
       menu.appendChild(item);
     }
 
-    addItem('\ud83d\uddbc\ufe0f', '查看大图', function() {
+    addItem('image', '查看大图', function() {
       if (Core.initImagePreview) {
         // 模拟点击打开图片预览
         var overlay = document.getElementById('imagePreviewOverlay');
@@ -1975,7 +1976,7 @@ Core.renderMarkdown = function(text) {
       }
     });
 
-    addItem('\ud83d\udccb', '复制图片链接', function() {
+    addItem('link', '复制图片链接', function() {
       if (!imgSrc) return;
       navigator.clipboard.writeText(imgSrc).then(function() {
         if (Core.dom.status) {
@@ -1987,7 +1988,7 @@ Core.renderMarkdown = function(text) {
       });
     });
 
-    addItem('\ud83d\udcbe', '保存图片', function() {
+    addItem('download', '保存图片', function() {
       if (!imgSrc) return;
       var a = document.createElement('a');
       a.href = imgSrc;
@@ -2030,16 +2031,16 @@ Core.renderMarkdown = function(text) {
       menu.style.cssText = 'position:absolute;bottom:52px;right:0;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:300;overflow:hidden;min-width:200px;padding:4px 0;';
       
       var items = [
-        { icon: '📄', text: '导出 JSON 文件', action: function() { if (Core.export && Core.export.exportCurrentSession) Core.export.exportCurrentSession('json'); } },
-        { icon: '📝', text: '导出 Markdown 文件', action: function() { if (Core.export && Core.export.exportCurrentSession) Core.export.exportCurrentSession('markdown'); } },
-        { icon: '✂️', text: '复制 Markdown 到剪贴板', action: function() { if (Core.export && Core.export.copySessionToClipboard) Core.export.copySessionToClipboard('markdown'); } },
-        { icon: '📋', text: '复制纯文本到剪贴板', action: function() { if (Core.export && Core.export.copySessionToClipboard) Core.export.copySessionToClipboard('plaintext'); } }
+        { icon: 'description', text: '导出 JSON 文件', action: function() { if (Core.export && Core.export.exportCurrentSession) Core.export.exportCurrentSession('json'); } },
+        { icon: 'edit_note', text: '导出 Markdown 文件', action: function() { if (Core.export && Core.export.exportCurrentSession) Core.export.exportCurrentSession('markdown'); } },
+        { icon: 'content_cut', text: '复制 Markdown 到剪贴板', action: function() { if (Core.export && Core.export.copySessionToClipboard) Core.export.copySessionToClipboard('markdown'); } },
+        { icon: 'content_copy', text: '复制纯文本到剪贴板', action: function() { if (Core.export && Core.export.copySessionToClipboard) Core.export.copySessionToClipboard('plaintext'); } }
       ];
       
       items.forEach(function(item) {
         var div = document.createElement('div');
         div.style.cssText = 'padding:10px 16px;cursor:pointer;color:#e8e8e8;font-size:13px;transition:background 0.2s;white-space:nowrap;display:flex;align-items:center;gap:8px;';
-        div.innerHTML = '<span style="font-size:15px;">' + item.icon + '</span><span>' + item.text + '</span>';
+        div.innerHTML = '<span class="material-icons-outlined" style="font-size:16px;color:#9ca3af;">' + item.icon + '</span><span>' + item.text + '</span>';
         div.addEventListener('mouseenter', function() { div.style.background = '#2a2a2a'; });
         div.addEventListener('mouseleave', function() { div.style.background = 'transparent'; });
         div.addEventListener('click', function(e) {

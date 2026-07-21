@@ -47,11 +47,11 @@ try {
   function setGenState(generating) {
     isGenerating = generating;
     if (generating) {
-      sendBtn.textContent = '⏹';
+      sendBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">stop</span>';
       sendBtn.style.background = '#ef4444';
       sendBtn.style.color = '#fff';
     } else {
-      sendBtn.textContent = '↑';
+      sendBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">arrow_upward</span>';
       sendBtn.style.background = '';
       sendBtn.style.color = '';
     }
@@ -63,10 +63,10 @@ try {
     if (isGenerating) {
       if (abortCtrl) { try { abortCtrl.abort(); } catch(e) {} }
       isGenerating = false;
-      sendBtn.textContent = '↑';
+      sendBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">arrow_upward</span>';
       sendBtn.style.background = '';
-      Core.dom.status.textContent = '⏹ 已停止';
-      setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪'; }, 1500);
+      Core.dom.status.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;">stop_circle</span> 已停止';
+      setTimeout(function() { Core.dom.status.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#22c55e;">check_circle</span> 已就绪'; }, 1500);
       return;
     }
     
@@ -177,7 +177,7 @@ try {
       const confirmBtn = document.getElementById('customPromptConfirm');
       const cancelBtn = document.getElementById('customPromptCancel');
 
-      titleEl.textContent = title || '✏️ 重命名会话';
+      titleEl.innerHTML = '<span class="material-icons-outlined" style="font-size:18px;vertical-align:-3px;margin-right:6px;">edit</span>' + escapeHtml(title || '重命名会话');
       input.value = defaultValue || '';
       overlay.classList.add('show');
       input.focus();
@@ -242,7 +242,7 @@ try {
         if (action === 'rename') {
           const titleElement = currentTarget.querySelector('.title');
           const currentTitle = titleElement ? titleElement.textContent.replace(/^📌\s*/, '').trim() : '';
-          showCustomPrompt('✏️ 重命名会话', currentTitle, function(newTitle) {
+          showCustomPrompt('重命名会话', currentTitle, function(newTitle) {
             if (newTitle && window.Core && Core.session && typeof Core.session.renameSession === 'function') {
               Core.session.renameSession(sessionId, newTitle);
             }
@@ -281,11 +281,11 @@ try {
           if (isRecording) {
             window.voice.stopListening();
             isRecording = false;
-            voiceBtn.textContent = '🎤 语音';
+            voiceBtn.innerHTML = '<span class="material-icons-outlined">mic</span>';
             voiceBtn.classList.remove('recording');
             return;
           }
-          voiceBtn.textContent = '⏹️ 停止';
+          voiceBtn.innerHTML = '<span class="material-icons-outlined">stop</span>';
           voiceBtn.classList.add('recording');
           isRecording = true;
           window.voice.startListening(
@@ -293,13 +293,13 @@ try {
               const input = document.getElementById('input');
               if (input) { input.value = result; input.focus(); }
               isRecording = false;
-              voiceBtn.textContent = '🎤 语音';
+              voiceBtn.innerHTML = '<span class="material-icons-outlined">mic</span>';
               voiceBtn.classList.remove('recording');
             },
             (error) => {
               console.warn('语音识别错误:', error);
               isRecording = false;
-              voiceBtn.textContent = '🎤 语音';
+              voiceBtn.innerHTML = '<span class="material-icons-outlined">mic</span>';
               voiceBtn.classList.remove('recording');
             }
           );
@@ -399,8 +399,8 @@ try {
         const reader = new FileReader();
         reader.onload = function(event) {
           addImageToPreview(event.target.result, file.name);
-          Core.dom.status.textContent = '📎 图片已添加，输入消息后发送';
-          setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪'; }, 2000);
+          Core.dom.status.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;">attach_file</span> 图片已添加，输入消息后发送';
+          setTimeout(function() { Core.dom.status.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#22c55e;">check_circle</span> 已就绪'; }, 2000);
         };
         reader.readAsDataURL(file);
         imageInput.value = '';
@@ -578,7 +578,7 @@ try {
       document.querySelector(`.service-tab[data-service="${service}"]`)?.classList.add('active');
       if (Core.cloudApi && typeof Core.cloudApi.switchService === 'function') {
         Core.cloudApi.switchService(service);
-        document.getElementById('status').textContent = `✅ 已切换到 ${service}`;
+        document.getElementById('status').innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#22c55e;">check_circle</span> 已切换到 ' + escapeHtml(service);
       } else {
         console.warn('⚠️ cloudApi 模块未加载');
       }
@@ -1050,8 +1050,8 @@ try {
       if (typeof addImageToPreview === 'function') {
         addImageToPreview(finalDataUrl, '截图');
         if (Core.dom && Core.dom.status) {
-          Core.dom.status.textContent = '📸 截图已添加，输入问题后发送进行分析';
-          setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪'; }, 3000);
+          Core.dom.status.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;">screenshot</span> 截图已添加，输入问题后发送进行分析';
+          setTimeout(function() { Core.dom.status.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#22c55e;">check_circle</span> 已就绪'; }, 3000);
         }
       }
 
@@ -1405,7 +1405,7 @@ if (Core.keyboard) {
       
       var delBtn = document.createElement('button');
       delBtn.className = 'history-delete';
-      delBtn.textContent = '✕';
+      delBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;">close</span>';
       delBtn.title = '删除';
       delBtn.addEventListener('click', function(e) {
         e.stopPropagation();
@@ -1537,13 +1537,13 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
   // 🔧 保险：如果角色未加载，直接填充默认值
   if (!Core.config.roles || Core.config.roles.length === 0) {
     Core.config.roles = [
-      { name: '通用助手', systemMsg: '你是一个 helpful、honest、harmless 的 AI 助手。', icon: '🤖', description: '通用问答和日常对话' },
-      { name: '程序员', systemMsg: '你是一位资深程序员，精通多种编程语言，擅长代码审查、算法优化和架构设计。', icon: '💻', description: '编程、代码审查、技术咨询' },
-      { name: '作家', systemMsg: '你是一位专业作家，擅长各类文体写作，包括小说、散文、剧本、公文等。', icon: '✍️', description: '写作、编辑、文案创作' },
-      { name: '老师', systemMsg: '你是一位经验丰富的教师，善于用通俗易懂的方式解释复杂概念，耐心引导学生学习。', icon: '👨‍🏫', description: '教学、辅导、知识讲解' },
-      { name: '医生', systemMsg: '你是一位专业医生，可以提供健康建议、解释医学知识，但请注意不能替代专业医疗诊断。', icon: '👨‍⚕️', description: '健康咨询、医学知识' },
-      { name: '律师', systemMsg: '你是一位专业律师，可以提供法律知识咨询，但请注意不能替代专业法律服务。', icon: '⚖️', description: '法律咨询、合同审查' },
-      { name: '产品经理', systemMsg: '你是一位资深产品经理，擅长需求分析、用户体验设计和产品规划。', icon: '📊', description: '产品设计、需求分析' },
+      { name: '通用助手', systemMsg: '你是一个 helpful、honest、harmless 的 AI 助手。', icon: 'smart_toy', description: '通用问答和日常对话' },
+      { name: '程序员', systemMsg: '你是一位资深程序员，精通多种编程语言，擅长代码审查、算法优化和架构设计。', icon: 'code', description: '编程、代码审查、技术咨询' },
+      { name: '作家', systemMsg: '你是一位专业作家，擅长各类文体写作，包括小说、散文、剧本、公文等。', icon: 'edit_note', description: '写作、编辑、文案创作' },
+      { name: '老师', systemMsg: '你是一位经验丰富的教师，善于用通俗易懂的方式解释复杂概念，耐心引导学生学习。', icon: 'school', description: '教学、辅导、知识讲解' },
+      { name: '医生', systemMsg: '你是一位专业医生，可以提供健康建议、解释医学知识，但请注意不能替代专业医疗诊断。', icon: 'medical_services', description: '健康咨询、医学知识' },
+      { name: '律师', systemMsg: '你是一位专业律师，可以提供法律知识咨询，但请注意不能替代专业法律服务。', icon: 'balance', description: '法律咨询、合同审查' },
+      { name: '产品经理', systemMsg: '你是一位资深产品经理，擅长需求分析、用户体验设计和产品规划。', icon: 'analytics', description: '产品设计、需求分析' },
     ];
     Core.config.currentRole = '通用助手';
     Core.config.systemInstruction = '你是一个 helpful、honest、harmless 的 AI 助手。';
@@ -1553,11 +1553,11 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
   // 🔧 保险：如果提示词未加载，直接填充默认值
   if (!Core.config.prompts || Core.config.prompts.length === 0) {
     Core.config.prompts = [
-      { name: '总结', content: '请总结以下内容的要点，用简洁的语言输出。', icon: '📝' },
-      { name: '翻译', content: '请将以下内容翻译成中文/英文，保持原意不变。', icon: '🌐' },
-      { name: '编程', content: '请帮我编写代码，要求清晰、高效、有注释。', icon: '💻' },
-      { name: '解释', content: '请用通俗易懂的方式解释以下内容，适合初学者理解。', icon: '💡' },
-      { name: '优化', content: '请优化以下内容，使其更加通顺、专业、有说服力。', icon: '✨' },
+      { name: '总结', content: '请总结以下内容的要点，用简洁的语言输出。', icon: 'summarize' },
+      { name: '翻译', content: '请将以下内容翻译成中文/英文，保持原意不变。', icon: 'translate' },
+      { name: '编程', content: '请帮我编写代码，要求清晰、高效、有注释。', icon: 'code' },
+      { name: '解释', content: '请用通俗易懂的方式解释以下内容，适合初学者理解。', icon: 'lightbulb' },
+      { name: '优化', content: '请优化以下内容，使其更加通顺、专业、有说服力。', icon: 'auto_awesome' },
     ];
     Core.saveConfig({ prompts: Core.config.prompts });
   }
@@ -1582,7 +1582,7 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
     prompts.forEach(function(p) {
       var item = document.createElement('div');
       item.className = 'prompt-item';
-      item.innerHTML = '<div class="prompt-item-icon">' + escapeHtml(p.icon || '📝') + '</div><div class="prompt-item-name">' + escapeHtml(p.name) + '</div>';
+      item.innerHTML = '<div class="prompt-item-icon"><span class="material-icons-outlined">' + escapeHtml(p.icon || 'summarize') + '</span></div><div class="prompt-item-name">' + escapeHtml(p.name) + '</div>';
       item.addEventListener('click', function() {
         if (input) { input.value = p.content; input.focus(); }
         promptPanel.classList.remove('active');
@@ -1626,7 +1626,7 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
     roles.forEach(function(r) {
       var item = document.createElement('div');
       item.className = 'role-item' + (r.name === currentRole ? ' active' : '');
-      item.innerHTML = '<div class="role-item-icon">' + escapeHtml(r.icon || '🤖') + '</div><div class="role-item-info"><div class="role-item-name">' + escapeHtml(r.name) + '</div><div class="role-item-desc">' + escapeHtml(r.description || '') + '</div></div><div class="role-item-check">✓</div>';
+      item.innerHTML = '<div class="role-item-icon"><span class="material-icons-outlined">' + escapeHtml(r.icon || 'smart_toy') + '</span></div><div class="role-item-info"><div class="role-item-name">' + escapeHtml(r.name) + '</div><div class="role-item-desc">' + escapeHtml(r.description || '') + '</div></div><div class="role-item-check"><span class="material-icons-outlined" style="font-size:16px;">check</span></div>';
       item.addEventListener('click', function() {
         Core.config.currentRole = r.name;
         Core.config.systemInstruction = r.systemMsg;
@@ -1636,9 +1636,9 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
         updateCurrentRoleDisplay();
         rolePanel2.classList.remove('active');
         var status = document.getElementById('status');
-        if (status) status.textContent = '✅ 已切换角色: ' + r.name;
+        if (status) status.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#22c55e;">check_circle</span> 已切换角色: ' + escapeHtml(r.name);
         setTimeout(function() {
-          if (status) status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')';
+          if (status) status.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#22c55e;">check_circle</span> 已就绪 (' + escapeHtml(Core.getCurrentService()) + ')';
         }, 2000);
       });
       roleList.appendChild(item);
@@ -1656,7 +1656,7 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
     var display = document.createElement('span');
     display.id = 'currentRoleDisplay';
     display.className = 'current-role-display';
-    display.innerHTML = (role ? escapeHtml(role.icon) : '🤖') + ' ' + escapeHtml(currentRole);
+    display.innerHTML = '<span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">' + escapeHtml(role ? role.icon : 'smart_toy') + '</span>' + escapeHtml(currentRole);
     display.title = '当前角色: ' + currentRole + '\n' + (role ? role.description : '');
     display.addEventListener('click', function() {
       renderRoles();

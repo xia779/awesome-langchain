@@ -207,7 +207,7 @@ function showEmptyState(containerId, options) {
   empty.className = 'empty-state';
   empty.id = containerId + '-empty';
 
-  var icon = opts.icon || '💭';
+  var icon = opts.icon || '<span class="material-icons-outlined" style="font-size:48px;">forum</span>';
   var title = opts.title || '暂无内容';
   var desc = opts.desc || '开始一次新对话吧';
   var actions = opts.actions || [];
@@ -221,7 +221,7 @@ function showEmptyState(containerId, options) {
     actionsDiv.className = 'empty-actions';
     actions.forEach(function(action) {
       var btn = document.createElement('button');
-      btn.textContent = action.label;
+      btn.innerHTML = action.label;
       btn.style.cssText = 'padding:6px 16px;border-radius:6px;border:1px solid var(--border-color,#444);' +
         'background:var(--bg-tertiary,#2a2a3a);color:var(--text-primary,#eee);cursor:pointer;font-size:13px;';
       btn.onclick = action.handler;
@@ -244,12 +244,12 @@ function checkEmptyState() {
 
   if (chatContainer.children.length === 0) {
     showEmptyState('chatContainer', {
-      icon: '💭',
+      icon: '<span class="material-icons-outlined" style="font-size:48px;">forum</span>',
       title: '开始新的对话',
       desc: '输入消息或使用 /help 查看所有命令',
       actions: [
-        { label: '📝 新对话', handler: function() { if (Core.session) Core.session.newChat(); } },
-        { label: '❓ 帮助', handler: function() { if (Core.custom) Core.custom.executeCommand('/help'); } }
+        { label: '<span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:5px;">edit_note</span>新对话', handler: function() { if (Core.session) Core.session.newChat(); } },
+        { label: '<span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:5px;">help</span>帮助', handler: function() { if (Core.custom) Core.custom.executeCommand('/help'); } }
       ]
     });
   } else {

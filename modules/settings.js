@@ -619,7 +619,9 @@ function renderPluginsList() {
     
     let html = '';
     plugins.forEach((plugin) => {
-      const status = plugin.enabled ? '🟢' : '⚫';
+      const status = plugin.enabled
+        ? '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#22c55e;">check_circle</span>'
+        : '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#6b7280;">cancel</span>';
       const statusText = plugin.enabled ? '已启用' : '已禁用';
       html += '<div style="padding:8px 12px; margin-bottom:6px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border);">';
       html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">';
@@ -628,7 +630,7 @@ function renderPluginsList() {
       html += '</div>';
       html += '<div style="font-size:11px; color:#94a3b8; margin-bottom:4px;">' + (plugin.description || '无描述') + '</div>';
       html += '<div style="display:flex; justify-content:space-between; align-items:center;">';
-      html += '<span style="font-size:11px; color:#94a3b8;">👤 ' + (plugin.author || '未知') + ' · ' + statusText + '</span>';
+      html += '<span style="font-size:11px; color:#94a3b8;"><span class="material-icons-outlined" style="font-size:12px;vertical-align:-2px;">person</span> ' + (plugin.author || '未知') + ' · ' + statusText + '</span>';
       html += '<div>';
       if (plugin.enabled) {
         html += '<button class="plugin-disable-btn" data-id="' + plugin.id + '" style="padding:2px 8px; background:#ef4444; border:none; border-radius:4px; color:#fff; font-size:11px; cursor:pointer; margin-right:4px;">禁用</button>';
@@ -1061,8 +1063,10 @@ function renderFavoritesList() {
     list.forEach(function(rule) {
       var row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;background:var(--bg);border:1px solid var(--border);';
-      var status = rule.enabled ? '✅' : '⏸';
-      row.innerHTML = '<span style="font-size:14px;">' + status + '</span>'
+      var status = rule.enabled
+        ? '<span class="material-icons-outlined" style="font-size:15px;color:#22c55e;">check_circle</span>'
+        : '<span class="material-icons-outlined" style="font-size:15px;color:#6b7280;">pause_circle</span>';
+      row.innerHTML = '<span style="display:flex;align-items:center;">' + status + '</span>'
         + '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
         + '<b>' + (rule.name || '') + '</b> [' + (rule.trigger.pattern || '').substring(0, 30) + '] → ' + (rule.action.response || '').substring(0, 40) + '</span>';
       var toggleBtn = document.createElement('button');
@@ -1103,7 +1107,9 @@ function renderFavoritesList() {
     list.forEach(function(task) {
       var row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;background:var(--bg);border:1px solid var(--border);';
-      var status = task.enabled ? '▶' : '⏸';
+      var status = task.enabled
+        ? '<span class="material-icons-outlined" style="font-size:15px;color:#22c55e;">play_circle</span>'
+        : '<span class="material-icons-outlined" style="font-size:15px;color:#6b7280;">pause_circle</span>';
       var schedDesc = '';
       if (task.schedule.type === 'interval') schedDesc = '每' + task.schedule.interval;
       else if (task.schedule.type === 'daily') schedDesc = '每天 ' + task.schedule.time;
@@ -1324,7 +1330,7 @@ function renderFavoritesList() {
     list.forEach(function(theme) {
       var btn = document.createElement('button');
       var isActive = theme.id === activeId;
-      btn.textContent = theme.name + (theme.isBuiltin ? '' : ' ✎');
+      btn.innerHTML = _htmlUtils.escapeHtml(theme.name) + (theme.isBuiltin ? '' : ' <span class="material-icons-outlined" style="font-size:13px;vertical-align:-2px;">edit</span>');
       btn.style.cssText = 'padding:6px 14px;border:' + (isActive ? '2px solid var(--primary)' : '1px solid var(--border)') +
         ';border-radius:8px;background:' + (isActive ? 'var(--primary-light,rgba(59,130,246,0.15))' : 'var(--bg)') +
         ';color:var(--text);cursor:pointer;font-size:12px;font-weight:' + (isActive ? '600' : '400') + ';';
@@ -1414,12 +1420,14 @@ function renderFavoritesList() {
     list.forEach(function(hook) {
       var row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:8px;background:var(--bg);border:1px solid var(--border);';
-      var status = hook.enabled ? '✅' : '⏸';
-      row.innerHTML = '<span style="font-size:14px;">' + status + '</span>'
+      var status = hook.enabled
+        ? '<span class="material-icons-outlined" style="font-size:15px;color:#22c55e;">check_circle</span>'
+        : '<span class="material-icons-outlined" style="font-size:15px;color:#6b7280;">pause_circle</span>';
+      row.innerHTML = '<span style="display:flex;align-items:center;">' + status + '</span>'
         + '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
         + '<b>' + hook.name + '</b> [' + hook.event + '] ' + (hook.script || '').substring(0, 50) + '</span>';
       var delBtn = document.createElement('button');
-      delBtn.textContent = '×';
+      delBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;">close</span>';
       delBtn.style.cssText = 'padding:2px 6px;border:none;border-radius:6px;background:#ef4444;color:#fff;cursor:pointer;font-size:12px;';
       delBtn.onclick = function() {
         if (confirm('删除钩子 "' + hook.name + '"？')) {

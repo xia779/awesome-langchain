@@ -28,7 +28,7 @@
     <div class="login-input-group">
       <label for="loginUsername">用户名</label>
       <div class="login-input-wrap">
-        <span class="login-input-icon">👤</span>
+        <span class="login-input-icon material-icons-outlined">person</span>
         <input type="text" id="loginUsername" placeholder="请输入用户名（如 admin）" autocomplete="username" />
       </div>
     </div>
@@ -36,8 +36,8 @@
     <div id="loginError"></div>
 
     <div class="login-btn-group">
-      <button id="loginBtn">🔐 登录</button>
-      <button id="registerBtn">📝 注册</button>
+      <button id="loginBtn"><span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:5px;">lock</span>登录</button>
+      <button id="registerBtn"><span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:5px;">person_add</span>注册</button>
     </div>
 
     <div class="login-users-section" id="userListSection" style="display:none;">
@@ -49,7 +49,7 @@
 
 <!-- ===== 自定义标题栏（可拖拽窗口）===== -->
 <div id="titlebar">
-  <div id="menuToggle" title="切换侧边栏">☰</div>
+  <div id="menuToggle" title="切换侧边栏"><span class="material-icons-outlined" style="font-size:20px;">menu</span></div>
   <button id="shortcutHintBtn" class="icon-btn top-bar-btn" title="快捷键 (Ctrl+/)"><span class="material-icons-outlined" style="font-size:18px;vertical-align:middle;">keyboard</span></button>
   <span id="appTitle">AI 智能体</span>
 </div>
@@ -57,13 +57,13 @@
 <!-- ===== 侧边栏 ===== -->
 <div id="sidebar">
   <div class="sidebar-header">
-    <button id="newChatBtn" title="新建对话">＋ 新建对话</button>
+    <button id="newChatBtn" title="新建对话"><span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:5px;">add</span>新建对话</button>
   </div>
   <div class="sidebar-search-area">
     <div class="search-box">
-      <span class="search-icon">🔍</span>
+      <span class="search-icon material-icons-outlined">search</span>
       <input type="text" id="chatSearch" placeholder="搜索会话..." />
-      <button id="clearSearch" title="清除搜索">×</button>
+      <button id="clearSearch" title="清除搜索"><span class="material-icons-outlined" style="font-size:14px;">close</span></button>
     </div>
     <div class="date-filter">
       <button class="filter-btn active" data-filter="all">全部</button>
@@ -74,8 +74,8 @@
   </div>
     <div class="search-results-panel" id="searchResultsPanel">
       <div class="search-results-header">
-        <span>🔍 搜索结果</span>
-        <button id="closeSearchResults" title="关闭">×</button>
+        <span><span class="material-icons-outlined" style="font-size:15px;vertical-align:-2px;">search</span> 搜索结果</span>
+        <button id="closeSearchResults" title="关闭"><span class="material-icons-outlined" style="font-size:15px;">close</span></button>
       </div>
       <div class="search-results-list" id="searchResultsList"></div>
     </div>
@@ -136,10 +136,10 @@
 <!-- ===== 方向A1：消息搜索框 ===== -->
 <div class="msg-search-box" id="msgSearchBox">
   <input type="text" id="msgSearchInput" placeholder="搜索消息..." />
-  <button class="search-btn" id="msgSearchPrev" title="上一个">▲</button>
-  <button class="search-btn" id="msgSearchNext" title="下一个">▼</button>
+  <button class="search-btn" id="msgSearchPrev" title="上一个"><span class="material-icons-outlined" style="font-size:16px;">expand_less</span></button>
+  <button class="search-btn" id="msgSearchNext" title="下一个"><span class="material-icons-outlined" style="font-size:16px;">expand_more</span></button>
   <span class="search-count" id="msgSearchCount">0/0</span>
-  <button class="search-close" id="msgSearchClose" title="关闭">&times;</button>
+  <button class="search-close" id="msgSearchClose" title="关闭"><span class="material-icons-outlined" style="font-size:16px;">close</span></button>
 </div>
 
 <!-- 搜索历史下拉面板 -->
@@ -153,22 +153,22 @@
 
 <!-- ===== 方向A2：图片预览遮罩层 ===== -->
 <div class="image-preview-overlay" id="imagePreviewOverlay" role="dialog" aria-label="图片预览">
-  <button class="image-preview-close" id="imagePreviewClose">&times;</button>
+  <button class="image-preview-close" id="imagePreviewClose"><span class="material-icons-outlined">close</span></button>
   <div class="preview-wrapper" id="previewWrapper">
     <img src="" alt="预览" id="imagePreviewImg" draggable="false" />
   </div>
   <div class="image-preview-bar">
-    <button id="imagePreviewZoomOut" title="缩小">➖</button>
+    <button id="imagePreviewZoomOut" title="缩小"><span class="material-icons-outlined" style="font-size:18px;">remove</span></button>
     <span class="zoom-level" id="zoomLevel">100%</span>
-    <button id="imagePreviewZoomIn" title="放大">➕</button>
+    <button id="imagePreviewZoomIn" title="放大"><span class="material-icons-outlined" style="font-size:18px;">add</span></button>
     <div class="bar-divider"></div>
-    <button id="imagePreviewRotateLeft" title="向左旋转">↺</button>
-    <button id="imagePreviewRotateRight" title="向右旋转">↻</button>
+    <button id="imagePreviewRotateLeft" title="向左旋转"><span class="material-icons-outlined" style="font-size:18px;">rotate_left</span></button>
+    <button id="imagePreviewRotateRight" title="向右旋转"><span class="material-icons-outlined" style="font-size:18px;">rotate_right</span></button>
     <div class="bar-divider"></div>
-    <button id="imagePreviewReset" title="重置">⟲</button>
+    <button id="imagePreviewReset" title="重置"><span class="material-icons-outlined" style="font-size:18px;">restart_alt</span></button>
     <div class="bar-divider"></div>
-    <button id="imagePreviewDownload">💾 下载</button>
-    <button id="imagePreviewCopy">📋 复制</button>
+    <button id="imagePreviewDownload"><span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">download</span>下载</button>
+    <button id="imagePreviewCopy"><span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">content_copy</span>复制</button>
   </div>
 </div>
 
@@ -225,14 +225,14 @@
       <button id="voiceBtn" class="icon-btn" title="语音输入"><span class="material-icons-outlined">mic</span></button>
       <button id="send" title="发送" onclick="if(window.Core&&Core.api&&Core.api.sendMessage)Core.api.sendMessage()"><span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">arrow_upward</span></button>
     </div>
-    <div id="status">✅ 已就绪</div>
+    <div id="status"><span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#22c55e;">check_circle</span> 已就绪</div>
   </div>
 
   <!-- 应用与插件菜单 -->
   <div class="apps-menu-panel" id="appsMenuPanel">
     <div class="apps-menu-header">
       <span>应用与插件</span>
-      <button class="apps-menu-close" id="appsMenuClose">&times;</button>
+      <button class="apps-menu-close" id="appsMenuClose"><span class="material-icons-outlined" style="font-size:18px;">close</span></button>
     </div>
     <div class="apps-menu-grid">
       <div class="apps-menu-item" role="button" tabindex="0" data-action="memo">
@@ -267,8 +267,8 @@
 <!-- ===== P2: 提示词面板 ===== -->
 <div class="prompt-panel" id="promptPanel">
   <div class="prompt-panel-header">
-    <h4>📋 提示词库</h4>
-    <button class="prompt-panel-close" id="promptPanelClose">&times;</button>
+    <h4><span class="material-icons-outlined" style="font-size:17px;vertical-align:-3px;margin-right:5px;">format_list_bulleted</span>提示词库</h4>
+    <button class="prompt-panel-close" id="promptPanelClose"><span class="material-icons-outlined" style="font-size:18px;">close</span></button>
   </div>
   <div class="prompt-list" id="promptList"></div>
 </div>
@@ -276,8 +276,8 @@
 <!-- ===== P2: 角色面板 ===== -->
 <div class="role-panel" id="rolePanel">
   <div class="role-panel-header">
-    <h4>🎭 角色预设</h4>
-    <button class="role-panel-close" id="rolePanelClose">&times;</button>
+    <h4><span class="material-icons-outlined" style="font-size:17px;vertical-align:-3px;margin-right:5px;">theater_comedy</span>角色预设</h4>
+    <button class="role-panel-close" id="rolePanelClose"><span class="material-icons-outlined" style="font-size:18px;">close</span></button>
   </div>
   <div class="role-list" id="roleList"></div>
 </div>
@@ -308,9 +308,9 @@
       <div class="api-group">
         <label>界面主题</label>
         <select id="themeSelect">
-          <option value="dark">🌙 深色模式</option>
-          <option value="light">☀️ 浅色模式</option>
-          <option value="system">💻 跟随系统</option>
+          <option value="dark">深色模式</option>
+          <option value="light">浅色模式</option>
+          <option value="system">跟随系统</option>
         </select>
       </div>
       <div class="api-group">
@@ -735,7 +735,7 @@
     <div class="settings-group-body">
       <!-- 权限控制 -->
       <div class="api-group" id="permissionsGroup">
-        <label>🔒 权限控制</label>
+        <label><span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:5px;">lock</span>权限控制</label>
         <div style="margin-bottom:12px;">
           <label class="settings-hint-text" style="display:block; margin-bottom:6px;">权限模式</label>
           <select id="permissionModeSelect" class="select-full">
@@ -795,7 +795,7 @@
 <!-- ===== 自定义弹窗 ===== -->
 <div id="customPromptOverlay" role="alertdialog" aria-modal="true">
   <div id="customPromptBox">
-    <h3 id="customPromptTitle">✏️ 重命名会话</h3>
+    <h3 id="customPromptTitle"><span class="material-icons-outlined" style="font-size:18px;vertical-align:-3px;margin-right:6px;">edit</span>重命名会话</h3>
     <input type="text" id="customPromptInput" placeholder="输入新名称..." />
     <div class="btn-row">
       <button class="btn-cancel" id="customPromptCancel">取消</button>
@@ -847,8 +847,8 @@
       <button class="ss-mode-btn" data-mode="crop">区域</button>
       <button class="ss-mode-btn" data-mode="window">窗口</button>
     </div>
-    <button class="ss-confirm" id="ssConfirm">✓ 发送分析</button>
-    <button class="ss-cancel" id="ssCancel">✕ 取消</button>
+    <button class="ss-confirm" id="ssConfirm"><span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">check</span>发送分析</button>
+    <button class="ss-cancel" id="ssCancel"><span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">close</span>取消</button>
   </div>
   <div class="screenshot-canvas-wrap" id="ssCanvasWrap">
     <canvas id="ssCanvas"></canvas>
@@ -860,8 +860,8 @@
 
 <!-- ===== Shortcut hint (relocated from between script blocks) ===== -->
 <div class="shortcut-hint" id="shortcutHint">
-  <span class="hint-close" onclick="this.parentElement.classList.remove('show')">&times;</span>
-  <strong>⌨️ 快捷键</strong><br>
+  <span class="hint-close" onclick="this.parentElement.classList.remove('show')"><span class="material-icons-outlined" style="font-size:15px;">close</span></span>
+  <strong><span class="material-icons-outlined" style="font-size:16px;vertical-align:-3px;margin-right:4px;">keyboard</span>快捷键</strong><br>
   <kbd>Enter</kbd> 发送消息 / <kbd>Shift</kbd>+<kbd>Enter</kbd> 换行<br>
   <kbd>Ctrl</kbd>+<kbd>N</kbd> 新建会话<br>
   <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> 聚焦输入<br>

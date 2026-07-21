@@ -239,7 +239,7 @@ function loadSessions() {
   if (masterIds.length === 0) {
     // 创建一个 master 节点
     var masterId = Core.generateId();
-    sessions[masterId] = { title: '👑 廿廿', messages: [], pinned: true, temperature: 0.7, roleType: 'master', parentId: null, collapsed: false, _manuallyRenamed: true };
+    sessions[masterId] = { title: '廿廿', messages: [], pinned: true, temperature: 0.7, roleType: 'master', parentId: null, collapsed: false, _manuallyRenamed: true };
     saveSession(masterId);
     masterIds.push(masterId);
   }
@@ -278,7 +278,7 @@ function ensureDefaultRoles() {
   if (!hasMaster) {
     masterId = Core.generateId();
     sessions[masterId] = {
-      title: '👑 廿廿', messages: [], pinned: true, temperature: 0.7,
+      title: '廿廿', messages: [], pinned: true, temperature: 0.7,
       roleType: 'master', parentId: null, collapsed: false, _manuallyRenamed: true
     };
     saveSession(masterId);
@@ -470,9 +470,9 @@ function renderFlatNode(id, container) {
   item.setAttribute('role', 'treeitem');
   if (id === currentSessionId) item.setAttribute('aria-selected', 'true');
   
-  // emoji
-  var emojiMap = { 'master': '👑', 'coder': '💻', 'writer': '✍️', 'analyst': '📊', 'teacher': '🎓', 'chat': '💬' };
-  var emoji = emojiMap[session.roleType] || '💬';
+  // 角色图标（Material Symbols）
+  var emojiMap = { 'master': 'workspace_premium', 'coder': 'code', 'writer': 'edit_note', 'analyst': 'analytics', 'teacher': 'school', 'chat': 'chat' };
+  var emoji = emojiMap[session.roleType] || 'chat';
   
   // 最后消息预览
   var lastMsgPreview = '';
@@ -490,7 +490,7 @@ function renderFlatNode(id, container) {
     timeStr = sessionDate.toLocaleDateString() + ' ' + sessionDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
   }
   
-  item.innerHTML = '<span style="margin-right:6px;">' + emoji + '</span>' +
+  item.innerHTML = '<span class="material-icons-outlined" style="font-size:16px;margin-right:6px;vertical-align:-2px;color:var(--text-secondary);">' + emoji + '</span>' +
     '<div style="flex:1;overflow:hidden;">' +
     '<div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (session.title || '未命名') + '</div>' +
     '<div style="font-size:11px;color:#6b7280;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + lastMsgPreview + '</div>' +
@@ -1322,11 +1322,11 @@ function newChat(roleType, parentId) {
   var id = Core.generateId();
   var defaultTemp = (Core && Core.config && Core.config.temperature !== undefined) ? Core.config.temperature : 0.7;
   var title = '新对话';
-  if (roleType === 'master') title = '👑 主管模式';
-  else if (roleType === 'coder') title = '💻 代码大师';
-  else if (roleType === 'writer') title = '✍️ 创意写手';
-  else if (roleType === 'analyst') title = '📊 数据分析师';
-  else if (roleType === 'teacher') title = '🎓 学习导师';
+  if (roleType === 'master') title = '主管模式';
+  else if (roleType === 'coder') title = '代码大师';
+  else if (roleType === 'writer') title = '创意写手';
+  else if (roleType === 'analyst') title = '数据分析师';
+  else if (roleType === 'teacher') title = '学习导师';
   // 没有指定 parentId 时，自动挂到 master 节点下（避免成为根节点排到列表最底部）
   if (!parentId && roleType !== 'master') {
     var masterIds = Object.keys(sessions).filter(function(sid) { return sessions[sid].roleType === 'master'; });
