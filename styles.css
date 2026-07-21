@@ -1,3 +1,30 @@
+    /* ===== 本地图标字体（Material Symbols Outlined，替代 Google Fonts CDN，渲染更清晰）===== */
+    @font-face {
+      font-family: "Material Symbols Outlined";
+      font-style: normal;
+      font-weight: 100 700;
+      font-display: block;
+      src: url("assets/fonts/material-symbols-outlined.woff2") format("woff2");
+    }
+    .material-icons-outlined {
+      font-family: "Material Symbols Outlined";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 24px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      vertical-align: middle;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      font-feature-settings: "liga";
+    }
+
     :root {
       --primary: #3b82f6;
       --primary-hover: #2563eb;
@@ -14,7 +41,7 @@
       --radius: 16px;
       --radius-sm: 12px;
       --sidebar-width: 260px;
-      --settings-width: 420px;
+      --settings-width: 720px;
       --transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
       /* 扩展色彩变量 */
       --white: #ffffff;
@@ -127,13 +154,16 @@
     * { margin:0; padding:0; box-sizing:border-box; }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       height: 100vh;
+      padding-top: 44px; /* 让出自定义标题栏高度 */
+      box-sizing: border-box;
       display: flex;
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
     }
 
     /* ===== 未登录时隐藏主界面 ===== */
@@ -152,7 +182,9 @@
       align-items: center;
       z-index: 9999;
       overflow: hidden;
+      -webkit-app-region: drag; /* 登录时也可拖拽窗口 */
     }
+    #loginOverlay .login-box { -webkit-app-region: no-drag; }
     #loginOverlay.hidden { display: none !important; }
 
     /* 动态背景光晕 */
@@ -411,17 +443,19 @@
       background: var(--primary);
       border: none;
       color: var(--white);
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      font-size: 20px;
+      width: 100%;
+      height: 36px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
       cursor: pointer;
       transition: var(--transition);
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 6px;
     }
-    #newChatBtn:hover { background: var(--primary-hover); transform: scale(1.05); }
+    #newChatBtn:hover { background: var(--primary-hover); }
     /* ===== P4: 会话搜索与筛选 ===== */
     .sidebar-search-area {
       padding: 8px 16px;
@@ -812,18 +846,33 @@
     }
     .user-display:empty { display: none; }
 
-    #menuToggle {
+    /* ===== 自定义标题栏（替代原生黑色标题栏，可拖拽窗口）===== */
+    #titlebar {
       position: fixed;
-      top: 12px;
-      left: 12px;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 44px;
       z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 150px 0 12px; /* 右侧预留原生窗口控制按钮位置 */
       background: var(--bg);
-      border: 1px solid var(--text-dark);
+      border-bottom: 1px solid var(--border);
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    #titlebar > * { -webkit-app-region: no-drag; }
+
+    #menuToggle {
+      background: transparent;
+      border: none;
       border-radius: var(--radius-sm);
-      color: var(--border);
-      font-size: 22px;
-      width: 40px;
-      height: 40px;
+      color: var(--text-secondary);
+      font-size: 20px;
+      width: 36px;
+      height: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -831,14 +880,22 @@
       transition: var(--transition);
       user-select: none;
     }
-    #menuToggle:hover { background: var(--text-dark); }
+    #menuToggle:hover { background: var(--overlay-light); color: var(--text); }
+
+    /* 标题栏应用名称 */
+    #titlebar #appTitle {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: none;
+      -webkit-background-clip: initial;
+      -webkit-text-fill-color: initial;
+      margin-left: 4px;
+      letter-spacing: 0.3px;
+    }
 
     /* 顶栏快捷键按钮 */
     .top-bar-btn {
-      position: fixed;
-      top: 12px;
-      left: 52px;
-      z-index: 101;
       width: 32px;
       height: 32px;
       border-radius: 8px;
@@ -1808,16 +1865,70 @@
       background: var(--panel);
       box-shadow: -4px 0 32px rgba(0,0,0,0.12);
       z-index: 1000;
-      overflow-y: auto;
-      padding: 24px 24px 30px;
       transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease, visibility 0.3s;
       transform: translateX(100%);
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      grid-template-rows: 1fr auto;
+      grid-template-areas:
+        "nav body"
+        "nav footer";
+      overflow: hidden;
+      padding: 0;
     }
     .settings-modal.show {
       visibility: visible;
       opacity: 1;
       transform: translateX(0);
     }
+    /* ===== 设置面板：左侧分类导航 + 右侧内容区 ===== */
+    .settings-nav {
+      grid-area: nav;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 20px 12px;
+      border-right: 1px solid var(--border);
+      background: rgba(255,255,255,0.015);
+    }
+    .settings-nav-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      padding: 2px 10px 14px;
+    }
+    .settings-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .settings-nav-item .material-icons-outlined { font-size: 18px; }
+    .settings-nav-item:hover {
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+    }
+    .settings-nav-item.active {
+      background: rgba(59,130,246,0.14);
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .settings-body {
+      grid-area: body;
+      overflow-y: auto;
+      padding: 48px 24px 16px;
+    }
+    /* 按分类隐藏/显示分组（由 JS 切换 data-category） */
+    .settings-group.cat-hidden { display: none; }
     /* 设置面板打开时，聊天区域自动收缩 */
     body.settings-open #main-container {
       margin-right: var(--settings-width);
@@ -1827,7 +1938,10 @@
       max-width: min(760px, calc(100% - 32px));
     }
     .settings-modal .close-modal {
-      float: right;
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      z-index: 20;
       background: none;
       border: none;
       font-size: 24px;
@@ -1988,6 +2102,90 @@
     .settings-group-body {
       padding: 4px 16px 8px;
     }
+    /* ===== 连接器卡片与开关 ===== */
+    .connector-category {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 14px 0 6px;
+    }
+    .connector-category:first-child { margin-top: 0; }
+    .connector-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+      background: rgba(255,255,255,0.015);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .connector-card:hover {
+      border-color: var(--primary);
+      background: rgba(255,255,255,0.03);
+    }
+    .connector-icon {
+      font-size: 22px;
+      color: var(--primary);
+      flex: 0 0 auto;
+    }
+    .connector-info { flex: 1; min-width: 0; }
+    .connector-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .connector-badge {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--primary);
+      background: rgba(59,130,246,0.12);
+      border-radius: 6px;
+      padding: 1px 6px;
+    }
+    .connector-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .connector-switch {
+      position: relative;
+      display: inline-block;
+      width: 38px;
+      height: 21px;
+      flex: 0 0 auto;
+      cursor: pointer;
+    }
+    .connector-switch input { opacity: 0; width: 0; height: 0; }
+    .connector-slider {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--border);
+      border-radius: 21px;
+      transition: background 0.2s ease;
+    }
+    .connector-slider::before {
+      content: '';
+      position: absolute;
+      width: 15px;
+      height: 15px;
+      left: 3px;
+      top: 3px;
+      background: #ffffff;
+      border-radius: 50%;
+      transition: transform 0.2s ease;
+    }
+    .connector-switch input:checked + .connector-slider { background: var(--primary); }
+    .connector-switch input:checked + .connector-slider::before { transform: translateX(17px); }
     body.light-theme .settings-group {
       border-color: #e2e8f0;
     }
@@ -2025,7 +2223,9 @@
     }
 
     .save-settings {
-      width: 100%;
+      grid-area: footer;
+      width: auto;
+      margin: 12px 24px 20px;
       padding: 14px;
       background: var(--primary);
       border: none;
@@ -2035,7 +2235,6 @@
       font-size: 15px;
       cursor: pointer;
       transition: var(--transition);
-      margin-top: 8px;
     }
     .save-settings:hover { background: var(--primary-hover); transform: translateY(-1px); }
     .settings-modal .btn-group {
@@ -2081,6 +2280,8 @@
     #contextMenu .menu-item { padding: 8px 18px; font-size: 13px; color: var(--text); cursor: pointer; transition: var(--transition); display: flex; align-items: center; gap: 8px; }
     #contextMenu .menu-item:hover { background: var(--bg-light); }
     #contextMenu .menu-divider { border-top: 1px solid var(--border); margin: 4px 0; }
+    #contextMenu .ctx-ico { font-size: 16px; width: 16px; height: 16px; color: var(--text-secondary); flex: 0 0 auto; }
+    #contextMenu .menu-item:hover .ctx-ico { color: var(--text); }
 
     #customPromptOverlay {
       display: none;
@@ -2275,8 +2476,8 @@
     body.dark-theme .agent-step-detail { color: var(--text-alt); }
     body.dark-theme .typing-cursor::after { color: var(--accent-light); }
     body.dark-theme #contextMenu .menu-item:hover { background: var(--border-alt); }
-    body.dark-theme #menuToggle { background: var(--text-dark); border-color: var(--border-alt); }
-    body.dark-theme #menuToggle:hover { background: var(--border-alt); }
+    body.dark-theme #menuToggle { background: transparent; border-color: transparent; color: var(--text-alt); }
+    body.dark-theme #menuToggle:hover { background: var(--overlay-light); color: var(--text); }
     body.dark-theme ::-webkit-scrollbar-thumb { background: var(--text-muted); }
     body.dark-theme ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
@@ -2850,8 +3051,8 @@
       /* 侧边栏抽屉模式 */
       #sidebar {
         position: fixed;
-        left: 0; top: 0;
-        height: 100vh;
+        left: 0; top: 44px;
+        height: calc(100vh - 44px);
         z-index: 100;
         transform: translateX(-100%);
         transition: transform 0.3s ease;
@@ -2863,7 +3064,24 @@
         display: flex;
       }
       /* 设置面板全宽 */
-      .settings-modal { width: 100%; }
+      .settings-modal {
+        width: 100%;
+        grid-template-columns: 1fr;
+        grid-template-rows: auto 1fr auto;
+        grid-template-areas:
+          "nav"
+          "body"
+          "footer";
+      }
+      .settings-nav {
+        flex-direction: row;
+        flex-wrap: wrap;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 12px;
+      }
+      .settings-nav-title { display: none; }
+      .settings-body { padding: 40px 16px 16px; }
       body.settings-open #main-container {
         margin-right: 0;
       }

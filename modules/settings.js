@@ -482,6 +482,29 @@ function closeSettings() {
   if (Core.dom && Core.dom.input) Core.dom.input.focus();
 }
 
+// ===== 设置面板分类切换（偏好/系统/工作台/连接）=====
+function switchSettingsCategory(cat) {
+  var groups = document.querySelectorAll('#settingsModal .settings-group[data-category]');
+  groups.forEach(function(g) {
+    if (g.getAttribute('data-category') === cat) {
+      g.classList.remove('cat-hidden');
+    } else {
+      g.classList.add('cat-hidden');
+    }
+  });
+  var navItems = document.querySelectorAll('#settingsModal .settings-nav-item');
+  navItems.forEach(function(btn) {
+    if (btn.getAttribute('data-cat') === cat) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+  // 切回内容区顶部
+  var body = document.querySelector('#settingsModal .settings-body');
+  if (body) body.scrollTop = 0;
+}
+
 // ===== 模型管理（保持不变） =====
 async function refreshModelList() {
   const container = document.getElementById('modelListContainer');
@@ -1562,6 +1585,15 @@ module.exports = {
         if (e.target === settingsModal) closeSettings();
       });
     }
+    // 左侧分类导航切换
+    const settingsNavItems = document.querySelectorAll('#settingsModal .settings-nav-item');
+    settingsNavItems.forEach(function(navBtn) {
+      navBtn.addEventListener('click', function() {
+        switchSettingsCategory(navBtn.getAttribute('data-cat'));
+      });
+    });
+    // 默认显示"偏好设置"分类
+    switchSettingsCategory('preferences');
     const saveBtn = document.getElementById('saveSettingsBtn');
     if (saveBtn) {
       saveBtn.removeEventListener('click', saveSettings);

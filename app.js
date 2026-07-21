@@ -378,6 +378,7 @@ try {
     // 暴露到全局作用域，供 api.js sendMessage 访问
     window.getPendingImagesMarkdown = getPendingImagesMarkdown;
     window.clearPendingImages = clearPendingImages;
+    window.addPendingImage = addImageToPreview; // 🔧 供拖拽/粘贴多图调用
     Object.defineProperty(window, '_pendingImages', {
       get: function() { return _pendingImages; },
       set: function(v) { _pendingImages = v; },

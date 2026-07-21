@@ -1018,7 +1018,7 @@ function renderSingleMessage(msg, index, container) {
     div.innerHTML = '<div class="search-result">' + _escapeHtml(msg.content || '') + '</div>';
   } else if (msg.thinking) {
     // Phase 5-2: XSS防护 — 转义思考内容
-    var thinkingHtml = '<div class="thinking-process"><div class="thinking-header">\ud83e\udde0 \u601d\u8003\u8fc7\u7a0b</div><div class="thinking-content">' + _escapeHtml(msg.thinking || '') + '</div></div>';
+    var thinkingHtml = '<div class="thinking-process"><div class="thinking-header"><span class="material-icons-outlined" style="font-size:15px;vertical-align:-2px;">psychology</span> \u601d\u8003\u8fc7\u7a0b</div><div class="thinking-content">' + _escapeHtml(msg.thinking || '') + '</div></div>';
     var mainHtml = '<div class="main-content">' + _escapeHtml(msg.content || '') + '</div>';
     div.innerHTML = thinkingHtml + mainHtml;
   } else if (msg.content) {

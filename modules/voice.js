@@ -24,6 +24,41 @@ function init(_Core) {
     voxcpmVoice: 'default',              // VoxCPM2 默认音色
     localTtsVoices: null,                // 缓存本地语音列表
 
+    // ===== 本地服务可用性缓存（避免反复连接已下线的服务导致报错刷屏）=====
+    _localSvc: { available: null, lastCheck: 0, cooldown: 60000 }, // null=未知, true/false
+
+    // 快速探测本地音频服务是否在线（3s 超时）
+    async _probeLocalService() {
+      var now = Date.now();
+      var svc = this._localSvc;
+      // 冷却期内直接返回上次结果，不重复探测
+      if (svc.available !== null && (now - svc.lastCheck) < svc.cooldown) {
+        return svc.available;
+      }
+      try {
+        var resp = await fetch('http://127.0.0.1:8080/api/tts/voices', { signal: AbortSignal.timeout(3000) });
+        svc.available = resp.ok || resp.status === 200;
+      } catch (e) {
+        svc.available = false;
+      }
+      svc.lastCheck = now;
+      if (!svc.available) {
+        console.log('[Voice] 本地音频服务(8080)不可用，' + (svc.cooldown / 1000) + 's 内跳过本地通道');
+      }
+      return svc.available;
+    },
+
+    // 标记本地服务状态（成功时重置为可用）
+    _markLocalSvc(ok) {
+      if (ok) {
+        this._localSvc.available = true;
+        this._localSvc.lastCheck = Date.now();
+      } else {
+        this._localSvc.available = false;
+        this._localSvc.lastCheck = Date.now();
+      }
+    },
+
     // ===== 辅助方法 =====
 
     // 检查云端 API 是否可用（有 siliconFlowKey）
@@ -58,32 +93,44 @@ function init(_Core) {
       // 停止之前的朗读
       this.stopSpeaking();
 
-      // 最高优先：VoxCPM2 本地 GPU TTS（48kHz 高保真，零样本克隆）
-      try {
-        return await this._voxcpmSpeak(text, options);
-      } catch (e) {
-        if (e.name === 'AbortError') throw e;
-        console.warn('VoxCPM TTS 失败，回退 Fish Speech:', e.message);
+      // 🔧 先探测本地音频服务是否在线，离线则跳过全部本地通道（避免 503/ConnectTimeout 刷屏）
+      var localOk = await this._probeLocalService();
+
+      if (localOk) {
+        // 最高优先：VoxCPM2 本地 GPU TTS（48kHz 高保真，零样本克隆）
+        try {
+          var r = await this._voxcpmSpeak(text, options);
+          this._markLocalSvc(true);
+          return r;
+        } catch (e) {
+          if (e.name === 'AbortError') throw e;
+          console.warn('VoxCPM TTS 失败，回退 Fish Speech:', e.message);
+        }
+
+        // 回退 1：Fish Speech 1.5 本地 GPU TTS（高质量，支持声音克隆）
+        try {
+          var r2 = await this._fishSpeak(text, options);
+          this._markLocalSvc(true);
+          return r2;
+        } catch (e) {
+          if (e.name === 'AbortError') throw e;
+          console.warn('Fish Speech TTS 失败，回退 edge-tts:', e.message);
+        }
+
+        // 回退 2：本地 edge-tts（免费神经语音，无需 API Key）
+        try {
+          var r3 = await this._localSpeak(text, options);
+          this._markLocalSvc(true);
+          return r3;
+        } catch (e) {
+          if (e.name === 'AbortError') throw e;
+          // 三个本地通道全部失败，标记服务异常
+          this._markLocalSvc(false);
+          console.warn('本地 TTS 全部失败，回退云端/浏览器:', e.message);
+        }
       }
 
-      // 回退 1：Fish Speech 1.5 本地 GPU TTS（高质量，支持声音克隆）
-      try {
-        return await this._fishSpeak(text, options);
-      } catch (e) {
-        // 用户主动取消，不继续回退
-        if (e.name === 'AbortError') throw e;
-        console.warn('Fish Speech TTS 失败，回退 edge-tts:', e.message);
-      }
-
-      // 回退 1：本地 edge-tts（免费神经语音，无需 API Key）
-      try {
-        return await this._localSpeak(text, options);
-      } catch (e) {
-        if (e.name === 'AbortError') throw e;
-        console.warn('本地 TTS 失败，回退云端:', e.message);
-      }
-
-      // 回退 2：云端 TTS
+      // 回退 3：云端 TTS
       if (this.isCloudAvailable()) {
         try {
           return await this._cloudSpeak(text, options);
@@ -93,7 +140,7 @@ function init(_Core) {
         }
       }
 
-      // 回退 3：浏览器 speechSynthesis
+      // 回退 4：浏览器 speechSynthesis
       return this._browserSpeak(text, options);
     },
 
@@ -407,11 +454,19 @@ function init(_Core) {
     async startListening(onResult, onError) {
       if (this.isListening) return;
 
-      // 优先：本地 faster-whisper（完全离线，无网络依赖）
-      try {
-        return await this._startLocalASR(onResult, onError);
-      } catch (e) {
-        console.warn('⚠️ 本地 ASR 启动失败，回退云端:', e.message);
+      // 🔧 探测本地音频服务，离线则跳过本地 ASR（避免 60s ConnectTimeout 报错）
+      var localOk = await this._probeLocalService();
+
+      if (localOk) {
+        // 优先：本地 faster-whisper（完全离线，无网络依赖）
+        try {
+          var mode = await this._startLocalASR(onResult, onError);
+          this._markLocalSvc(true);
+          return mode;
+        } catch (e) {
+          this._markLocalSvc(false);
+          console.warn('⚠️ 本地 ASR 启动失败，回退云端:', e.message);
+        }
       }
 
       // 回退 1：云端 ASR（MediaRecorder 录音 + 上传识别）
@@ -472,7 +527,7 @@ function init(_Core) {
                   model: (Core.config && Core.config.asrLocalModel) || 'base',
                   language: (Core.config && Core.config.asrLanguage) || 'zh'
                 }),
-                signal: AbortSignal.timeout(60000)
+                signal: AbortSignal.timeout(15000)
               });
 
               if (!response.ok) {
@@ -483,13 +538,26 @@ function init(_Core) {
 
               var data = await response.json();
               if (data.success && data.text) {
+                self._markLocalSvc(true);
                 if (onResult) onResult(data.text, true);
               } else {
                 throw new Error(data.error || '识别结果为空');
               }
             } catch (e) {
-              console.error('❌ 本地 ASR 请求失败:', e.message);
-              if (onError) onError('语音识别失败: ' + e.message);
+              // 🔧 本地失败 → 标记服务异常 + 静默回退云端（不再向用户暴露原始错误）
+              self._markLocalSvc(false);
+              console.warn('[Voice] 本地 ASR 失败，尝试云端回退:', e.message);
+              if (self.isCloudAvailable()) {
+                try {
+                  if (onResult) onResult('🔄 正在识别中...', false);
+                  var text = await self._uploadASR(blob);
+                  if (onResult) onResult(text, true);
+                  return;
+                } catch (e2) {
+                  console.warn('[Voice] 云端 ASR 回退也失败:', e2.message);
+                }
+              }
+              if (onError) onError('语音识别失败，请检查网络或稍后重试');
             }
           };
           reader.readAsDataURL(blob);

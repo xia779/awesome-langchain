@@ -121,6 +121,40 @@ function refreshSkills() {
   return allSkills;
 }
 
+// ===== 激活状态持久化（修复：刷新/重启后激活状态丢失）=====
+function getActiveFile() {
+  var dir = getSkillsDir();
+  if (!dir) return null;
+  return path.join(dir, 'active-skills.json');
+}
+
+function saveActiveSkills() {
+  var file = getActiveFile();
+  if (!file) return;
+  try {
+    ensureSkillsDir();
+    fs.writeFileSync(file, JSON.stringify({ activeSkillIds: activeSkillIds }, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('[Skill] 保存激活状态失败:', e.message);
+  }
+}
+
+function loadActiveSkills() {
+  var file = getActiveFile();
+  if (!file || !fs.existsSync(file)) return;
+  try {
+    var data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    var ids = Array.isArray(data) ? data : (data && Array.isArray(data.activeSkillIds) ? data.activeSkillIds : []);
+    // 只保留仍然存在的技能，过滤掉已删除/失效的 id
+    activeSkillIds = ids.filter(function (id) { return !!allSkills[id]; });
+    if (activeSkillIds.length > 0) {
+      console.log('✅ 已恢复 ' + activeSkillIds.length + ' 个激活技能: ' + activeSkillIds.join(', '));
+    }
+  } catch (e) {
+    console.warn('[Skill] 读取激活状态失败:', e.message);
+  }
+}
+
 // ===== 公共 API =====
 
 function getSkill(id) {
@@ -194,7 +228,10 @@ function removeSkill(id) {
     return { success: false, error: '删除失败: ' + e.message };
   }
   var idx = activeSkillIds.indexOf(id);
-  if (idx !== -1) activeSkillIds.splice(idx, 1);
+  if (idx !== -1) {
+    activeSkillIds.splice(idx, 1);
+    saveActiveSkills();
+  }
   refreshSkills();
   return { success: true };
 }
@@ -202,6 +239,7 @@ function removeSkill(id) {
 function setSkill(id) {
   if (id === null) {
     activeSkillIds = [];
+    saveActiveSkills();
     console.log('✅ 已取消激活全部技能');
     return true;
   }
@@ -219,6 +257,7 @@ function setSkill(id) {
     activeSkillIds.push(id);
     console.log('✅ 已激活技能: ' + allSkills[id].name + ' (当前激活 ' + activeSkillIds.length + ' 个)');
   }
+  saveActiveSkills();
   return true;
 }
 
@@ -327,6 +366,7 @@ module.exports = {
     Core = _Core;
     ensureSkillsDir();
     refreshSkills();
+    loadActiveSkills(); // 恢复上次保存的激活状态（修复刷新/重启后丢失）
 
     Core.skills = {
       getSkill: getSkill,

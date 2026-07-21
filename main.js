@@ -762,6 +762,14 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     icon: path.join(__dirname, 'icon.ico'),
+    backgroundColor: '#0d0d0d',
+    // 🔧 无边框自定义标题栏：隐藏原生黑色标题栏，窗口控制按钮与应用背景融合
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#0d0d0d',
+      symbolColor: '#9ca3af',
+      height: 44
+    },
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -789,10 +797,17 @@ function createWindow() {
   });
   setupTray();
 
-  // 🔧 注册 Ctrl+Shift+I 打开 DevTools 快捷键
+  // 🔧 注册快捷键：Ctrl+Shift+I 打开 DevTools，Ctrl+R 刷新，Ctrl+Shift+R 强制刷新
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if ((input.key === 'I' || input.key === 'i') && input.control && input.shift && !input.alt && !input.meta) {
       mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    } else if ((input.key === 'R' || input.key === 'r') && input.control && !input.alt && !input.meta) {
+      if (input.shift) {
+        mainWindow.webContents.reloadIgnoringCache();
+      } else {
+        mainWindow.webContents.reload();
+      }
       event.preventDefault();
     }
   });
@@ -826,27 +841,8 @@ function createWindow() {
     }
   });
 
-  // 🔧 注册菜单快捷键（Ctrl+Shift+I 打开 DevTools）
-  const template = [
-    {
-      label: '视图',
-      submenu: [
-        {
-          label: '切换开发者工具',
-          accelerator: 'Ctrl+Shift+I',
-          click: () => {
-            if (mainWindow && mainWindow.webContents) {
-              mainWindow.webContents.toggleDevTools();
-            }
-          }
-        },
-        { role: 'reload' },
-        { role: 'forceReload' }
-      ]
-    }
-  ];
-  const menu = Menu.buildFromTemplate(template);
-  Menu.setApplicationMenu(menu);
+  // 🔧 移除原生菜单栏（"视图"菜单），界面更简洁；快捷键由 before-input-event 处理
+  Menu.setApplicationMenu(null);
 
   mainWindow.webContents.on('did-finish-load', () => {
     // 页面成功加载：重置崩溃计数器，删除崩溃标记

@@ -119,9 +119,15 @@ function startServer() {
     ws.on('error', function(err) {
       console.warn('[gateway] 连接错误:', err.message);
     });
+
+    // 💓 WS 协议级 pong：浏览器等标准客户端收到 ping 会自动回 pong，借此刷新心跳，无需客户端写心跳代码
+    ws.on('pong', function() {
+      var c = clients.get(ws);
+      if (c) c.lastHeartbeat = Date.now();
+    });
   });
 
-  // 心跳检测定时器
+  // 心跳检测定时器：主动 ping 保活 + 超时清理
   setInterval(function() {
     var now = Date.now();
     clients.forEach(function(client, ws) {
@@ -129,7 +135,10 @@ function startServer() {
         if (client.deviceId) setDeviceOffline(client.deviceId);
         clients.delete(ws);
         try { ws.close(); } catch (e) {}
+        return;
       }
+      // 主动发 ping，标准 WS 客户端自动回 pong（触发 ws.on('pong') 刷新 lastHeartbeat），避免误判离线
+      try { ws.ping(); } catch (e) {}
     });
   }, HEARTBEAT_INTERVAL);
 

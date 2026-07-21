@@ -61,6 +61,7 @@ body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; backg
 </div>
 <script>
 var ws = null;
+var heartbeatTimer = null;
 var deviceId = 'web_' + Math.random().toString(36).substring(2,8);
 var chatArea = document.getElementById('chatArea');
 var msgInput = document.getElementById('msgInput');
@@ -76,10 +77,16 @@ function connect() {
     connStatus.textContent = '已连接';
     connStatus.className = 'status';
     ws.send(JSON.stringify({ type:'device_register', deviceId:deviceId, deviceType:'web', os:navigator.platform, capabilities:['display','input'] }));
+    // 💓 心跳保活：每 30s 发一次，避免被网关 90s 超时踢下线（修复频繁离线重连）
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = setInterval(function() {
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type:'heartbeat' }));
+    }, 30000);
   };
   ws.onclose = function() {
     connStatus.textContent = '已断开';
     connStatus.className = 'status offline';
+    if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
     setTimeout(connect, 3000);
   };
   ws.onmessage = function(e) {

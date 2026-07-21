@@ -31,7 +31,8 @@ function initFileDragDrop() {
       if (e.target.closest('#input-area')) return;
       var files = e.dataTransfer.files;
       if (!files || files.length === 0) return;
-      for (var i = 0; i < files.length; i++) handleDroppedFile(files[i]);
+      // 🔧 拖入聊天区域：AI 智能体自动读取，不经过发送框解析
+      handleChatAreaDrop(files);
     });
   }
   
@@ -74,8 +75,17 @@ function handleImageToInput(file) {
   var reader = new FileReader();
   reader.onload = function(e) {
     var dataUrl = e.target.result;
-    Core.pendingImage = dataUrl;
-    showAttachmentPreview(dataUrl);
+    // 🔧 多图片支持：累加到待发送图片集合（而非覆盖单张）
+    if (typeof window.addPendingImage === 'function') {
+      window.addPendingImage(dataUrl, file.name);
+      var count = (window._pendingImages && window._pendingImages.length) || 1;
+      Core.dom.status.textContent = '📎 已添加 ' + count + ' 张图片，可继续拖入更多';
+      setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 2500);
+    } else {
+      // 回退：单张图片
+      Core.pendingImage = dataUrl;
+      showAttachmentPreview(dataUrl);
+    }
   };
   reader.readAsDataURL(file);
 }
@@ -108,33 +118,9 @@ function showAttachmentPreview(dataUrl) {
   preview.appendChild(container);
 }
 
-function handleDroppedFile(file) {
-  if (file.type.startsWith('image/')) {
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var dataUrl = e.target.result;
-      var base64 = dataUrl.split(',')[1];
-      
-      // 🔧 将图片保存为消息到 session
-      if (Core.session && Core.session.addMessage) {
-        Core.session.addMessage('![图片](' + dataUrl + ')', 'user');
-      }
-      
-      // 调用图片识别，结果放入输入框
-      Core.dom.status.textContent = '🖼️ 正在分析图片...';
-      if (Core.api && Core.api.describeImage) {
-        Core.api.describeImage(base64, '请详细描述这张图片的内容').then(function(desc) {
-          var input = document.getElementById('input');
-          input.value = (input.value ? input.value + '\n' : '') + '📷 图片描述：' + desc;
-          input.focus();
-          Core.dom.status.textContent = '✅ 图片描述已生成，可继续输入或发送';
-          setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 3000);
-        }).catch(function(err) { console.error('图片分析失败:', err); });
-      }
-    };
-    reader.readAsDataURL(file);
-  } else if (/\.(pdf|docx|doc|xlsx|xls|csv|pptx|ppt|txt|md|json|js|py|css|html|xml|yaml|yml|log|sql|sh|bat|ps1|java|c|cpp|h|hpp|go|rs|rb|php|ts|tsx|jsx|vue|svelte|toml|ini|conf|cfg|env)$/i.test(file.name) || file.type.startsWith('text/')) {
-    // 📄 文档/文本格式：统一保存为附件，用户发送时 AI 可直接读取文件内容
+// 📄 将文档/文本文件保存为待发送附件（返回 Promise；showPreview 控制是否显示预览芯片）
+function saveDocAttachment(file, showPreview) {
+  return new Promise(function(resolve) {
     var icon = '📄';
     var ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
     if (ext === '.pdf') icon = '📕';
@@ -148,22 +134,123 @@ function handleDroppedFile(file) {
     if (!fs.existsSync(tmpDir)) { try { fs.mkdirSync(tmpDir, { recursive: true }); } catch(e) { console.warn('[UI] Failed to create tmp dir:', e.message); } }
     var tmpPath = path.join(tmpDir, file.name);
 
-    Core.dom.status.textContent = icon + ' 正在保存文件 ' + file.name + '...';
     var reader = new FileReader();
     reader.onload = function(e) {
-      fs.writeFileSync(tmpPath, Buffer.from(e.target.result));
-
-      // 🔧 存储为待发送附件（而非提取文本到输入框）
-      if (!Core.pendingFiles) Core.pendingFiles = [];
-      Core.pendingFiles.push({ name: file.name, path: tmpPath, icon: icon, size: file.size });
-
-      // 显示附件预览芯片
-      showFileAttachmentPreview(Core.pendingFiles);
-
-      Core.dom.status.textContent = '✅ 附件已添加: ' + file.name + ' (发送时 AI 将自动读取)';
-      setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 3000);
+      try {
+        fs.writeFileSync(tmpPath, Buffer.from(e.target.result));
+        if (!Core.pendingFiles) Core.pendingFiles = [];
+        Core.pendingFiles.push({ name: file.name, path: tmpPath, icon: icon, size: file.size });
+        if (showPreview) showFileAttachmentPreview(Core.pendingFiles);
+        resolve(true);
+      } catch (err) {
+        console.warn('[UI] 附件保存失败:', err.message);
+        resolve(false);
+      }
     };
+    reader.onerror = function() { resolve(false); };
     reader.readAsArrayBuffer(file);
+  });
+}
+
+// 🖼️ 读取图片为 dataURL（返回 Promise）
+function readImageAsDataUrl(file) {
+  return new Promise(function(resolve) {
+    var reader = new FileReader();
+    reader.onload = function(e) { resolve({ dataUrl: e.target.result, name: file.name }); };
+    reader.onerror = function() { resolve(null); };
+    reader.readAsDataURL(file);
+  });
+}
+
+// 🔧 拖入聊天区域：AI 智能体自动读取（直接发送，不在发送框解析）
+function handleChatAreaDrop(files) {
+  var DOC_RE = /\.(pdf|docx|doc|xlsx|xls|csv|pptx|ppt|txt|md|json|js|py|css|html|xml|yaml|yml|log|sql|sh|bat|ps1|java|c|cpp|h|hpp|go|rs|rb|php|ts|tsx|jsx|vue|svelte|toml|ini|conf|cfg|env)$/i;
+  var imageFiles = [];
+  var docFiles = [];
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    if (f.type.startsWith('image/')) {
+      imageFiles.push(f);
+    } else if (DOC_RE.test(f.name) || f.type.startsWith('text/')) {
+      docFiles.push(f);
+    }
+  }
+  if (imageFiles.length === 0 && docFiles.length === 0) {
+    Core.dom.status.textContent = '⚠️ 暂不支持该格式，请拖入图片或文档';
+    setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 3000);
+    return;
+  }
+
+  Core.dom.status.textContent = '📥 正在读取 ' + (imageFiles.length + docFiles.length) + ' 个文件，AI 将自动分析...';
+
+  var imagePromises = imageFiles.map(readImageAsDataUrl);
+  var docPromises = docFiles.map(function(f) { return saveDocAttachment(f, false); });
+
+  Promise.all(imagePromises.concat(docPromises)).then(function(results) {
+    var imageResults = results.slice(0, imageFiles.length);
+    // 图片：加入待发送集合（不在发送框显示预览）
+    var addedImages = 0;
+    imageResults.forEach(function(img) {
+      if (img && img.dataUrl) {
+        if (window._pendingImages && Array.isArray(window._pendingImages)) {
+          window._pendingImages.push({ dataUrl: img.dataUrl, name: img.name });
+        } else {
+          Core.pendingImage = img.dataUrl; // 回退：单张
+        }
+        addedImages++;
+      }
+    });
+    // 自动发送给 AI 读取
+    autoSendDroppedContent(addedImages, docFiles.length);
+  });
+}
+
+// 🔧 自动发送拖入的内容（保留用户未发送的草稿）
+function autoSendDroppedContent(imgCount, docCount) {
+  var input = Core.dom.input;
+  var sid = (Core.session && Core.session.getCurrentId) ? Core.session.getCurrentId() : null;
+  var savedDraft = input.value;
+
+  var parts = [];
+  if (imgCount > 0) parts.push(imgCount + ' 张图片');
+  if (docCount > 0) parts.push(docCount + ' 个文件');
+  input.value = '请阅读并分析' + parts.join('和') + '的内容。';
+
+  var p = null;
+  try {
+    p = (Core.api && Core.api.sendMessage) ? Core.api.sendMessage() : null;
+  } catch (err) {
+    console.warn('[UI] 自动发送失败:', err.message);
+  }
+  var restore = function() {
+    input.value = savedDraft;
+    if (sid && Core.session.sessions && Core.session.sessions[sid]) {
+      Core.session.sessions[sid]._draft = savedDraft;
+    }
+  };
+  if (p && typeof p.then === 'function') {
+    p.then(restore, restore);
+  } else {
+    restore();
+  }
+}
+
+// 📎 拖入发送框：暂存为附件（显示预览，发送时 AI 自动读取）
+function handleDroppedFile(file) {
+  if (file.type.startsWith('image/')) {
+    handleImageToInput(file);
+    return;
+  }
+  if (/\.(pdf|docx|doc|xlsx|xls|csv|pptx|ppt|txt|md|json|js|py|css|html|xml|yaml|yml|log|sql|sh|bat|ps1|java|c|cpp|h|hpp|go|rs|rb|php|ts|tsx|jsx|vue|svelte|toml|ini|conf|cfg|env)$/i.test(file.name) || file.type.startsWith('text/')) {
+    Core.dom.status.textContent = '📄 正在保存文件 ' + file.name + '...';
+    saveDocAttachment(file, true).then(function(ok) {
+      if (ok) {
+        Core.dom.status.textContent = '✅ 附件已添加: ' + file.name + ' (发送时 AI 将自动读取)';
+      } else {
+        Core.dom.status.textContent = '⚠️ 附件保存失败: ' + file.name;
+      }
+      setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪 (' + Core.getCurrentService() + ')'; }, 3000);
+    });
   } else {
     var input = document.getElementById('input');
     input.value = (input.value ? input.value + '\n' : '') + '📎 文件「' + file.name + '」(' + (file.size / 1024).toFixed(1) + ' KB)';

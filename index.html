@@ -9,8 +9,7 @@
   <meta http-equiv="Expires" content="0">
   <title>AI智能体</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-theme">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
 
 <link rel="stylesheet" href="styles.css">
 <base target="_blank">
@@ -48,15 +47,17 @@
   </div>
 </div>
 
-<!-- ===== 汉堡菜单 ===== -->
-<div id="menuToggle" title="切换侧边栏">☰</div>
-<button id="shortcutHintBtn" class="icon-btn top-bar-btn" title="快捷键 (Ctrl+/)"><span class="material-icons-outlined" style="font-size:18px;vertical-align:middle;">keyboard</span></button>
+<!-- ===== 自定义标题栏（可拖拽窗口）===== -->
+<div id="titlebar">
+  <div id="menuToggle" title="切换侧边栏">☰</div>
+  <button id="shortcutHintBtn" class="icon-btn top-bar-btn" title="快捷键 (Ctrl+/)"><span class="material-icons-outlined" style="font-size:18px;vertical-align:middle;">keyboard</span></button>
+  <span id="appTitle">AI 智能体</span>
+</div>
 
 <!-- ===== 侧边栏 ===== -->
 <div id="sidebar">
   <div class="sidebar-header">
-    <span id="appTitle">AI 智能体</span>
-    <button id="newChatBtn" title="新建对话">+</button>
+    <button id="newChatBtn" title="新建对话">＋ 新建对话</button>
   </div>
   <div class="sidebar-search-area">
     <div class="search-box">
@@ -284,10 +285,17 @@
 <!-- ===== 设置面板 ===== -->
 <div class="settings-modal" id="settingsModal" role="dialog" aria-modal="true" aria-label="设置">
   <button class="close-modal" id="closeSettingsBtn">&times;</button>
-  <h3><span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;margin-right:6px;">settings</span>全局设置</h3>
+  <div class="settings-nav">
+    <div class="settings-nav-title">设置</div>
+    <button class="settings-nav-item active" data-cat="preferences"><span class="material-icons-outlined">tune</span>偏好设置</button>
+    <button class="settings-nav-item" data-cat="system"><span class="material-icons-outlined">settings</span>系统设置</button>
+    <button class="settings-nav-item" data-cat="workbench"><span class="material-icons-outlined">dashboard_customize</span>工作台</button>
+    <button class="settings-nav-item" data-cat="connect"><span class="material-icons-outlined">lan</span>连接</button>
+  </div>
+  <div class="settings-body">
 
   <!-- 分组1：外观与通用 -->
-  <details class="settings-group" open>
+  <details class="settings-group" data-category="preferences" open>
     <summary class="settings-group-header">
       <span class="material-icons-outlined">tune</span>
       <span>外观与通用</span>
@@ -373,7 +381,7 @@
   </details>
 
   <!-- 分组2：模型与API -->
-  <details class="settings-group">
+  <details class="settings-group" data-category="system">
     <summary class="settings-group-header">
       <span class="material-icons-outlined">api</span>
       <span>模型与 API</span>
@@ -413,7 +421,7 @@
   </details>
 
   <!-- 分组3：搜索引擎 -->
-  <details class="settings-group">
+  <details class="settings-group" data-category="connect">
     <summary class="settings-group-header">
       <span class="material-icons-outlined">travel_explore</span>
       <span>搜索引擎</span>
@@ -445,7 +453,7 @@
   </details>
 
   <!-- 分组4：高级功能 -->
-  <details class="settings-group">
+  <details class="settings-group" data-category="workbench">
     <summary class="settings-group-header">
       <span class="material-icons-outlined">build</span>
       <span>高级功能</span>
@@ -596,7 +604,7 @@
   </details>
 
   <!-- 分组6：高级定制 -->
-  <details class="settings-group">
+  <details class="settings-group" data-category="preferences">
     <summary class="settings-group-header">
       <span class="material-icons-outlined">palette</span>
       <span>高级定制</span>
@@ -658,7 +666,7 @@
   </details>
 
     <!-- 分组5：工作流自动化 -->
-  <details class="settings-group">
+  <details class="settings-group" data-category="workbench">
     <summary class="settings-group-header">
       <span class="material-icons-outlined">automation</span>
       <span>工作流自动化</span>
@@ -719,7 +727,7 @@
   </details>
 
     <!-- 分组5：数据管理 + 保存 -->
-  <details class="settings-group">
+  <details class="settings-group" data-category="system">
     <summary class="settings-group-header">
       <span class="material-icons-outlined">storage</span>
       <span>数据管理</span>
@@ -759,6 +767,26 @@
     </div>
   </details>
 
+  <!-- 分组：连接器 -->
+  <details class="settings-group" data-category="connect">
+    <summary class="settings-group-header">
+      <span class="material-icons-outlined">lan</span>
+      <span>连接器</span>
+    </summary>
+    <div class="settings-group-body">
+      <div class="api-group" id="connectorsGroup">
+        <label class="settings-group-title">连接器</label>
+        <div class="description-text">连接外部软件与服务，扩展 AI 的能力边界</div>
+        <button id="connectorsRefreshBtn" class="btn-primary btn-full">刷新连接器列表</button>
+        <div id="connectorsList" style="max-height:300px; overflow-y:auto; margin-top:10px;">
+          <div class="empty-state-text">暂无可用连接器</div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  </div><!-- /.settings-body -->
+
   <button class="save-settings" id="saveSettingsBtn">
     <span class="material-icons-outlined material-icons-inline">save</span>保存设置
   </button>
@@ -778,23 +806,23 @@
 
 <!-- ===== 右键菜单 ===== -->
 <div id="contextMenu" role="menu">
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="copy">📋 复制</div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="paste">📥 粘贴</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="copy"><span class="material-icons-outlined ctx-ico">content_copy</span>复制</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="paste"><span class="material-icons-outlined ctx-ico">content_paste</span>粘贴</div>
   <div class="menu-divider"></div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="rename">✏️ 重命名会话</div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="pin">📌 置顶/取消置顶</div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="delete">🗑️ 删除会话</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="rename"><span class="material-icons-outlined ctx-ico">edit</span>重命名会话</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="pin"><span class="material-icons-outlined ctx-ico">push_pin</span>置顶/取消置顶</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="delete"><span class="material-icons-outlined ctx-ico">delete</span>删除会话</div>
   <div class="menu-divider"></div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-json">📦 导出 JSON</div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-md">📝 导出 Markdown</div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-html">🌐 导出 HTML</div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-tree">🌳 导出会话树</div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="copy-md">📋 复制 Markdown</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-json"><span class="material-icons-outlined ctx-ico">data_object</span>导出 JSON</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-md"><span class="material-icons-outlined ctx-ico">description</span>导出 Markdown</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-html"><span class="material-icons-outlined ctx-ico">code</span>导出 HTML</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-tree"><span class="material-icons-outlined ctx-ico">account_tree</span>导出会话树</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="copy-md"><span class="material-icons-outlined ctx-ico">copy_all</span>复制 Markdown</div>
   <div class="menu-divider"></div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-pdf">📕 导出 PDF</div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-docx">📘 导出 Word</div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-xlsx">📗 导出 Excel</div>
-  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-pptx">📙 导出 PPT</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-pdf"><span class="material-icons-outlined ctx-ico">picture_as_pdf</span>导出 PDF</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-docx"><span class="material-icons-outlined ctx-ico">article</span>导出 Word</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-xlsx"><span class="material-icons-outlined ctx-ico">table_chart</span>导出 Excel</div>
+  <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-pptx"><span class="material-icons-outlined ctx-ico">slideshow</span>导出 PPT</div>
 </div>
 
 <!-- ===== 引入外部库 ===== -->
