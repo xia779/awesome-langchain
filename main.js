@@ -470,6 +470,108 @@ async function startWebServer() {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
   });
 
+  // ===== VoxCPM2 TTS 端点（代理到本地 8084 持久化服务）=====
+  const VOXCPM_PORT = 8084;
+
+  app2.post('/api/tts-voxcpm', async (req, res) => {
+    try {
+      const { text, voice = 'default', speed = 1.0, reference_audio, reference_text, voice_design } = req.body;
+      if (!text) return res.status(400).json({ success: false, error: '缺少文本' });
+
+      const os = require('os');
+      const outputFile = path.join(os.tmpdir(), `voxcpm_tts_${Date.now()}.wav`);
+
+      // 转发到 VoxCPM 持久化服务
+      const http = require('http');
+      const postData = JSON.stringify({
+        text, voice, speed, reference_audio, reference_text, voice_design,
+        output: outputFile
+      });
+
+      const proxyReq = http.request({
+        hostname: '127.0.0.1',
+        port: VOXCPM_PORT,
+        path: '/synthesize',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+        timeout: 300000
+      }, (proxyRes) => {
+        let data = '';
+        proxyRes.on('data', chunk => data += chunk);
+        proxyRes.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            if (result.success && result.file) {
+              const audioBuffer = fs.readFileSync(result.file);
+              try { fs.unlinkSync(result.file); } catch (e) {}
+              res.set({
+                'Content-Type': 'audio/wav',
+                'Content-Length': audioBuffer.length,
+                'X-TTS-Engine': 'voxcpm2',
+                'X-TTS-Voice': encodeURIComponent(voice || 'default')
+              });
+              res.send(audioBuffer);
+            } else {
+              res.status(500).json({ success: false, error: result.error || 'VoxCPM TTS 失败' });
+            }
+          } catch (e) {
+            res.status(500).json({ success: false, error: 'VoxCPM 响应解析失败: ' + e.message });
+          }
+        });
+      });
+
+      proxyReq.on('error', (err) => {
+        res.status(503).json({ success: false, error: 'VoxCPM 服务未启动 (端口 ' + VOXCPM_PORT + '): ' + err.message });
+      });
+
+      proxyReq.on('timeout', () => {
+        proxyReq.destroy();
+        res.status(504).json({ success: false, error: 'VoxCPM 合成超时' });
+      });
+
+      proxyReq.write(postData);
+      proxyReq.end();
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // VoxCPM 音色列表
+  app2.get('/api/tts-voxcpm/voices', async (req, res) => {
+    try {
+      const http = require('http');
+      http.get(`http://127.0.0.1:${VOXCPM_PORT}/voices`, (proxyRes) => {
+        let data = '';
+        proxyRes.on('data', chunk => data += chunk);
+        proxyRes.on('end', () => {
+          try { res.json(JSON.parse(data)); } catch (e) {
+            res.status(500).json({ success: false, error: '解析失败' });
+          }
+        });
+      }).on('error', (err) => {
+        res.status(503).json({ success: false, error: 'VoxCPM 服务未启动: ' + err.message });
+      });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+  });
+
+  // VoxCPM 健康检查
+  app2.get('/api/tts-voxcpm/health', async (req, res) => {
+    try {
+      const http = require('http');
+      http.get(`http://127.0.0.1:${VOXCPM_PORT}/health`, (proxyRes) => {
+        let data = '';
+        proxyRes.on('data', chunk => data += chunk);
+        proxyRes.on('end', () => {
+          try { res.json(JSON.parse(data)); } catch (e) {
+            res.status(500).json({ status: 'error' });
+          }
+        });
+      }).on('error', () => {
+        res.json({ status: 'offline', service: 'voxcpm-tts' });
+      });
+    } catch (err) { res.json({ status: 'offline' }); }
+  });
+
   // ===== 本地 ASR 端点（faster-whisper，完全离线语音识别）=====
   app2.post('/api/asr', async (req, res) => {
     try {

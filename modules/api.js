@@ -828,6 +828,37 @@ async function sendMessage() {
       return;
     }
 
+    // ⏰ /remind 自然语言触发：无需输入命令，直接说"每天三点半推送给我最新的大盘情况"即可自动建好定时任务。
+    // Agent 模式下同样拦截——"每天X点推送Y"这类句式本身足够明确，双重门槛（意图词+具体时间）已防住绝大多数误判；
+    // 显式 /agent 前缀的命令仍交给 Agent（detectReminderIntent 内部会拒绝以 / 开头的消息）。可通过 config.autoRemindDetect=false 关闭。
+    if (Core.scheduler && Core.scheduler.tryNaturalRemind && Core.config.autoRemindDetect !== false) {
+      try {
+        var remindResult = Core.scheduler.tryNaturalRemind(text);
+        if (remindResult) {
+          // 显示用户消息（让用户看到自己说的话）
+          Core.session.addMessage(text, 'user');
+          // 组装确认信息
+          var nextRunStr = remindResult.task.nextRun ? new Date(remindResult.task.nextRun).toLocaleString('zh-CN') : 'N/A';
+          var actionDesc = remindResult.actionType === 'send'
+            ? '到点自动发送「' + remindResult.content + '」给我处理'
+            : '到点弹窗提醒「' + remindResult.content + '」';
+          var confirmText = '✅ 好的，已为你设置定时任务：\n\n' +
+            '⏰ **' + remindResult.task.name + '**\n' +
+            '调度：' + Core.scheduler.describeSchedule(remindResult.schedule) + '\n' +
+            '动作：' + actionDesc + '\n' +
+            '下次执行：' + nextRunStr + '\n\n' +
+            '如需取消，输入 `/schedule list` 查看任务 ID，再用 `/schedule delete <ID>` 删除。';
+          Core.session.addMessage(confirmText, 'ai');
+          var _remindSid = Core.session.getCurrentId();
+          if (_remindSid && Core.session.renderMessages) Core.session.renderMessages(_remindSid);
+          console.log('⏰ 自然语言提醒已创建:', remindResult.task.name, JSON.stringify(remindResult.schedule));
+          Core.dom.sendBtn.disabled = false;
+          Core.dom.input.focus();
+          return;
+        }
+      } catch (e) { console.warn('⚠️ [api] 自然语言提醒检测失败:', e.message); }
+    }
+
     // 🔧 智能记忆自动提取：从用户消息中检测值得记住的信息
     if (Core.memory && Core.memory.autoExtract && Core.config.autoMemoryExtract !== false) {
       try {
@@ -1011,22 +1042,34 @@ async function sendMessage() {
     } catch (e) { console.warn('⚠️ [api] 知识库文档列表检查失败:', e.message); }
     if (hasKnowledgeDocs && Core.knowledge) {
       try {
-        // 优先使用 searchWithCitations（RRF 融合 + 引用格式）
-        if (Core.knowledge.searchWithCitations) {
-          var kbResult = await Core.knowledge.searchWithCitations(text, 3);
-          if (kbResult && kbResult.results && kbResult.results.length > 0) {
-            knowledgeContext = kbResult.context + '\n\n📚 参考来源：\n' + kbResult.citations;
-            console.log('知识库 RRF 检索到', kbResult.results.length, '条相关片段');
+        // 🔥 优先查蒸馏索引（热缓存层，毫秒级）
+        var distilledHit = false;
+        if (Core.knowledgeDistill && Core.knowledgeDistill.searchDistilled) {
+          var distilledResult = Core.knowledgeDistill.searchDistilled(text, 3);
+          if (distilledResult && distilledResult.results && distilledResult.results.length > 0) {
+            knowledgeContext = distilledResult.context + '\n\n📚 参考来源（蒸馏）：\n' + distilledResult.citations;
+            console.log('[distill] 蒸馏索引命中', distilledResult.results.length, '条主题');
+            distilledHit = true;
           }
-        } else if (Core.knowledge.search) {
-          // 回退到普通 search
-          var knowledgeResults = await Core.knowledge.search(text, 3);
-          if (knowledgeResults && knowledgeResults.length > 0) {
-            knowledgeContext = '';
-            knowledgeResults.forEach(function(r) {
-              knowledgeContext += '---\n来源：' + (r.fileName || '未知') + '\n' + (r.text || '').substring(0, 300) + '\n';
-            });
-            console.log('知识库检索到', knowledgeResults.length, '条相关片段');
+        }
+
+        // 蒸馏未命中 → 全量 BM25/RRF 检索
+        if (!distilledHit) {
+          if (Core.knowledge.searchWithCitations) {
+            var kbResult = await Core.knowledge.searchWithCitations(text, 3);
+            if (kbResult && kbResult.results && kbResult.results.length > 0) {
+              knowledgeContext = kbResult.context + '\n\n📚 参考来源：\n' + kbResult.citations;
+              console.log('知识库 RRF 检索到', kbResult.results.length, '条相关片段');
+            }
+          } else if (Core.knowledge.search) {
+            var knowledgeResults = await Core.knowledge.search(text, 3);
+            if (knowledgeResults && knowledgeResults.length > 0) {
+              knowledgeContext = '';
+              knowledgeResults.forEach(function(r) {
+                knowledgeContext += '---\n来源：' + (r.fileName || '未知') + '\n' + (r.text || '').substring(0, 300) + '\n';
+              });
+              console.log('知识库检索到', knowledgeResults.length, '条相关片段');
+            }
           }
         }
       } catch (err) {
@@ -1056,7 +1099,7 @@ async function sendMessage() {
 }
 module.exports = {
   name: 'api',
-  dependencies: ['error-handler', 'search', 'routing', 'custom', 'session', 'command-handler', 'chat-handler', 'agent-loop'],
+  dependencies: ['error-handler', 'search', 'routing', 'custom', 'session', 'command-handler', 'chat-handler', 'agent-loop', 'scheduler'],
   init(_Core) {
     Core = _Core;
     // 🔧 按钮点击事件由 index.html 中的 initStopGeneration 绑定

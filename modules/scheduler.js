@@ -104,7 +104,14 @@ function parseNaturalSchedule(text) {
     // "9:00", "14:30"
     var m1 = str.match(/(\d{1,2}):(\d{2})/);
     if (m1) return { hour: parseInt(m1[1]), minute: parseInt(m1[2]) };
-    // "9点30分", "9点半", "3点"
+    // "9点半", "三点半" → 30分（必须先于通用"X点Y分"判断，否则"半"会被忽略而返回整点）
+    var mHalf = str.match(/(\d{1,2}|[一二三四五六七八九十]+)[点时]半/);
+    if (mHalf) {
+      var hHalf = cnToNum(mHalf[1]);
+      if (/下午|晚上|晚|pm/i.test(str) && hHalf < 12) hHalf += 12;
+      return { hour: hHalf, minute: 30 };
+    }
+    // "9点30分", "9点30", "3点"
     var m2 = str.match(/(\d{1,2}|[一二三四五六七八九十]+)[点时](\d{1,2}|[一二三四五六七八九十]+)?分?/);
     if (m2) {
       var h = cnToNum(m2[1]);
@@ -113,15 +120,6 @@ function parseNaturalSchedule(text) {
       // "下午"/"晚上" +12h
       if (/下午|晚上|晚|pm/i.test(str) && h < 12) h += 12;
       return { hour: h, minute: min };
-    }
-    // "半" → 30分
-    if (/半/.test(str)) {
-      var m3 = str.match(/(\d{1,2}|[一二三四五六七八九十]+)[点时]半/);
-      if (m3) {
-        var h = cnToNum(m3[1]);
-        if (/下午|晚上|晚|pm/i.test(str) && h < 12) h += 12;
-        return { hour: h, minute: 30 };
-      }
     }
     return null;
   }
@@ -177,7 +175,28 @@ function parseNaturalSchedule(text) {
     return { type: 'daily', time: '09:00', weekdaysOnly: true };
   }
 
-  // 6. "周X/星期X + 时间" → weekly (用 daily + 86400 * 7 模拟)
+  // 6. "明天/后天/大后天/今天/今晚 + 时间" → 一次性任务（指定日期时刻）
+  var dayWordMatch = text.match(/(大后天|后天|明天|明日|今晚|今天晚上|今天|今日)/);
+  if (dayWordMatch) {
+    var dayWord = dayWordMatch[1];
+    var dayTime = extractTime(text);
+    var dayTarget = new Date();
+    var dayOffset = 0;
+    if (dayWord === '明天' || dayWord === '明日') dayOffset = 1;
+    else if (dayWord === '后天') dayOffset = 2;
+    else if (dayWord === '大后天') dayOffset = 3;
+    if (dayTime) {
+      dayTarget.setHours(dayTime.hour, dayTime.minute, 0, 0);
+    } else {
+      // 无具体时间：今晚默认20:00，其余默认09:00
+      if (dayWord === '今晚' || dayWord === '今天晚上') dayTarget.setHours(20, 0, 0, 0);
+      else dayTarget.setHours(9, 0, 0, 0);
+    }
+    if (dayOffset > 0) dayTarget.setDate(dayTarget.getDate() + dayOffset);
+    return { type: 'once', at: dayTarget.toISOString() };
+  }
+
+  // 7. "周X/星期X + 时间" → weekly (用 daily + 86400 * 7 模拟)
   var weekMatch = text.match(/周([一二三四五六日天])|星期([一二三四五六日天])/);
   if (weekMatch) {
     var dayStr = weekMatch[1] || weekMatch[2];
@@ -188,7 +207,7 @@ function parseNaturalSchedule(text) {
     return { type: 'weekly', time: timeStr, dayOfWeek: dayNum };
   }
 
-  // 7. 仅包含时间 → daily
+  // 8. 仅包含时间 → daily
   var timeOnly = extractTime(text);
   if (timeOnly) {
     var timeStr = String(timeOnly.hour).padStart(2, '0') + ':' + String(timeOnly.minute).padStart(2, '0');
@@ -196,6 +215,110 @@ function parseNaturalSchedule(text) {
   }
 
   return null;
+}
+
+// ===== 自然语言提醒意图检测（无需输入 /remind 命令） =====
+
+// 判断文本是否包含"具体时刻 / 周期 / 倒计时"。
+// 用作触发门槛之一，避免把"告诉我明天天气"这类问句误判为提醒。
+function hasSpecificTime(text) {
+  // 具体时刻: "3点" "三点半" "14:30" "3:30"
+  if (/([一二三四五六七八九十\d]+\s*[点时])|(\d{1,2}[:：]\d{2})/.test(text)) return true;
+  // 周期: "每30分钟" "每2小时" "每天" "每小时"
+  if (/每\s*(\d+|[一二三四五六七八九十]+)\s*(秒|分钟|分|小时|时|天|日)/.test(text)) return true;
+  if (/每分钟|每分|每小时|每时|每天|每日/.test(text)) return true;
+  // 倒计时: "5分钟后" "一小时后" "半小时后"
+  if (/(\d+|[一二三四五六七八九十半]+)\s*(秒|分钟|分|小时|时|天|日)\s*后/.test(text)) return true;
+  return false;
+}
+
+// 从提醒句中提炼核心内容（去掉时间词与意图词），作为任务名和到点发送/提醒的文案。
+function extractReminderContent(text) {
+  var content = text;
+  content = content.replace(/每天|每日/g, '');
+  content = content.replace(/每[一二三四五六七八九十\d]+\s*(秒|分钟|分|小时|时|天|日)/g, '');
+  content = content.replace(/工作日|周一到周五|星期一到星期五/g, '');
+  content = content.replace(/(大后天|后天|明天|明日|今晚|今天晚上|今天|今日)/g, '');
+  content = content.replace(/周[一二三四五六日天]|星期[一二三四五六日天]/g, '');
+  content = content.replace(/(\d+|[一二三四五六七八九十半]+)\s*(秒|分钟|分|小时|时|天|日)\s*后/g, '');
+  content = content.replace(/\d{1,2}[:：]\d{2}/g, '');
+  content = content.replace(/[一二三四五六七八九十\d]+\s*[点时]\s*([一二三四五六七八九十\d]+\s*分|半)?/g, '');
+  content = content.replace(/上午|下午|晚上|早上|中午|凌晨/g, '');
+  // "做个定时任务/设置定时任务/建一个定时任务"等是元指令（要求创建任务），不属于到点发送的内容
+  content = content.replace(/(帮我|请|麻烦|给我|设置|创建|添加|搞)?\s*(做|建|来|弄)?\s*(一?个)?\s*定时任务/g, '');
+  content = content.replace(/提醒我?|通知我?|推送|推给我|发给我|发我|给我发|给我推|给我|叫我|喊我|播报|别忘了|别忘|记得|告诉我/g, '');
+  content = content.replace(/^[，。,.:：;；!！?？\s]+/, '');
+  content = content.replace(/\s+/g, ' ').trim();
+  return content || text.trim();
+}
+
+// 检测一句话是否为"提醒 / 定时推送"意图。
+// 双重门槛：必须同时含"提醒类意图词" + "具体时间/周期"，最大限度避免误判普通对话。
+// 命中返回 { schedule, content, actionType }，否则返回 null。
+function detectReminderIntent(text) {
+  if (!text || typeof text !== 'string') return null;
+  text = text.trim();
+  if (text.length < 4) return null;
+  // 命令（以 / 开头）不走自然语言触发，交给命令处理器
+  if (text.charAt(0) === '/') return null;
+
+  // 门槛1：明确的提醒 / 推送意图词
+  var INTENT_RE = /(提醒我?|推送|推给我|发给我|发我|给我发|给我推|通知我?|叫我|喊我|播报|别忘了|别忘|记得|告诉我)/;
+  if (!INTENT_RE.test(text)) return null;
+
+  // 门槛2：具体的时刻 / 周期 / 倒计时
+  if (!hasSpecificTime(text)) return null;
+
+  var schedule = parseNaturalSchedule(text);
+  if (!schedule) return null;
+
+  // 如果解析为 daily 但原文并无"每天"等周期词（来自"仅时刻"兜底），视为"今天的一次性提醒"
+  var hasRecurWord = /每天|每日|工作日|周一到周五|星期一到星期五|周[一二三四五六日天]|星期[一二三四五六日天]/.test(text);
+  if (schedule.type === 'daily' && !hasRecurWord) {
+    var t = parseCronTime(schedule.time);
+    if (t) {
+      var target = new Date();
+      target.setHours(t.hour, t.minute, 0, 0);
+      schedule = { type: 'once', at: target.toISOString() };
+    }
+  }
+
+  var content = extractReminderContent(text);
+
+  // 动作类型：内容含"需要AI执行/产出"的信号 → send（到点自动发给我处理）；否则 prompt（仅弹窗提醒）
+  var AI_ACTION_RE = /(推送|分析|总结|查询|搜索|搜一下|生成|写|整理|发送|播报|获取|大盘|股票|行情|新闻|天气|股价|涨跌|报告|日报|周报|笑话|故事)/;
+  var actionType = AI_ACTION_RE.test(content) ? 'send' : 'prompt';
+
+  return { schedule: schedule, content: content, actionType: actionType };
+}
+
+// 尝试把一句自然语言直接创建为定时任务。
+// 成功返回 { task, schedule, content, actionType }，未命中返回 null。
+function tryNaturalRemind(text) {
+  var detected = detectReminderIntent(text);
+  if (!detected) return null;
+  var taskName = detected.content.substring(0, 20) || '自然语言提醒';
+  var task = addTask({
+    name: taskName,
+    schedule: detected.schedule,
+    action: { type: detected.actionType, message: detected.content }
+  });
+  return { task: task, schedule: detected.schedule, content: detected.content, actionType: detected.actionType };
+}
+
+// 调度计划的中文描述（用于确认消息与任务列表）
+function describeSchedule(schedule) {
+  if (!schedule) return '';
+  var dayNames = ['日','一','二','三','四','五','六'];
+  if (schedule.type === 'interval') return '每 ' + schedule.interval;
+  if (schedule.type === 'daily') return '每天 ' + schedule.time + (schedule.weekdaysOnly ? '（工作日）' : '');
+  if (schedule.type === 'once') {
+    if (schedule.at) return '一次性 ' + new Date(schedule.at).toLocaleString('zh-CN');
+    return '一次性 ' + (schedule.delay || schedule.interval || '');
+  }
+  if (schedule.type === 'cron') return 'Cron: ' + schedule.cron;
+  if (schedule.type === 'weekly') return '每周' + dayNames[schedule.dayOfWeek] + ' ' + schedule.time;
+  return JSON.stringify(schedule);
 }
 
 // ===== Cron 表达式支持 =====
@@ -887,7 +1010,10 @@ function init(_Core) {
     start: startTask,
     stop: stopTask,
     stopAll: stopAllTasks,
-    runNow: runNow
+    runNow: runNow,
+    parseNaturalSchedule: parseNaturalSchedule,
+    describeSchedule: describeSchedule,
+    tryNaturalRemind: tryNaturalRemind
   };
 
   console.log('✅ scheduler.js 已加载 (' + tasks.length + ' 任务, ' + Object.keys(activeTimers).length + ' 活跃)');

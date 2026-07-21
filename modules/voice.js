@@ -21,6 +21,7 @@ function init(_Core) {
     apiBase: 'https://api.siliconflow.cn/v1',
     localVoice: 'zh-CN-XiaoxiaoNeural',  // edge-tts 默认语音
     fishVoice: '语音测试01',              // Fish Speech 默认音色（声音克隆）
+    voxcpmVoice: 'default',              // VoxCPM2 默认音色
     localTtsVoices: null,                // 缓存本地语音列表
 
     // ===== 辅助方法 =====
@@ -48,7 +49,7 @@ function init(_Core) {
 
     // ================================================================
     //  TTS 语音合成
-    //  优先级：Fish Speech 1.5 (本地GPU) → edge-tts → 云端 SiliconFlow → 浏览器 speechSynthesis
+    //  优先级：VoxCPM2 (本地GPU) → Fish Speech 1.5 → edge-tts → 云端 SiliconFlow → 浏览器 speechSynthesis
     // ================================================================
 
     async speak(text, options) {
@@ -57,7 +58,15 @@ function init(_Core) {
       // 停止之前的朗读
       this.stopSpeaking();
 
-      // 优先：Fish Speech 1.5 本地 GPU TTS（高质量，支持声音克隆）
+      // 最高优先：VoxCPM2 本地 GPU TTS（48kHz 高保真，零样本克隆）
+      try {
+        return await this._voxcpmSpeak(text, options);
+      } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        console.warn('VoxCPM TTS 失败，回退 Fish Speech:', e.message);
+      }
+
+      // 回退 1：Fish Speech 1.5 本地 GPU TTS（高质量，支持声音克隆）
       try {
         return await this._fishSpeak(text, options);
       } catch (e) {
@@ -86,6 +95,60 @@ function init(_Core) {
 
       // 回退 3：浏览器 speechSynthesis
       return this._browserSpeak(text, options);
+    },
+
+    // VoxCPM2 本地 GPU TTS（48kHz 高保真，零样本克隆，音色设计）
+    async _voxcpmSpeak(text, options) {
+      var voice = options.voice || this.voxcpmVoice || 'default';
+      var speed = options.speed || options.rate || 1.0;
+      var voiceDesign = options.voiceDesign || null;
+
+      this._voxcpmAbortController = new AbortController();
+
+      var bodyData = { text: text, voice: voice, speed: speed };
+      if (voiceDesign) bodyData.voice_design = voiceDesign;
+      if (options.referenceAudio) bodyData.reference_audio = options.referenceAudio;
+      if (options.referenceText) bodyData.reference_text = options.referenceText;
+
+      var response = await fetch('http://127.0.0.1:8080/api/tts-voxcpm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData),
+        signal: this._voxcpmAbortController.signal
+      });
+
+      this._voxcpmAbortController = null;
+
+      if (!response.ok) {
+        var errData = {};
+        try { errData = await response.json(); } catch (e2) {}
+        throw new Error('HTTP ' + response.status + ': ' + (errData.error || response.statusText));
+      }
+
+      var arrayBuffer = await response.arrayBuffer();
+      var blob = new Blob([arrayBuffer], { type: 'audio/wav' });
+      var url = URL.createObjectURL(blob);
+
+      var self = this;
+      return new Promise(function(resolve) {
+        self.currentAudio = new Audio(url);
+        self.currentAudio.volume = options.volume !== undefined ? options.volume : 1.0;
+        self.currentAudio.onended = function() {
+          URL.revokeObjectURL(url);
+          self.currentAudio = null;
+          resolve(true);
+        };
+        self.currentAudio.onerror = function(e) {
+          URL.revokeObjectURL(url);
+          self.currentAudio = null;
+          resolve(false);
+        };
+        self.currentAudio.play().catch(function(err) {
+          URL.revokeObjectURL(url);
+          self.currentAudio = null;
+          resolve(false);
+        });
+      });
     },
 
     // Fish Speech s1-mini 本地 GPU TTS
@@ -141,6 +204,10 @@ function init(_Core) {
 
     // 取消正在进行的 TTS 请求和播放
     cancelSpeak() {
+      if (this._voxcpmAbortController) {
+        this._voxcpmAbortController.abort();
+        this._voxcpmAbortController = null;
+      }
       if (this._fishAbortController) {
         this._fishAbortController.abort();
         this._fishAbortController = null;

@@ -502,6 +502,17 @@
         </div>
       </div>
 
+      <div class="api-group" id="toolsGroup">
+        <label>工具集</label>
+        <div class="description-text">Agent 模式下 AI 可自动调用的内置工具（共 <span id="toolsCountBadge">0</span> 个），无需手动操作</div>
+        <div class="btn-group">
+          <button id="toolsRefreshBtn" class="btn-primary" style="background:#2a2a2a; flex:1;">刷新工具列表</button>
+        </div>
+        <div id="toolsListContainer" style="margin-top:12px; max-height:320px; overflow-y:auto;">
+          <div class="empty-state-text">正在加载工具列表...</div>
+        </div>
+      </div>
+
       <div class="api-group" id="imageGenGroup">
         <label class="settings-group-title">图像生成</label>
         <div class="flex-col-gap8">

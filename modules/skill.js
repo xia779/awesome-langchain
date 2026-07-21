@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 let Core = null;
-let currentSkillId = null;
+let activeSkillIds = [];
 
 // ===== 内置默认技能 =====
 const builtinSkills = {
@@ -193,49 +193,74 @@ function removeSkill(id) {
   } catch (e) {
     return { success: false, error: '删除失败: ' + e.message };
   }
-  if (currentSkillId === id) currentSkillId = null;
+  var idx = activeSkillIds.indexOf(id);
+  if (idx !== -1) activeSkillIds.splice(idx, 1);
   refreshSkills();
   return { success: true };
 }
 
 function setSkill(id) {
   if (id === null) {
-    currentSkillId = null;
-    console.log('✅ 技能已重置为默认');
+    activeSkillIds = [];
+    console.log('✅ 已取消激活全部技能');
     return true;
   }
   if (!allSkills[id]) {
     console.warn('❌ 技能 "' + id + '" 不存在');
     return false;
   }
-  currentSkillId = id;
-  console.log('✅ 已激活技能: ' + allSkills[id].name);
+  var idx = activeSkillIds.indexOf(id);
+  if (idx !== -1) {
+    // 已激活 → 取消激活（切换逻辑）
+    activeSkillIds.splice(idx, 1);
+    console.log('⏹ 已取消激活技能: ' + allSkills[id].name);
+  } else {
+    // 未激活 → 加入激活列表
+    activeSkillIds.push(id);
+    console.log('✅ 已激活技能: ' + allSkills[id].name + ' (当前激活 ' + activeSkillIds.length + ' 个)');
+  }
   return true;
 }
 
 function getCurrentSkill() {
-  if (!currentSkillId) return null;
-  return getSkill(currentSkillId);
+  // 兼容旧调用：返回第一个激活的技能
+  if (activeSkillIds.length === 0) return null;
+  return getSkill(activeSkillIds[0]);
+}
+
+function getActiveSkills() {
+  return activeSkillIds
+    .map(function (id) { return getSkill(id); })
+    .filter(function (s) { return !!s; });
 }
 
 function getCurrentSystemPrompt() {
-  var skill = getCurrentSkill();
-  return skill ? skill.systemPrompt : null;
+  var skills = getActiveSkills();
+  if (skills.length === 0) return null;
+  if (skills.length === 1) return skills[0].systemPrompt;
+  // 多技能：拼接所有激活技能的 prompt
+  return skills.map(function (s) {
+    return '【技能：' + s.name + '】\n' + s.systemPrompt;
+  }).join('\n\n---\n\n');
 }
 
 function applySkillToPrompt(userSystemPrompt) {
   var skillPrompt = getCurrentSystemPrompt();
   if (!skillPrompt) return userSystemPrompt;
+  var skills = getActiveSkills();
+  var label = skills.length === 1
+    ? '【当前技能：' + skills[0].name + '】'
+    : '【当前技能（' + skills.length + ' 个）：' + skills.map(function (s) { return s.name; }).join('、') + '】';
   if (userSystemPrompt && userSystemPrompt.trim() !== '') {
-    return userSystemPrompt + '\n\n【当前技能：' + getCurrentSkill().name + '】\n' + skillPrompt;
+    return userSystemPrompt + '\n\n' + label + '\n' + skillPrompt;
   }
-  return skillPrompt;
+  return label + '\n' + skillPrompt;
 }
 
 function listSkills() {
   var all = getAllSkills();
   return all.map(function (s) {
-    var tag = currentSkillId === s.id ? ' [激活]' : '';
+    var tag = activeSkillIds.indexOf(s.id) !== -1 ? ' [激活]' : '';
     var src = s.source === 'file' ? ' 📁' : '';
     return s.id + ' - ' + s.name + tag + src;
   }).join('\n');
@@ -311,6 +336,7 @@ module.exports = {
       installSkill: installSkill,
       setSkill: setSkill,
       getCurrentSkill: getCurrentSkill,
+      getActiveSkills: getActiveSkills,
       getCurrentSystemPrompt: getCurrentSystemPrompt,
       applySkillToPrompt: applySkillToPrompt,
       listSkills: listSkills,

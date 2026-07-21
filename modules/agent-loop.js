@@ -19,6 +19,7 @@ const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主�
 7. 替代策略示例：read_file失败→用list_dir查看目录；browser_click失败→用browser_execute执行JS
 8. 如果连续两次工具失败，考虑用 run_python 编写脚本来完成任务，或向用户 ask_user 确认参数
 9. web_search 可能不可用（返回"未启用"），此时应优先使用本地工具（run_command、run_python、read_file等）完成任务，不要反复尝试搜索
+10. 【严禁编造数据】如果搜索结果中没有确切的数字（如股指点位、股价、开盘价、收盘价、涨跌幅、成交量等），绝对不允许编造一个"看起来合理"的数字，必须明确说明"未找到确切数据"。宁可承认不知道，也绝不给出虚假数字。引用数据时尽量注明来源和时间。
 
 你可以使用以下工具（action名称）：
 - web_search: 联网搜索，获取最新信息、实时数据、新闻
@@ -471,6 +472,10 @@ async function sendToAgent(task, isDeepThink) {
     try {
       // 📁 Agent 模式也注入项目上下文 + 增强记忆
       var agentPrompt = AGENT_SYSTEM_PROMPT;
+      // ⏰ 注入当前时间：让 Agent 知道"现在"，才能判断市场是否开盘、数据是否过期，避免编造开盘/收盘点位、混淆日期
+      var _nowDt = new Date();
+      var _weekDayNames = ['日','一','二','三','四','五','六'];
+      agentPrompt += '\n\n【当前时间】现在是 ' + _nowDt.getFullYear() + '年' + (_nowDt.getMonth() + 1) + '月' + _nowDt.getDate() + '日 星期' + _weekDayNames[_nowDt.getDay()] + ' ' + String(_nowDt.getHours()).padStart(2, '0') + ':' + String(_nowDt.getMinutes()).padStart(2, '0') + '。请基于这个时间点判断信息时效性：A股交易时段为工作日 9:30-15:00，非交易时段（如凌晨、深夜、周末）不存在当天的开盘/收盘数据，不要编造。';
       if (Core.projectContext && Core.projectContext.hasContext()) {
         var pCtx = Core.projectContext.getContextString();
         if (pCtx) agentPrompt += pCtx;
@@ -478,6 +483,13 @@ async function sendToAgent(task, isDeepThink) {
       if (Core.memoryEnhance && Core.memoryEnhance.getEnhancedContext) {
         var memCtx = Core.memoryEnhance.getEnhancedContext(task);
         if (memCtx) agentPrompt += '\n\n' + memCtx;
+      }
+      // 📚 注入历史经验教训：避免 Agent 重复犯同样的错误（如 ComfyUI 未启动、CUDA OOM 等）
+      if (Core.knowledgeDistill && Core.knowledgeDistill.getRelevantLessons) {
+        var lessons = Core.knowledgeDistill.getRelevantLessons(null, task);
+        if (lessons && lessons.length > 0) {
+          agentPrompt += Core.knowledgeDistill.formatLessonsForPrompt(lessons);
+        }
       }
       // 🔧 使用用户当前选择的模型/提供商，而非硬编码 ollama
       var agentProvider = 'ollama';
@@ -617,6 +629,18 @@ async function sendToAgent(task, isDeepThink) {
       isToolError = errorPatterns.some(function(p) { return lowerResult.indexOf(p.toLowerCase()) !== -1; });
     }
     if (isToolError) {
+      // 📚 记录错误经验：供后续蒸馏和 Agent pre-check 使用
+      if (Core.knowledgeDistill && Core.knowledgeDistill.addLesson) {
+        try {
+          Core.knowledgeDistill.addLesson({
+            category: 'tool_error',
+            pattern: action.action,
+            message: '工具 "' + action.action + '" 执行失败: ' + toolResultStr.substring(0, 150),
+            tool: action.action,
+            suggestion: '检查参数/服务状态后重试，或使用替代方案'
+          });
+        } catch (e) { /* 静默失败，不影响主流程 */ }
+      }
       var correctionHint = '\n⚠️ [自动纠错提示] 工具 "' + action.action + '" 执行失败。请分析上述错误原因，并尝试以下策略之一：\n' +
         '1. 检查并修正参数后重试（如路径错误则修正路径）\n' +
         '2. 使用不同的工具完成同一目标\n' +

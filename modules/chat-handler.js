@@ -289,6 +289,11 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
     injectedSystemPrompt = finalSystemPrompt + '\n\n' + memoryContext;
   }
 
+  // ⏰ 注入当前时间：让AI知道"现在"，才能判断信息时效性（如凌晨没有当天开盘/收盘数据），避免编造数字、混淆日期
+  var _nowChat = new Date();
+  var _weekDayZh = ['日','一','二','三','四','五','六'];
+  injectedSystemPrompt += '\n\n【当前时间】现在是 ' + _nowChat.getFullYear() + '年' + (_nowChat.getMonth() + 1) + '月' + _nowChat.getDate() + '日 星期' + _weekDayZh[_nowChat.getDay()] + ' ' + String(_nowChat.getHours()).padStart(2, '0') + ':' + String(_nowChat.getMinutes()).padStart(2, '0') + '。请基于这个时间点判断信息时效性，不要编造不存在的数据（如非交易时段的当天开盘/收盘价）。';
+
   // 📁 项目上下文注入：自动读取项目约定文件并注入系统提示
   if (Core.projectContext && Core.projectContext.hasContext()) {
     var projectCtx = Core.projectContext.getContextString();

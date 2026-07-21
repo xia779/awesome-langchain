@@ -850,6 +850,13 @@ module.exports = {
       rebuildEmbeddings,
       getStats,
       saveConversation,
+      // 内部函数暴露（供 knowledge-distill 模块使用）
+      _loadAllChunks: loadAllChunks,
+      _getEmbedding: getEmbedding,
+      _cosineSimilarity: cosineSimilarity,
+      _tokenize: tokenize,
+      _bm25Search: bm25Search,
+      _chunkDocument: chunkDocument,
     };
 
     // 异步初始化：检测嵌入模型（不阻塞启动）

@@ -349,6 +349,114 @@ function renderKnowledgeDocList() {
   }
 }
 
+// ===== 工具集面板初始化 =====
+function initToolsPanel() {
+  var refreshBtn = document.getElementById('toolsRefreshBtn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', function() {
+      renderToolsList();
+    });
+  }
+  renderToolsList();
+}
+
+function renderToolsList() {
+  var container = document.getElementById('toolsListContainer');
+  var badge = document.getElementById('toolsCountBadge');
+  if (!container) return;
+
+  if (!Core.toolsRegistry || !Core.toolsRegistry.getToolDefinitions) {
+    container.innerHTML = '<div style="color:#888;font-size:13px;text-align:center;padding:16px 0;">工具模块尚未加载...</div>';
+    setTimeout(renderToolsList, 1000);
+    return;
+  }
+
+  try {
+    var definitions = Core.toolsRegistry.getToolDefinitions();
+    if (badge) badge.textContent = definitions.length;
+
+    if (!definitions || definitions.length === 0) {
+      container.innerHTML = '<div style="color:#888;font-size:13px;text-align:center;padding:16px 0;">暂无可用工具</div>';
+      return;
+    }
+
+    // 工具分类
+    var categories = {
+      '文件操作': ['read_file', 'write_file', 'edit_file', 'list_dir', 'search_files', 'file_info', 'batch_operations'],
+      '系统命令': ['run_command', 'run_python'],
+      '浏览器': ['browser_navigate', 'browser_screenshot', 'browser_click', 'browser_type', 'browser_extract', 'browser_wait'],
+      '网络': ['read_url', 'image_search', 'image_download'],
+      'GitHub': ['github_pr', 'github_issue', 'github_repo', 'github_release']
+    };
+
+    var toolMap = {};
+    definitions.forEach(function(def) {
+      toolMap[def.function.name] = def.function;
+    });
+
+    var escapeHtml = _htmlUtils.escapeHtml;
+    var html = '';
+
+    Object.keys(categories).forEach(function(catName) {
+      var toolNames = categories[catName];
+      var catTools = toolNames.filter(function(n) { return toolMap[n]; });
+      if (catTools.length === 0) return;
+
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:12px;color:#8b5cf6;font-weight:600;margin-bottom:6px;padding-left:2px;">' + escapeHtml(catName) + ' (' + catTools.length + ')</div>';
+
+      catTools.forEach(function(name) {
+        var tool = toolMap[name];
+        var params = tool.parameters && tool.parameters.properties
+          ? Object.keys(tool.parameters.properties).join(', ')
+          : '无参数';
+        html += '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin-bottom:4px;background:#1e1e2e;border-radius:8px;border:1px solid #2a2a3a;">';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-size:13px;font-weight:500;color:#e0e0e0;font-family:monospace;">' + escapeHtml(name) + '</div>';
+        html += '<div style="font-size:12px;color:#999;margin-top:2px;">' + escapeHtml(tool.description || '') + '</div>';
+        html += '<div style="font-size:11px;color:#666;margin-top:2px;">参数: ' + escapeHtml(params) + '</div>';
+        html += '</div>';
+        html += '<span style="font-size:10px;color:#4ade80;background:#052e16;padding:2px 6px;border-radius:4px;white-space:nowrap;">可用</span>';
+        html += '</div>';
+      });
+
+      html += '</div>';
+    });
+
+    // 未分类的工具
+    var categorized = [];
+    Object.keys(categories).forEach(function(cat) {
+      categorized = categorized.concat(categories[cat]);
+    });
+    var uncategorized = definitions.filter(function(d) {
+      return categorized.indexOf(d.function.name) === -1;
+    });
+    if (uncategorized.length > 0) {
+      html += '<div style="margin-bottom:12px;">';
+      html += '<div style="font-size:12px;color:#8b5cf6;font-weight:600;margin-bottom:6px;padding-left:2px;">其他 (' + uncategorized.length + ')</div>';
+      uncategorized.forEach(function(def) {
+        var tool = def.function;
+        var params = tool.parameters && tool.parameters.properties
+          ? Object.keys(tool.parameters.properties).join(', ')
+          : '无参数';
+        html += '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin-bottom:4px;background:#1e1e2e;border-radius:8px;border:1px solid #2a2a3a;">';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-size:13px;font-weight:500;color:#e0e0e0;font-family:monospace;">' + escapeHtml(tool.name) + '</div>';
+        html += '<div style="font-size:12px;color:#999;margin-top:2px;">' + escapeHtml(tool.description || '') + '</div>';
+        html += '<div style="font-size:11px;color:#666;margin-top:2px;">参数: ' + escapeHtml(params) + '</div>';
+        html += '</div>';
+        html += '<span style="font-size:10px;color:#4ade80;background:#052e16;padding:2px 6px;border-radius:4px;white-space:nowrap;">可用</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
+  } catch (err) {
+    container.innerHTML = '<div style="color:#ef4444;font-size:13px;text-align:center;padding:16px 0;">加载工具列表失败: ' + (err.message || err) + '</div>';
+  }
+}
+
 // ===== 打开/关闭设置面板 =====
 function openSettings() {
   loadSettingsToUI();
@@ -684,14 +792,18 @@ function renderSkillsList() {
   }
   try {
     const skills = Core.skills.getAllSkills();
-    const current = Core.skills.getCurrentSkill();
+    const activeSkills = Core.skills.getActiveSkills ? Core.skills.getActiveSkills() : [];
+    const activeIds = activeSkills.map(function (a) { return a.id; });
     if (!skills || skills.length === 0) {
       container.innerHTML = '<div style="color:var(--text-secondary);font-size:13px;text-align:center;padding:16px 0;">暂无技能</div>';
       return;
     }
     let html = '';
+    if (activeIds.length > 0) {
+      html += '<div style="font-size:11px;color:var(--primary);margin-bottom:8px;padding:6px 10px;background:rgba(99,102,241,0.08);border-radius:6px;">已激活 ' + activeIds.length + ' 个技能，将同时注入对话</div>';
+    }
     skills.forEach(function(s) {
-      const isActive = current && current.id === s.id;
+      const isActive = activeIds.indexOf(s.id) !== -1;
       const activeStyle = isActive ? 'border-left:3px solid var(--primary);' : '';
       const activeTag = isActive ? ' <span style="color:var(--primary);font-size:11px;font-weight:600;">[激活中]</span>' : '';
       const srcTag = s.source === 'file' ? '<span style="color:#22c55e;font-size:10px;margin-left:6px;">文件</span>' : '<span style="color:#94a3b8;font-size:10px;margin-left:6px;">内置</span>';
@@ -727,7 +839,7 @@ function renderSkillsList() {
     });
     container.querySelectorAll('.skill-deactivate-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        Core.skills.setSkill(null);
+        Core.skills.setSkill(btn.dataset.id);
         renderSkillsList();
       });
     });
@@ -1532,6 +1644,7 @@ module.exports = {
     try { initWorkflowPanel(); } catch(e) { console.warn('⚠️ Workflow panel init error:', e.message); }
     try { initPermissionsPanel(); } catch(e) { console.warn('⚠️ Permissions panel init error:', e.message); }
     try { initCustomizerPanel(); } catch(e) { console.warn('⚠️ Customizer panel init error:', e.message); }
+    try { initToolsPanel(); } catch(e) { console.warn('⚠️ Tools panel init error:', e.message); }
 
     Core.on('configChanged', () => {
       try {

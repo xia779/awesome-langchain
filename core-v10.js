@@ -782,6 +782,14 @@ Core.renderMarkdown = function(text) {
           else if (Core.dom.input) { Core.dom.input.value = '/agent '; Core.dom.input.focus(); }
         } else if (action === 'tools') {
           if (Core.dom.openSettingsBtn) Core.dom.openSettingsBtn.click();
+          setTimeout(function() {
+            var toolsGroup = document.getElementById('toolsGroup');
+            if (toolsGroup) {
+              toolsGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              var details = toolsGroup.closest('details');
+              if (details) details.open = true;
+            }
+          }, 350);
         } else if (action === 'history') {
           var chatSearch = document.getElementById('chatSearch');
           if (chatSearch) chatSearch.focus();
