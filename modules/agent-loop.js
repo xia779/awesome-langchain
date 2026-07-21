@@ -508,6 +508,8 @@ async function sendToAgent(task, isDeepThink) {
       reply = reply.replace(/<?\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '').trim();
     } catch (err) {
       finalAnswer = '❌ Agent 执行出错：' + err.message + '\n\n可能原因：\n1. 模型服务未启动或 API Key 未配置\n2. 当前选择的模型不可用\n\n建议：检查设置中的模型配置，或切换到其他可用模型。';
+      // 📡 Gateway 桥接：Agent 模型调用失败的真实现场。agent-loop 内部吞掉异常（返回 success:true），api.js 的 catch 够不到，须在此处补发 'ai:error'，回传结构化错误帧给 WS 客户端
+      if (Core.emit) Core.emit('ai:error', { message: err.message || 'Agent 模型调用失败', context: 'agent', time: Date.now() });
       break;
     }
 
