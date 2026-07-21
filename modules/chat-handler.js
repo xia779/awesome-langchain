@@ -450,6 +450,8 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
         return function(chunk, fullText) {
           reply = fullText;
           _pendingFullText = fullText;
+          // 🌐 Gateway 流式广播：实时推送给远程客户端
+          if (Core.ui) Core.ui.updateLastMessage(fullText, false);
           if (Core.voice && Core.voice.streamAppend) {
             try { Core.voice.streamAppend(chunk); } catch (e) { console.warn('\u26a0\ufe0f [api] \u6d41\u5f0f\u8bed\u97f3\u8ffd\u52a0\u5931\u8d25:', e.message); }
           }
@@ -577,6 +579,8 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       } else {
         Core.session.saveSession(currentSessionId);
       }
+      // 🌐 Gateway 广播：将 AI 回复推送给所有 WebSocket 客户端（手机/Web/开发板）
+      if (Core.ui) Core.ui.appendMessage('ai', reply, { sessionId: currentSessionId });
       // 🔧 知识库自动记忆：将本轮 Q&A 存入知识库供未来检索
       if (Core.config.autoKnowledgeMemory && Core.knowledge && Core.knowledge.saveConversation) {
         try {
@@ -592,7 +596,8 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       throw new Error('AI 返回空内容');
     }
 
-    Core.dom.status.textContent = `✅ 已就绪 (${provider})`;
+    if (Core.ui) Core.ui.setStatus('✅ 已就绪 (' + provider + ')');
+    else Core.dom.status.textContent = '✅ 已就绪 (' + provider + ')';
     Core.emit('typingEnd');
 
     // Phase 3-2：流式朗读结束 + 自动朗读回复

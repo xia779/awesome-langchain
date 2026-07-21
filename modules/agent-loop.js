@@ -842,6 +842,11 @@ async function sendToAgent(task, isDeepThink) {
   agentDiv.appendChild(contentDiv);
   Core.addTimestamp(agentDiv); // 添加时间戳
 
+  // 📡 Gateway 桥接：Agent 回复广播到 WebSocket 客户端（Core.ui.appendMessage 仅发事件，不操作 DOM，不会二次渲染）
+  if (Core.ui && Core.ui.appendMessage && finalAnswer) {
+    Core.ui.appendMessage('ai', finalAnswer, {});
+  }
+
   // 添加代码复制按钮和折叠按钮
   agentDiv.querySelectorAll('pre').forEach(pre => {
     if (pre.querySelector('.copy-code-btn')) return; // 避免重复

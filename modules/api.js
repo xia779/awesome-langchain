@@ -681,6 +681,7 @@ async function sendMessage() {
     const handled = Core.custom.executeCommand(inputText);
     if (handled) {
       Core.dom.input.value = '';
+      _sendSemaphore = false; // 命令已处理，释放信号量（此 return 在 try/finally 之外）
       return;
     }
   }

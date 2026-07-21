@@ -735,6 +735,96 @@ Core.renderMarkdown = function(text) {
   Core.dom.tempSlider = Core.dom.temperatureSlider || document.getElementById('temperatureSlider');
   Core.dom.chatContainer = Core.dom.chatContainer || document.getElementById('chatContainer');
 
+  // ===== Core.ui 抽象层（Gateway 化基础：事件广播 + DOM 兼容）=====
+  // 每个方法同时执行 DOM 操作（本地 Electron）和 emit 事件（远程客户端 via WebSocket）
+  // 远程客户端（手机/Web/开发板）监听这些事件来渲染自己的 UI
+  Core.ui = {
+    // 状态栏
+    setStatus: function(text) {
+      if (Core.dom.status) Core.dom.status.textContent = text;
+      Core.emit('ui:status', { text: text, time: Date.now() });
+    },
+
+    // 追加聊天消息（role: user/ai/system, content: 文本或HTML）
+    appendMessage: function(role, content, options) {
+      options = options || {};
+      Core.emit('ui:message', {
+        role: role,
+        content: content,
+        sessionId: options.sessionId || (Core.session && Core.session.getCurrentId ? Core.session.getCurrentId() : null),
+        streaming: options.streaming || false,
+        time: Date.now()
+      });
+    },
+
+    // 流式更新最后一条 AI 消息
+    updateLastMessage: function(content, done) {
+      Core.emit('ui:stream', { content: content, done: !!done, time: Date.now() });
+    },
+
+    // 设置输入框内容
+    setInput: function(text) {
+      if (Core.dom.input) {
+        Core.dom.input.value = text;
+        Core.dom.input.focus();
+      }
+      Core.emit('ui:input', { text: text, time: Date.now() });
+    },
+
+    // 获取输入框内容
+    getInput: function() {
+      return (Core.dom.input && Core.dom.input.value) || '';
+    },
+
+    // 发送按钮状态
+    setSendEnabled: function(enabled) {
+      if (Core.dom.sendBtn) Core.dom.sendBtn.disabled = !enabled;
+      Core.emit('ui:sendState', { enabled: enabled, time: Date.now() });
+    },
+
+    // 打字指示器
+    setTyping: function(active) {
+      Core.emit('ui:typing', { active: active, time: Date.now() });
+    },
+
+    // 桌面通知
+    notify: function(title, body) {
+      Core.emit('ui:notify', { title: title, body: body, time: Date.now() });
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(title, { body: body });
+        }
+      } catch (e) {}
+    },
+
+    // 应用标题
+    setTitle: function(title) {
+      if (typeof document !== 'undefined') document.title = title;
+      if (Core.dom.appTitle) Core.dom.appTitle.textContent = title;
+      Core.emit('ui:title', { title: title, time: Date.now() });
+    },
+
+    // 会话列表更新
+    sessionUpdated: function(sessionId, title) {
+      Core.emit('ui:session', { sessionId: sessionId, title: title, time: Date.now() });
+    },
+
+    // Agent 步骤更新（实时进度）
+    agentStep: function(step, action, status, detail) {
+      Core.emit('ui:agentStep', { step: step, action: action, status: status, detail: detail, time: Date.now() });
+    },
+
+    // 工具调用广播（跨设备路由用）
+    toolCall: function(tool, params, targetDevice) {
+      Core.emit('gateway:toolCall', { tool: tool, params: params, targetDevice: targetDevice, time: Date.now() });
+    },
+
+    // 设备状态变更
+    deviceStatus: function(deviceId, status, capabilities) {
+      Core.emit('gateway:device', { deviceId: deviceId, status: status, capabilities: capabilities, time: Date.now() });
+    }
+  };
+
   // 🔧 浮动输入框：新建对话按钮 + 模型标签更新
   // 🔧 应用与插件菜单
   (function initAppsMenu() {
