@@ -132,17 +132,19 @@ const tools = {
         // 确保目录存在
         const dir = path.dirname(file_path);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        // 写入前备份（如果文件已存在）
-        if (fs.existsSync(file_path)) {
-          try {
-            var backupDir = path.join(Core ? (Core.DATA_ROOT || Core._globalDataRoot || '.') : '.', 'tmp', 'file-backups');
-            if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
-            var backupName = path.basename(file_path) + '.' + Date.now() + '.bak';
-            fs.copyFileSync(file_path, path.join(backupDir, backupName));
-          } catch(be) { /* 备份失败不阻止写入 */ }
+        // Checkpoint 快照 + diff 预览
+        var diffInfo = null;
+        if (fs.existsSync(file_path) && Core && Core.fileCheckpoint) {
+          var sessionId = (Core.currentSession && Core.currentSession.id) || 'default';
+          Core.fileCheckpoint.createCheckpoint(file_path, sessionId);
+          diffInfo = Core.fileCheckpoint.generateDiff(file_path, content);
         }
         fs.writeFileSync(file_path, content, 'utf8');
-        return `✅ 文件写入成功：${file_path}`;
+        var msg = `✅ 文件写入成功：${file_path}`;
+        if (diffInfo && diffInfo.changeCount > 0) {
+          msg += `\n📝 变更: ${diffInfo.changeCount} 行 (共 ${diffInfo.totalLines} 行)`;
+        }
+        return msg;
       } catch (err) {
         return `❌ 写入失败：${err.message}`;
       }
@@ -522,14 +524,19 @@ const tools = {
         if (count === 0) {
           return '❌ 未找到匹配的文本:\n"' + old_text.substring(0, 100) + '"';
         }
-        // 备份原文件
-        try {
-          var backupDir = path.join(Core ? (Core.DATA_ROOT || Core._globalDataRoot || '.') : '.', 'tmp', 'file-backups');
-          if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
-          fs.copyFileSync(file_path, path.join(backupDir, path.basename(file_path) + '.' + Date.now() + '.bak'));
-        } catch(be) { console.warn('[Tools] Pre-edit backup failed:', be.message); }
+        // Checkpoint 快照 + diff 预览
+        var diffInfo = null;
+        if (Core && Core.fileCheckpoint) {
+          var sessionId = (Core.currentSession && Core.currentSession.id) || 'default';
+          Core.fileCheckpoint.createCheckpoint(file_path, sessionId);
+          diffInfo = Core.fileCheckpoint.generateDiff(file_path, newContent);
+        }
         fs.writeFileSync(file_path, newContent, 'utf8');
-        return '✅ 编辑成功：替换了 ' + count + ' 处匹配文本\n文件：' + file_path;
+        var msg = '✅ 编辑成功：替换了 ' + count + ' 处匹配文本\n文件：' + file_path;
+        if (diffInfo && diffInfo.changeCount > 0) {
+          msg += '\n📝 变更: ' + diffInfo.changeCount + ' 行';
+        }
+        return msg;
       } catch (err) {
         return '❌ 编辑失败：' + err.message;
       }
