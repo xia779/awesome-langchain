@@ -262,14 +262,43 @@ function isPathAllowed(filePath) {
 // ===== 初始化 MCP =====
 function initMcp(_Core) {
   Core = _Core;
+
+  // 配置门控：Core.config.mcpEnabled 默认 true
+  var configEnabled = !Core.config || Core.config.mcpEnabled !== false;
+  if (!configEnabled) {
+    console.log('⏭️ MCP 模块已禁用 (config.mcpEnabled = false)');
+    Core.mcp = { enabled: function() { return false; }, listTools: function() { return []; }, callTool: function() { return { success: false, error: 'MCP 已禁用' }; } };
+    return;
+  }
+
   registerLocalTools();
 
-  // 自动连接配置中的 MCP 服务器
+  // 如果没有 mcp-servers.json，创建默认配置（filesystem 限定 DATA_ROOT）
+  var configPath = getServersConfigPath();
+  if (!fs.existsSync(configPath)) {
+    var dataRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || 'E:\\my-ai-data';
+    var defaultConfig = {
+      servers: [
+        {
+          id: 'filesystem',
+          name: '文件系统（数据目录）',
+          command: 'npx',
+          args: ['-y', '@anthropic/mcp-filesystem', dataRoot],
+          enabled: false,
+          note: '启用后 AI 可读写 ' + dataRoot + ' 下的文件'
+        }
+      ]
+    };
+    saveServersConfig(defaultConfig);
+    console.log('📝 已创建默认 MCP 配置: ' + configPath);
+  }
+
+  // 自动连接配置中已启用的 MCP 服务器
   var config = loadServersConfig();
   if (config.servers && config.servers.length > 0) {
     for (var i = 0; i < config.servers.length; i++) {
       var s = config.servers[i];
-      if (s.enabled !== false) {
+      if (s.enabled === true) {
         connectServer(s.id).catch(function (e) {
           console.warn('⚠️ 自动连接 MCP 服务器失败:', e.message);
         });
@@ -291,6 +320,15 @@ function initMcp(_Core) {
     addServer: addServer,
     removeServer: removeServer,
     _rpc: sendRpc,
+    // 运行时开关
+    enable: function() { mcpEnabled = true; console.log('✅ MCP 已启用'); },
+    disable: function() { mcpEnabled = false; console.log('⏭️ MCP 已禁用'); },
+    // 合并本地+外部工具（供 agent-loop 使用）
+    getAllTools: function() {
+      return Object.values(registeredTools).map(function(t) {
+        return { name: t.name, description: t.description, schema: t.schema, source: t.source || 'local' };
+      });
+    },
   };
 
 }
