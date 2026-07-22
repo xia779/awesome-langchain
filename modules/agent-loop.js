@@ -66,6 +66,8 @@ const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主�
   参数: {"query": "搜索关键词", "provider": "duckduckgo|bing|unsplash", "count": 5}
 - image_download: 下载图片到本地
   参数: {"url": "图片URL", "dest": "保存路径"}
+- stock_quote: 查询A股实时行情（指数/个股），返回现价、涨跌幅、开盘收盘、最高最低、成交量额和行情时间。数据来源腾讯行情接口，数字准确。【查询股指点位、开盘收盘、涨跌幅等行情时必须优先使用本工具，禁止用 web_search 猜测或编造数字】
+  参数: {"query": "代码或名称，逗号分隔多个。如 上证指数 / 600519 / 贵州茅台,宁德时代"}
 - ask_user: 向用户提问，收集偏好或确认信息（暂停执行等待回答）
   参数: {"question": "问题文本", "options": [{"label":"选项A","description":"说明"}], "multiSelect": false}
 - parallel_execute: 并行执行多个工具（适用于互不依赖的子任务）
@@ -159,7 +161,8 @@ var ACTION_ZH_MAP = {
   'parallel_execute': '并行执行',
   'complete': '完成任务',
   'memory_search': '记忆检索',
-  'knowledge_search': '知识检索'
+  'knowledge_search': '知识检索',
+  'stock_quote': '行情查询'
 };
 function translateAction(action) {
   return ACTION_ZH_MAP[action] || action;
@@ -277,7 +280,7 @@ async function _executeAgentActionRaw(action, params) {
          'run_command',
          'browser_navigate', 'browser_screenshot', 'browser_click', 'browser_type', 'browser_extract', 'browser_wait',
          'github_pr', 'github_issue', 'github_repo', 'github_release',
-         'image_search', 'image_download'].includes(action)) {
+         'image_search', 'image_download', 'stock_quote'].includes(action)) {
       try {
         const result = await Core.toolsRegistry.executeTool(action, mappedParams);
         return result;

@@ -1062,6 +1062,24 @@ const tools = {
       } catch (e) { return '❌ 图片下载失败: ' + e.message; }
     },
   },
+
+  // ===== A股行情查询（腾讯行情数据源，返回确定数字）=====
+  stock_quote: {
+    description: '查询A股实时行情（指数/个股）：现价、涨跌幅、今开、昨收、最高最低、成交量额、行情时间。数据来自腾讯行情接口，数字准确权威。查询股指点位、开盘收盘、涨跌幅等行情数据时必须优先使用本工具，不要用 web_search 猜测或编造数字。',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: '股票代码或名称，多个用逗号分隔。支持：指数名称（上证指数/大盘/沪深300）、6位代码（600519/000001）、股票名称（贵州茅台/宁德时代）' }
+      },
+      required: ['query']
+    },
+    handler: async function (params) {
+      if (!Core.stockQuote) return '❌ 行情模块未加载';
+      try {
+        return await Core.stockQuote.getQuote(params.query || '');
+      } catch (e) { return '❌ 行情查询失败: ' + e.message; }
+    },
+  },
 };
 
 // ===== 获取工具定义（用于 Ollama API） =====
