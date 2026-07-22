@@ -94,6 +94,7 @@
       <button id="importBtn" class="icon-btn" title="导入数据"><span class="material-icons-outlined">file_open</span></button>
       <button id="checkUpdateBtn" class="icon-btn" title="检查更新"><span class="material-icons-outlined">update</span></button>
       <button id="switchUserBtn" class="icon-btn" title="切换用户"><span class="material-icons-outlined">person</span></button>
+      <button id="openVoiceBtn" class="icon-btn" title="语音/音色"><span class="material-icons-outlined">graphic_eq</span></button>
       <button id="openSettingsBtn" class="icon-btn" title="设置"><span class="material-icons-outlined">settings</span></button>
     </div>
     <div id="currentUserDisplay" class="user-display"></div>
@@ -291,6 +292,7 @@
     <button class="settings-nav-item" data-cat="system"><span class="material-icons-outlined">settings</span>系统设置</button>
     <button class="settings-nav-item" data-cat="workbench"><span class="material-icons-outlined">dashboard_customize</span>工作台</button>
     <button class="settings-nav-item" data-cat="connect"><span class="material-icons-outlined">lan</span>连接</button>
+    <button class="settings-nav-item" data-cat="voice"><span class="material-icons-outlined">graphic_eq</span>语音</button>
   </div>
   <div class="settings-body">
 
@@ -780,6 +782,22 @@
         <button id="connectorsRefreshBtn" class="btn-primary btn-full">刷新连接器列表</button>
         <div id="connectorsList" style="max-height:300px; overflow-y:auto; margin-top:10px;">
           <div class="empty-state-text">暂无可用连接器</div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <!-- 分组：语音/音色 -->
+  <details class="settings-group" data-category="voice">
+    <summary class="settings-group-header">
+      <span class="material-icons-outlined">graphic_eq</span>
+      <span>语音 / 音色</span>
+    </summary>
+    <div class="settings-group-body">
+      <div class="api-group">
+        <input type="file" id="voiceRefFileInput" accept=".wav,.mp3,.flac,.ogg,.m4a,audio/*" style="display:none;" />
+        <div id="voicePanelList">
+          <div class="empty-state-text">加载中...</div>
         </div>
       </div>
     </div>

@@ -554,6 +554,49 @@ async function startWebServer() {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
   });
 
+  // VoxCPM 参考音频目录（零样本克隆音色存放处，与服务端 list_voices 保持一致）
+  const VOXCPM_REF_DIR = 'E:/voxcpm-models/references';
+
+  // 上传参考音频 → 新增克隆音色
+  app2.post('/api/tts-voxcpm/voices/upload', async (req, res) => {
+    try {
+      const { name, ext = '.wav', dataBase64 } = req.body;
+      if (!name || !dataBase64) return res.status(400).json({ success: false, error: '缺少 name 或 dataBase64' });
+      // 清洗音色名：仅允许中文/字母/数字/下划线/连字符，防止路径穿越
+      const safeName = String(name).replace(/[^\w\u4e00-\u9fa5\-]/g, '').trim();
+      if (!safeName) return res.status(400).json({ success: false, error: '音色名无效（仅支持中文/字母/数字/-/_）' });
+      const safeExt = ['.wav', '.mp3', '.flac', '.ogg', '.m4a'].includes(String(ext).toLowerCase()) ? String(ext).toLowerCase() : '.wav';
+      if (!fs.existsSync(VOXCPM_REF_DIR)) fs.mkdirSync(VOXCPM_REF_DIR, { recursive: true });
+      const audioBuffer = Buffer.from(String(dataBase64).replace(/^data:audio\/\w+;base64,/, ''), 'base64');
+      if (audioBuffer.length < 1024) return res.status(400).json({ success: false, error: '音频数据过小，可能无效' });
+      const outFile = path.join(VOXCPM_REF_DIR, safeName + safeExt);
+      fs.writeFileSync(outFile, audioBuffer);
+      res.json({ success: true, name: safeName, file: outFile, size: audioBuffer.length });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+  });
+
+  // 删除克隆音色（移入 .trash 子目录，非永久删除，可随时恢复）
+  app2.post('/api/tts-voxcpm/voices/delete', async (req, res) => {
+    try {
+      const { name } = req.body;
+      if (!name || name === 'default') return res.status(400).json({ success: false, error: '默认音色不可删除' });
+      const safeName = String(name).replace(/[^\w\u4e00-\u9fa5\-]/g, '').trim();
+      if (!safeName) return res.status(400).json({ success: false, error: '音色名无效' });
+      const trashDir = path.join(VOXCPM_REF_DIR, '.trash');
+      if (!fs.existsSync(trashDir)) fs.mkdirSync(trashDir, { recursive: true });
+      let moved = 0;
+      for (const ext of ['.wav', '.mp3', '.flac', '.ogg', '.m4a', '.txt']) {
+        const src = path.join(VOXCPM_REF_DIR, safeName + ext);
+        if (fs.existsSync(src)) {
+          fs.renameSync(src, path.join(trashDir, safeName + '_' + Date.now() + ext));
+          moved++;
+        }
+      }
+      if (moved === 0) return res.status(404).json({ success: false, error: '未找到该音色文件' });
+      res.json({ success: true, moved });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+  });
+
   // VoxCPM 健康检查
   app2.get('/api/tts-voxcpm/health', async (req, res) => {
     try {
@@ -1312,7 +1355,7 @@ ipcMain.on('toggle-devtools', () => {
 if (process.env.NODE_ENV === 'development') {
   app.whenReady().then(() => {
     setTimeout(() => {
-      if (mainWindow && mainWindow.webContents) { mainWindow.webContents.openDevTools(); }
+      if (mainWindow && mainWindow.webContents) { mainWindow.webContents.openDevTools({ mode: 'right' }); }
     }, 2000);
   });
 }

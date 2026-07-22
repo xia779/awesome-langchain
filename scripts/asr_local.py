@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 import argparse, json, os, sys
 
+# 🔧 离线使用本地模型缓存，跳过 HuggingFace 联网校验
+# （国内网络访问 HF 会超时 ~40s，导致每次识别都卡住；模型已缓存后可安全离线）
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
 def transcribe(input_file, model_size, language, device):
     try:
         from faster_whisper import WhisperModel
