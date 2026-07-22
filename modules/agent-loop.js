@@ -221,6 +221,38 @@ function normalizeToolResult(result) {
   if (result instanceof Error) return '❌ ' + result.message;
   try { return JSON.stringify(result, null, 2); } catch (e) { return String(result); }
 }
+
+// ===== 工具错误判定（基于结果前缀，替代全文关键词匹配）=====
+// 旧逻辑对工具返回的【完整内容】做子串匹配，导致 read_file / search_files / run_command / run_python
+// 返回的聊天记录、日志、命令输出里天然含有"错误、失败、error、未找到、无法"等词时，
+// 把【成功】的工具调用误判为失败，触发无意义的"自动纠错"重试，错误率虚高。
+// 实际上 tools.js 的所有工具已统一用开头表情标记成败：失败以 ❌ / ⛔ 开头，成功以 ✅ / 🔍 找到 / 📋 等开头，
+// 因此判定应读取这个前缀标记，而不是扫描内容。
+var TOOL_FAIL_PREFIXES = ['❌', '⛔'];
+var TOOL_SUCCESS_PREFIXES = ['✅', '🔍 找到', '📋', '🌐', '🔄', '⚡', '💬', '🛡️', '{', '['];
+// 仅用于无前缀的未知格式结果（如浏览器原始返回），且只检查首行，避免匹配到数据内容
+var TOOL_HEAD_ERROR_PATTERNS = ['error:', 'error：', 'failed:', 'failed：', 'traceback (most recent call last)', 'exception:', 'enoent', 'permission denied', 'is not recognized', 'command failed'];
+
+function detectToolError(toolResultStr) {
+  if (!toolResultStr) return false;
+  var t = String(toolResultStr).trim();
+  if (!t) return false;
+  // 1) 明确的失败前缀 → 判定为错误
+  for (var i = 0; i < TOOL_FAIL_PREFIXES.length; i++) {
+    if (t.indexOf(TOOL_FAIL_PREFIXES[i]) === 0) return true;
+  }
+  // 2) 明确的成功前缀 → 即使内容里出现错误关键词，也不算工具失败
+  for (var j = 0; j < TOOL_SUCCESS_PREFIXES.length; j++) {
+    if (t.indexOf(TOOL_SUCCESS_PREFIXES[j]) === 0) return false;
+  }
+  // 3) 无前缀（未知格式）：仅对首行做高置信度错误特征匹配
+  var firstLine = t.split('\n')[0].toLowerCase();
+  for (var k = 0; k < TOOL_HEAD_ERROR_PATTERNS.length; k++) {
+    if (firstLine.indexOf(TOOL_HEAD_ERROR_PATTERNS[k]) !== -1) return true;
+  }
+  return false;
+}
+
 // ===== Agent 工具执行（MCP + toolsRegistry 统一调度）=====
 async function _executeAgentActionRaw(action, params) {
   // 优先级 1：通过 toolsRegistry 执行（tools.js，含路径白名单 + 安全检查）
@@ -623,13 +655,9 @@ async function sendToAgent(task, isDeepThink) {
     var toolResultStr = (toolResult == null) ? '' : (typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult));
 
     // 🔧 自动纠错：检测工具失败并注入重试引导
+    // 用 detectToolError 前缀判定，避免对返回内容做关键词全文匹配导致误判
     var resultForContext = toolResultStr;
-    var isToolError = false;
-    if (toolResultStr) {
-      var errorPatterns = ['❌', '错误', 'error', 'failed', '失败', '未找到', 'not found', 'ENOENT', 'EACCES', 'permission denied', 'timeout', '超时', '无法', 'cannot'];
-      var lowerResult = toolResultStr.toLowerCase();
-      isToolError = errorPatterns.some(function(p) { return lowerResult.indexOf(p.toLowerCase()) !== -1; });
-    }
+    var isToolError = detectToolError(toolResultStr);
     if (isToolError) {
       // 📚 记录错误经验：供后续蒸馏和 Agent pre-check 使用
       if (Core.knowledgeDistill && Core.knowledgeDistill.addLesson) {
@@ -909,6 +937,7 @@ module.exports = {
       extractJSONFromText: extractJSONFromText,
       cleanFinalAnswer: cleanFinalAnswer,
       evaluateAnswer: evaluateAnswer,
+      detectToolError: detectToolError,
       AGENT_SYSTEM_PROMPT: AGENT_SYSTEM_PROMPT
     };
     console.log('✅ Agent 循环模块已加载');

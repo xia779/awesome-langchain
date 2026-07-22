@@ -84,13 +84,10 @@ async function executeStreaming(action, params, options) {
     reportProgress('processing', '处理结果...', 80);
     var resultStr = typeof result === 'string' ? result : JSON.stringify(result);
 
-    // 检测工具执行错误（与 agent-loop.js 保持一致）
-    var isToolError = false;
-    if (resultStr) {
-      var errorPatterns = ['❌', '错误', 'error', 'failed', '失败', '未找到', 'not found', 'ENOENT', 'timeout', '超时'];
-      var lowerResult = resultStr.toLowerCase();
-      isToolError = errorPatterns.some(function(p) { return lowerResult.indexOf(p.toLowerCase()) !== -1; });
-    }
+    // 检测工具执行错误（复用 agent-loop 的 detectToolError 前缀判定，与 agent-loop.js 保持一致）
+    var isToolError = (Core.agentLoop && Core.agentLoop.detectToolError)
+      ? Core.agentLoop.detectToolError(resultStr)
+      : false;
 
     // Phase 4: 完成
     reportProgress('complete', isToolError ? '执行完成（有错误）' : '执行完成', 100, { resultLength: resultStr.length });

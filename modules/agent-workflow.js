@@ -208,11 +208,10 @@ async function handleObserve(ctx) {
   var action = ctx._toolAction;
   var toolResultStr = (toolResult == null) ? '' : (typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult));
 
-  // 错误检测
-  var isToolError = false;
-  var errorPatterns = ['❌', '错误', 'error', 'failed', '失败', '未找到', 'not found', 'ENOENT', 'EACCES', 'permission denied', 'timeout', '超时', '无法', 'cannot'];
-  var lowerResult = toolResultStr.toLowerCase();
-  isToolError = errorPatterns.some(function(p) { return lowerResult.indexOf(p.toLowerCase()) !== -1; });
+  // 错误检测（前缀判定，复用 agent-loop 的 detectToolError，避免对返回内容做关键词全文匹配导致误判）
+  var isToolError = (Core.agentLoop && Core.agentLoop.detectToolError)
+    ? Core.agentLoop.detectToolError(toolResultStr)
+    : false;
 
   var resultForContext = toolResultStr;
   if (isToolError) {
