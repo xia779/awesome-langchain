@@ -79,6 +79,9 @@ function init(_Core) {
     getMarketplaceRegistry,
     installFromMarketplace,
     getInstalledIds,
+    // 版本更新
+    checkUpdates: checkPluginUpdates,
+    updatePlugin: updatePlugin,
   };
   // 加载本地市场注册表
   var localMarketplace = path.join(Core.DATA_ROOT, 'plugins-marketplace.json');
@@ -424,8 +427,36 @@ function installPlugin(sourcePath) {
     
     const stat = fs.statSync(sourcePath);
     if (stat.isFile() && sourcePath.endsWith('.zip')) {
-      // 🔧 ZIP 安装需要解压（当前简化版：提示用户手动解压）
-      return { success: false, error: 'ZIP 安装暂不支持，请手动解压到 ' + pluginsDir };
+      // ZIP 安装：解压到临时目录后按目录安装
+      const os = require('os');
+      const { execSync } = require('child_process');
+      const tmpDir = path.join(os.tmpdir(), 'plugin-install-' + Date.now());
+      try {
+        fs.mkdirSync(tmpDir, { recursive: true });
+        if (process.platform === 'win32') {
+          execSync(`powershell -Command "Expand-Archive -Path '${sourcePath}' -DestinationPath '${tmpDir}' -Force"`, { timeout: 30000 });
+        } else {
+          execSync(`unzip -o '${sourcePath}' -d '${tmpDir}'`, { timeout: 30000 });
+        }
+        // 检查解压后的结构（可能有一层包装目录）
+        let extractedDir = tmpDir;
+        const entries = fs.readdirSync(tmpDir);
+        if (entries.length === 1 && fs.statSync(path.join(tmpDir, entries[0])).isDirectory()) {
+          extractedDir = path.join(tmpDir, entries[0]);
+        }
+        // 验证 plugin.json 存在
+        if (!fs.existsSync(path.join(extractedDir, 'plugin.json'))) {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+          return { success: false, error: 'ZIP 内未找到 plugin.json（请确保插件清单在 ZIP 根目录）' };
+        }
+        // 递归调用自身（以目录模式安装）
+        const result = installPlugin(extractedDir);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        return result;
+      } catch (zipErr) {
+        try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) {}
+        return { success: false, error: 'ZIP 解压失败: ' + zipErr.message };
+      }
     }
     
     if (!stat.isDirectory()) {
@@ -483,6 +514,49 @@ function uninstallPlugin(pluginId) {
   } catch (err) {
     console.error('❌ 卸载插件失败:', err.message);
     return { success: false, error: err.message };
+  }
+}
+
+// ===== 插件版本更新检查 =====
+async function checkPluginUpdates() {
+  const updates = [];
+  const installed = listPlugins();
+  for (const plugin of installed) {
+    if (!plugin.manifest || !plugin.manifest.updateUrl) continue;
+    try {
+      const resp = await fetch(plugin.manifest.updateUrl, { signal: AbortSignal.timeout(8000) });
+      if (!resp.ok) continue;
+      const remote = await resp.json();
+      if (remote.version && remote.version !== plugin.manifest.version) {
+        updates.push({
+          id: plugin.id,
+          name: plugin.manifest.name || plugin.id,
+          currentVersion: plugin.manifest.version || '0.0.0',
+          remoteVersion: remote.version,
+          downloadUrl: remote.downloadUrl || remote.zipUrl || null,
+        });
+      }
+    } catch (e) { /* skip unreachable update servers */ }
+  }
+  return updates;
+}
+
+async function updatePlugin(pluginId, downloadUrl) {
+  if (!downloadUrl) return { success: false, error: '无下载地址' };
+  try {
+    const os = require('os');
+    const tmpZip = path.join(os.tmpdir(), 'plugin-update-' + pluginId + '-' + Date.now() + '.zip');
+    // 下载 ZIP
+    const resp = await fetch(downloadUrl, { signal: AbortSignal.timeout(60000) });
+    if (!resp.ok) return { success: false, error: '下载失败: HTTP ' + resp.status };
+    const buffer = Buffer.from(await resp.arrayBuffer());
+    fs.writeFileSync(tmpZip, buffer);
+    // 安装（会先卸载旧版）
+    const result = installPlugin(tmpZip);
+    try { fs.unlinkSync(tmpZip); } catch (e) {}
+    return result;
+  } catch (e) {
+    return { success: false, error: '更新失败: ' + e.message };
   }
 }
 

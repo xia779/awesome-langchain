@@ -1,0 +1,32 @@
+{
+  "id": "manga-auto",
+  "name": "AI漫剧全自动工作流",
+  "version": "1.0.0",
+  "description": "一键将文字大纲转化为完整漫剧视频（剧本→角色/场景图→配音→音效→字幕→合成）",
+  "author": "AI Agent Pro",
+  "icon": "🎬",
+  "category": "creative",
+  "tags": ["漫剧", "视频", "ComfyUI", "TTS", "FFmpeg"],
+  "command": "/manga-auto",
+  "usage": "/manga-auto <故事大纲>",
+  "examples": [
+    "/manga-auto 一个程序员穿越到古代成为军师，用现代知识帮助将军打赢战争",
+    "/manga-auto 都市白领意外获得超能力，在办公室展开一系列搞笑冒险"
+  ],
+  "requirements": {
+    "services": ["ComfyUI (8188)", "VoxCPM2 TTS (8084)", "FFmpeg"],
+    "models": ["ComfyUI SD/Flux 模型", "VoxCPM2 2B"],
+    "modules": ["manga-workflow", "manga-comfyui", "voice"]
+  },
+  "pipeline": [
+    "1. LLM 生成结构化剧本（分镜+对白+场景描述）",
+    "2. ComfyUI 生成角色立绘（IPAdapter 一致性）",
+    "3. ComfyUI 生成场景背景",
+    "4. VoxCPM2 语音合成（多角色音色）",
+    "5. 音效/背景音乐匹配",
+    "6. FFmpeg 分镜合成（图片+音频+字幕）",
+    "7. 片段拼接为完整视频",
+    "8. 输出 MP4 到 manga_pipeline/output/"
+  ],
+  "output": "E:\my-ai-data\manga_pipeline\output\<timestamp>.mp4"
+}

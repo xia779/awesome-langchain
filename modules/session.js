@@ -1246,17 +1246,91 @@ function updateChatCountDisplay() {
   if (countEl) countEl.textContent = count;
 }
 
-// ===== 自动更新标题 =====
+// ===== 自动更新标题（LLM 增强版）=====
 function autoTitle(sessionId) {
   if (!sessions[sessionId]) return;
   var session = sessions[sessionId];
   if (session._manuallyRenamed) return;
   var firstUser = session.messages.find(function(m) { return m.role === 'user'; });
-  if (firstUser) {
-    var title = firstUser.content.substring(0, 20) + (firstUser.content.length > 20 ? '...' : '');
-    session.title = title;
-    saveSession(sessionId);
-    renderChatList();
+  if (!firstUser) return;
+
+  // 即时回退：截取前 20 字
+  var fallbackTitle = firstUser.content.substring(0, 20) + (firstUser.content.length > 20 ? '...' : '');
+  session.title = fallbackTitle;
+  saveSession(sessionId);
+  renderChatList();
+
+  // 异步 LLM 生成更精准的标题
+  if (Core && Core.api && Core.api.callAPI && session.messages.length >= 2) {
+    var context = session.messages.slice(0, 4).map(function(m) {
+      return (m.role === 'user' ? '用户: ' : 'AI: ') + (m.content || '').substring(0, 150);
+    }).join('\n');
+
+    Core.api.callAPI(
+      context,
+      '为以下对话生成一个简短标题（不超过12个字，中文），只输出标题文本，不要引号和标点。',
+      0.3, null, null,
+      [{ role: 'system', content: '为以下对话生成一个简短标题（不超过12个字，中文），只输出标题文本，不要引号和标点。' }, { role: 'user', content: context }],
+      { disableTools: true }
+    ).then(function(result) {
+      if (result && result.message && result.message.content) {
+        var llmTitle = result.message.content.trim().replace(/^["'《]|["'》]$/g, '').substring(0, 15);
+        if (llmTitle && llmTitle.length >= 2 && !sessions[sessionId]._manuallyRenamed) {
+          sessions[sessionId].title = llmTitle;
+          saveSession(sessionId);
+          renderChatList();
+        }
+      }
+    }).catch(function() {});
+  }
+}
+
+// ===== 长对话摘要压缩（消息数超阈值时，将旧消息压缩为摘要）=====
+var COMPRESS_THRESHOLD = 60; // 超过此数量触发压缩
+var KEEP_RECENT = 20;        // 保留最近 N 条不压缩
+
+async function compressLongConversation(sessionId) {
+  if (!sessions[sessionId]) return { success: false, error: '会话不存在' };
+  var session = sessions[sessionId];
+  if (session.messages.length <= COMPRESS_THRESHOLD) {
+    return { success: false, error: '消息数未达压缩阈值 (' + session.messages.length + '/' + COMPRESS_THRESHOLD + ')' };
+  }
+  if (!Core || !Core.api || !Core.api.callAPI) {
+    return { success: false, error: 'API 不可用' };
+  }
+
+  try {
+    // 取旧消息（保留最近 KEEP_RECENT 条）
+    var oldMessages = session.messages.slice(0, session.messages.length - KEEP_RECENT);
+    var recentMessages = session.messages.slice(session.messages.length - KEEP_RECENT);
+
+    // 构建摘要请求
+    var oldText = oldMessages.map(function(m) {
+      return (m.role === 'user' ? '用户: ' : 'AI: ') + (m.content || '').substring(0, 300);
+    }).join('\n');
+
+    var result = await Core.api.callAPI(
+      oldText.substring(0, 6000),
+      '将以下对话历史压缩为一段简洁的摘要（200字以内），保留关键信息、决定和上下文。只输出摘要。',
+      0.3, null, null,
+      [{ role: 'system', content: '将以下对话历史压缩为一段简洁的摘要（200字以内），保留关键信息、决定和上下文。只输出摘要。' }, { role: 'user', content: oldText.substring(0, 6000) }],
+      { disableTools: true }
+    );
+
+    if (result && result.message && result.message.content) {
+      var summary = result.message.content.trim();
+      // 替换旧消息为一条摘要消息
+      session.messages = [{ role: 'system', content: '[对话摘要] ' + summary, timestamp: Date.now(), _isSummary: true }].concat(recentMessages);
+      session._compressedAt = Date.now();
+      session._originalCount = oldMessages.length + recentMessages.length;
+      saveSession(sessionId);
+      renderMessages(sessionId);
+      console.log('📦 会话已压缩: ' + oldMessages.length + ' 条旧消息 → 1 条摘要');
+      return { success: true, compressed: oldMessages.length, kept: recentMessages.length };
+    }
+    return { success: false, error: 'LLM 未返回摘要' };
+  } catch (e) {
+    return { success: false, error: '压缩失败: ' + e.message };
   }
 }
 
@@ -1891,6 +1965,7 @@ function init(core) {
     togglePinSession: togglePinSession,
     clear: clearSessions,
     reload: reloadSessions,
+    compress: compressLongConversation,
     // 🔧 获取会话列表（按置顶和时间排序）
     getSessionList: function() {
       var rootIds = Object.keys(sessions).filter(function(id) { return !sessions[id].parentId; });
