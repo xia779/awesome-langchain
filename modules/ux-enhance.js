@@ -177,7 +177,12 @@ function addActionsToMessage(msgEl) {
   var copyBtn = createActionBtn('content_copy', '复制');
   copyBtn.onclick = function(e) {
     e.stopPropagation();
-    var text = msgEl.textContent || '';
+    // 提取纯文本：排除图标连字、时间戳、操作按钮、代码行号/语言标签等 UI 元素，保留正文与代码
+    var source = msgEl.querySelector('.agent-content') || msgEl;
+    var clone = source.cloneNode(true);
+    var rm = clone.querySelectorAll('.msg-timestamp, .msg-actions-inline, .msg-actions, .quick-actions, .msg-hover-actions, .tts-btn, .copy-code-btn, .fold-code-btn, .agent-think-panel, .agent-steps-live, .agent-status-row, .thinking-process, .line-numbers, .code-lang-label');
+    rm.forEach(function(el) { el.remove(); });
+    var text = clone.textContent || '';
     navigator.clipboard.writeText(text).then(function() {
       copyBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;">check</span>';
       setTimeout(function() { copyBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;">content_copy</span>'; }, 1500);

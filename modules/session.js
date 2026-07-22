@@ -1606,11 +1606,13 @@ function init(core) {
             window.speechSynthesis.cancel();
             return;
           }
-          // 提取纯文本（排除时间戳、操作按钮等）
-          var contentClone = aiMsg.cloneNode(true);
-          var toRemove = contentClone.querySelectorAll('.msg-timestamp, .msg-actions-inline, .msg-actions, .quick-actions, .tts-btn, .copy-code-btn, .fold-code-btn');
+          // 提取纯文本（排除时间戳、操作按钮、执行追踪面板、思考过程、代码块等）
+          // Agent 消息优先取 .agent-content（最终回答），避免朗读执行追踪中的英文参数/结果
+          var contentSource = aiMsg.querySelector('.agent-content') || aiMsg;
+          var contentClone = contentSource.cloneNode(true);
+          var toRemove = contentClone.querySelectorAll('.msg-timestamp, .msg-actions-inline, .msg-actions, .quick-actions, .msg-hover-actions, .tts-btn, .copy-code-btn, .fold-code-btn, .agent-think-panel, .agent-steps-live, .agent-status-row, .thinking-process, pre');
           toRemove.forEach(function(el) { el.remove(); });
-          var text = contentClone.textContent.replace(/```[\s\S]*?```/g, '（代码）').replace(/\s+/g, ' ').trim();
+          var text = contentClone.textContent.replace(/\s+/g, ' ').trim();
           if (text.length > 2000) text = text.substring(0, 2000) + '...';
           if (!text) return;
 
@@ -1907,7 +1909,7 @@ function init(core) {
     // 🔧 兼容性：提供 loadSessionsForService 函数
     loadSessionsForService: function(service) { return sessions; }
   };
-  
+
   console.log('✅ session.js 初始化完成');
 }
 
