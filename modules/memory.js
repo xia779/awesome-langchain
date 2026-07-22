@@ -155,6 +155,15 @@ function semanticSearch(query, limit) {
   var userId = (Core._currentUser) || 'admin';
   if (!query || !query.trim()) return [];
 
+  // === 策略 1: 向量召回（如果嵌入可用且有已嵌入的记忆）===
+  var vectorResults = _vectorRecall(query, userId, limit);
+  if (vectorResults && vectorResults.length > 0) {
+    // 更新 access_count
+    _touchMemories(vectorResults.map(function(m) { return m.id; }));
+    return vectorResults;
+  }
+
+  // === 策略 2: TF-IDF 文本召回（回退）===
   var queryTokens = _tokenize(query);
   if (queryTokens.length === 0) return searchMemories(query, limit); // 降级
 
@@ -196,10 +205,98 @@ function semanticSearch(query, limit) {
 
   // 按分数排序，过滤零分
   scored.sort(function(a, b) { return b.score - a.score; });
-  return scored.filter(function(s) { return s.score > 0; }).slice(0, limit).map(function(s) {
+  var results = scored.filter(function(s) { return s.score > 0; }).slice(0, limit).map(function(s) {
     s.memory._relevanceScore = s.score;
     return s.memory;
   });
+  _touchMemories(results.map(function(m) { return m.id; }));
+  return results;
+}
+
+// 向量召回：使用嵌入向量 + 衰减公式
+function _vectorRecall(query, userId, limit) {
+  if (!Core.knowledge || !Core.knowledge._getEmbedding || !Core.knowledge._cosineSimilarity) return null;
+  if (!Core.db || Core.db._backend !== 'sqlite') return null;
+
+  try {
+    // 获取有嵌入的记忆
+    var rows = Core.db.query(
+      "SELECT id, content, tags, importance, created_at, access_count, embedding FROM memories WHERE user_id = ? AND status = 'active' AND embedding IS NOT NULL AND embedding != ''",
+      [userId]
+    );
+    if (!rows || rows.length === 0) return null;
+
+    // 同步获取查询向量（_getEmbedding 是 async，这里用同步缓存方式不可行）
+    // 改为在 async 版本中处理 — 返回 null 让上层走 async 路径
+    return null; // 同步函数无法 await，由 vectorRecallAsync 处理
+  } catch (e) {
+    return null;
+  }
+}
+
+// 异步向量召回（供 getSmartMemoryContext 等异步调用者使用）
+async function vectorRecallAsync(query, userId, limit) {
+  limit = limit || 10;
+  userId = userId || (Core._currentUser) || 'admin';
+  if (!Core.knowledge || !Core.knowledge._getEmbedding || !Core.knowledge._cosineSimilarity) return [];
+  if (!Core.db || Core.db._backend !== 'sqlite') return [];
+
+  try {
+    var queryEmbedding = await Core.knowledge._getEmbedding(query);
+    if (!queryEmbedding) return [];
+
+    var rows = Core.db.query(
+      "SELECT id, content, tags, importance, created_at, access_count, embedding FROM memories WHERE user_id = ? AND status = 'active' AND embedding IS NOT NULL AND embedding != ''",
+      [userId]
+    );
+    if (!rows || rows.length === 0) return [];
+
+    var IMPORTANCE_WEIGHTS = { critical: 1.5, normal: 1.0, low: 0.6 };
+    var now = Date.now() / 1000;
+
+    var scored = [];
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var memEmbedding;
+      try { memEmbedding = JSON.parse(row.embedding); } catch (e) { continue; }
+      if (!memEmbedding || !Array.isArray(memEmbedding)) continue;
+
+      var sim = Core.knowledge._cosineSimilarity(queryEmbedding, memEmbedding);
+      if (sim <= 0) continue;
+
+      // 衰减公式: importanceWeight × exp(-ageDays/120) × (1 + min(access_count,10)*0.03)
+      var ageDays = (now - (row.created_at || now)) / 86400;
+      var importanceWeight = IMPORTANCE_WEIGHTS[row.importance] || 1.0;
+      var timeDecay = Math.exp(-Math.max(0, ageDays) / 120);
+      var accessBoost = 1 + Math.min(row.access_count || 0, 10) * 0.03;
+      var finalScore = sim * importanceWeight * timeDecay * accessBoost;
+
+      scored.push({ memory: row, score: finalScore });
+    }
+
+    scored.sort(function(a, b) { return b.score - a.score; });
+    var results = scored.slice(0, limit).map(function(s) {
+      s.memory._relevanceScore = s.score;
+      return s.memory;
+    });
+
+    _touchMemories(results.map(function(m) { return m.id; }));
+    return results;
+  } catch (e) {
+    return [];
+  }
+}
+
+// 更新记忆的 access_count 和 updated_at
+function _touchMemories(ids) {
+  if (!ids || ids.length === 0) return;
+  if (!Core.db || Core.db._backend !== 'sqlite') return;
+  try {
+    var now = Math.floor(Date.now() / 1000);
+    for (var i = 0; i < ids.length; i++) {
+      Core.db.run('UPDATE memories SET access_count = COALESCE(access_count, 0) + 1, updated_at = ? WHERE id = ?', [now, ids[i]]);
+    }
+  } catch (e) { /* non-critical */ }
 }
 
 // 3. 记忆去重 — 检查是否已有高度相似的记忆
@@ -352,12 +449,29 @@ function formatMemoryList(memories) {
 function extendDatabase() {
   if (!Core.db || Core.db._backend !== 'sqlite') return;
   try {
-    // 给 memories 表添加 importance 列（如果不存在）
+    // 给 memories 表添加新列（如果不存在）
     var cols = Core.db.query("PRAGMA table_info(memories)");
-    var hasImportance = cols.some(function(c) { return c.name === 'importance'; });
-    if (!hasImportance) {
+    var colNames = cols.map(function(c) { return c.name; });
+
+    if (colNames.indexOf('importance') < 0) {
       Core.db.run("ALTER TABLE memories ADD COLUMN importance TEXT DEFAULT 'normal'");
     }
+    if (colNames.indexOf('embedding') < 0) {
+      Core.db.run("ALTER TABLE memories ADD COLUMN embedding TEXT");
+    }
+    if (colNames.indexOf('source') < 0) {
+      Core.db.run("ALTER TABLE memories ADD COLUMN source TEXT DEFAULT 'manual'");
+    }
+    if (colNames.indexOf('status') < 0) {
+      Core.db.run("ALTER TABLE memories ADD COLUMN status TEXT DEFAULT 'active'");
+    }
+    if (colNames.indexOf('updated_at') < 0) {
+      Core.db.run("ALTER TABLE memories ADD COLUMN updated_at INTEGER");
+    }
+    if (colNames.indexOf('access_count') < 0) {
+      Core.db.run("ALTER TABLE memories ADD COLUMN access_count INTEGER DEFAULT 0");
+    }
+
     // 创建 daily_logs 表
     Core.db.run(`CREATE TABLE IF NOT EXISTS daily_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -984,6 +1098,167 @@ function handleCommand(args) {
   }
 }
 
+// ===== LLM 自动记忆提取（typingEnd 触发，每会话节流）=====
+var _lastExtractSession = {}; // sessionId → timestamp
+
+async function llmExtractMemories(sessionId, messages) {
+  // 节流：同一会话 60 秒内不重复提取
+  var now = Date.now();
+  if (_lastExtractSession[sessionId] && now - _lastExtractSession[sessionId] < 60000) return;
+  _lastExtractSession[sessionId] = now;
+
+  if (!Core.api || !Core.api.callAPI) return;
+  if (!messages || messages.length < 2) return;
+
+  // 取最近 6 条消息作为上下文
+  var recentMsgs = messages.slice(-6);
+  var conversationText = recentMsgs.map(function(m) {
+    var role = m.role === 'user' ? '用户' : 'AI';
+    return role + ': ' + (m.content || '').substring(0, 500);
+  }).join('\n');
+
+  var systemPrompt = '你是一个记忆提取助手。从以下对话中提取值得长期记住的信息（用户偏好、重要事实、决定、个人信息等）。\n' +
+    '输出格式：每行一条记忆，用 "- " 开头。如果没有值得记住的内容，输出 "无"。\n' +
+    '只输出记忆条目，不要解释。最多提取 3 条最重要的。';
+
+  try {
+    var result = await Core.api.callAPI(
+      conversationText,
+      systemPrompt,
+      0.3,
+      null, null,
+      [{ role: 'system', content: systemPrompt }, { role: 'user', content: '请从以下对话中提取记忆：\n\n' + conversationText }],
+      { disableTools: true }
+    );
+
+    if (!result || !result.message || !result.message.content) return;
+    var content = result.message.content.trim();
+    if (content === '无' || content.length < 3) return;
+
+    // 解析提取的记忆条目
+    var lines = content.split('\n').filter(function(l) {
+      l = l.trim();
+      return l.startsWith('- ') || l.startsWith('· ') || l.startsWith('* ');
+    });
+
+    var extracted = 0;
+    for (var i = 0; i < lines.length && extracted < 3; i++) {
+      var memContent = lines[i].replace(/^[-·*]\s*/, '').trim();
+      if (memContent.length < 5) continue;
+
+      // 去重检查（向量 + Jaccard）
+      var isDup = await _checkDuplicateVector(memContent);
+      if (isDup) continue;
+      if (isDuplicateMemory(memContent)) continue;
+
+      // 存入记忆
+      addMemoryWithSource(memContent, 'auto', 'llm');
+      extracted++;
+    }
+
+    if (extracted > 0) {
+      console.log('🧠 LLM 自动提取 ' + extracted + ' 条记忆');
+    }
+  } catch (e) {
+    // 静默失败，不影响主流程
+  }
+}
+
+// 向量去重检查（相似度 > 0.9 视为重复）
+async function _checkDuplicateVector(content) {
+  if (!Core.knowledge || !Core.knowledge._getEmbedding || !Core.knowledge._cosineSimilarity) return false;
+  if (!Core.db || Core.db._backend !== 'sqlite') return false;
+
+  try {
+    var newEmbedding = await Core.knowledge._getEmbedding(content);
+    if (!newEmbedding) return false;
+
+    var userId = (Core._currentUser) || 'admin';
+    var rows = Core.db.query(
+      "SELECT embedding FROM memories WHERE user_id = ? AND status = 'active' AND embedding IS NOT NULL AND embedding != '' ORDER BY created_at DESC LIMIT 50",
+      [userId]
+    );
+    if (!rows || rows.length === 0) return false;
+
+    for (var i = 0; i < rows.length; i++) {
+      var existing;
+      try { existing = JSON.parse(rows[i].embedding); } catch (e) { continue; }
+      if (!existing) continue;
+      var sim = Core.knowledge._cosineSimilarity(newEmbedding, existing);
+      if (sim > 0.9) return true; // 高度相似，视为重复
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 带来源的记忆添加（同时异步生成嵌入）
+function addMemoryWithSource(content, tags, source) {
+  var result = addMemory(content, tags);
+  if (result.success && Core.db && Core.db._backend === 'sqlite') {
+    try {
+      // 更新 source 字段
+      var userId = (Core._currentUser) || 'admin';
+      Core.db.run(
+        "UPDATE memories SET source = ?, updated_at = ? WHERE user_id = ? AND content = ? AND (source IS NULL OR source = 'manual')",
+        [source || 'manual', Math.floor(Date.now() / 1000), userId, content.trim()]
+      );
+      // 异步生成嵌入（不阻塞）
+      _embedLatestMemory(content.trim(), userId);
+    } catch (e) { /* non-critical */ }
+  }
+  return result;
+}
+
+// 为最新添加的记忆生成嵌入
+async function _embedLatestMemory(content, userId) {
+  if (!Core.knowledge || !Core.knowledge._getEmbedding) return;
+  try {
+    var embedding = await Core.knowledge._getEmbedding(content);
+    if (embedding && Core.db && Core.db._backend === 'sqlite') {
+      Core.db.run(
+        "UPDATE memories SET embedding = ? WHERE user_id = ? AND content = ? AND (embedding IS NULL OR embedding = '')",
+        [JSON.stringify(embedding), userId, content]
+      );
+    }
+  } catch (e) { /* non-critical */ }
+}
+
+// 后台填充已有记忆的嵌入向量
+var _backfillRunning = false;
+async function backfillMemoryEmbeddings() {
+  if (_backfillRunning) return { success: false, error: '填充正在进行中' };
+  if (!Core.knowledge || !Core.knowledge._getEmbedding) return { success: false, error: '嵌入模型不可用' };
+  if (!Core.db || Core.db._backend !== 'sqlite') return { success: false, error: '需要 SQLite 后端' };
+
+  _backfillRunning = true;
+  var userId = (Core._currentUser) || 'admin';
+  var filled = 0;
+
+  try {
+    var rows = Core.db.query(
+      "SELECT id, content FROM memories WHERE user_id = ? AND (embedding IS NULL OR embedding = '') AND content != '' ORDER BY created_at DESC LIMIT 100",
+      [userId]
+    );
+
+    for (var i = 0; i < rows.length; i++) {
+      var embedding = await Core.knowledge._getEmbedding(rows[i].content);
+      if (embedding) {
+        Core.db.run('UPDATE memories SET embedding = ? WHERE id = ?', [JSON.stringify(embedding), rows[i].id]);
+        filled++;
+      }
+    }
+
+    console.log('🧠 记忆嵌入填充完成: ' + filled + '/' + rows.length + ' 条');
+    return { success: true, filled: filled, total: rows.length };
+  } catch (e) {
+    return { success: false, error: e.message };
+  } finally {
+    _backfillRunning = false;
+  }
+}
+
 module.exports = {
   name: 'memory',
   dependencies: ['routing', 'custom'],
@@ -1005,6 +1280,7 @@ module.exports = {
       autoExtract: autoExtractMemories,
       smartContext: getSmartMemoryContext,
       semanticSearch: semanticSearch,
+      vectorRecallAsync: vectorRecallAsync,
       isDuplicate: isDuplicateMemory,
       getStats: getMemoryStats,
       cleanup: cleanupOldMemories,
@@ -1030,6 +1306,10 @@ module.exports = {
       writeDistilledFile: writeDistilledMemoryFile,
       // 增强上下文
       getEnhancedContext: getEnhancedMemoryContext,
+      // 新增：向量记忆 + LLM 提取
+      addWithSource: addMemoryWithSource,
+      backfillEmbeddings: backfillMemoryEmbeddings,
+      llmExtract: llmExtractMemories,
     };
 
     // 向后兼容别名
@@ -1039,6 +1319,24 @@ module.exports = {
     if (Core.routing && Core.routing.register) {
       Core.routing.register('/mem', handleCommand, '记忆增强（画像/日志/关键记忆/精炼）');
     }
+
+    // typingEnd 事件：LLM 自动提取记忆（需要 Core.on 支持）
+    if (Core.on) {
+      Core.on('typingEnd', function(data) {
+        try {
+          var sessionId = (data && data.sessionId) || (Core.currentSession && Core.currentSession.id) || 'default';
+          var messages = (data && data.messages) || (Core.currentSession && Core.currentSession.messages) || [];
+          if (messages.length >= 2) {
+            llmExtractMemories(sessionId, messages);
+          }
+        } catch (e) { /* silent */ }
+      });
+    }
+
+    // 延迟后台填充记忆嵌入（启动 10 秒后，不阻塞）
+    setTimeout(function() {
+      backfillMemoryEmbeddings().catch(function() {});
+    }, 10000);
 
     // 启动时自动构建画像
     setTimeout(function() {
