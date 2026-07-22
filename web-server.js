@@ -560,7 +560,105 @@ function setupMobileRoutes(expressApp, dataRoot) {
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
-  console.log('📱 移动端 Web API 已就绪');
+  // ===== 跨端同步 API =====
+  // POST /api/m/sync/push — 接收其他设备的变更
+  expressApp.post('/api/m/sync/push', express.json({ limit: '10mb' }), (req, res) => {
+    try {
+      const database = getDB(dataRoot);
+      if (!database) return res.status(500).json({ success: false, error: 'DB unavailable' });
+
+      const { deviceId, changes } = req.body || {};
+      if (!deviceId) return res.status(400).json({ success: false, error: 'Missing deviceId' });
+      if (!changes) return res.status(400).json({ success: false, error: 'Missing changes' });
+
+      var applied = { sessions: 0, memories: 0, config: false };
+
+      // 应用会话（last-write-wins by timestamp）
+      if (changes.sessions && Array.isArray(changes.sessions)) {
+        changes.sessions.forEach(function(s) {
+          try {
+            var existing = database.prepare('SELECT timestamp FROM sessions WHERE id = ?').get(s.id);
+            if (!existing || (s.timestamp || 0) > (existing.timestamp || 0)) {
+              database.prepare(
+                'INSERT OR REPLACE INTO sessions (id, user_id, title, parent_id, pinned, role_type, timestamp, created_at) VALUES (?,?,?,?,?,?,?,?)'
+              ).run(s.id, s.userId || 'admin', s.title || '', s.parentId || null, s.pinned ? 1 : 0, s.roleType || 'normal', s.timestamp || Date.now(), s.createdAt || Date.now());
+
+              // 写入消息（增量）
+              if (s.messages && s.messages.length > 0) {
+                var existingCount = database.prepare('SELECT COUNT(*) as c FROM messages WHERE session_id = ?').get(s.id);
+                var skip = existingCount ? existingCount.c : 0;
+                var insertMsg = database.prepare('INSERT INTO messages (session_id, role, content, timestamp) VALUES (?,?,?,?)');
+                for (var i = skip; i < s.messages.length; i++) {
+                  insertMsg.run(s.id, s.messages[i].role, s.messages[i].content, s.messages[i].timestamp || Date.now());
+                }
+              }
+              applied.sessions++;
+            }
+          } catch (e) {}
+        });
+      }
+
+      // 应用记忆
+      if (changes.memories && Array.isArray(changes.memories)) {
+        changes.memories.forEach(function(m) {
+          try {
+            database.prepare('INSERT OR IGNORE INTO memories (id, user_id, content, tags, created_at) VALUES (?,?,?,?,?)')
+              .run(m.id, m.user_id || 'admin', m.content, m.tags || '', m.created_at || Date.now());
+            applied.memories++;
+          } catch (e) {}
+        });
+      }
+
+      // 应用配置（合并到 SQLite config 表）
+      if (changes.config && typeof changes.config === 'object') {
+        Object.keys(changes.config).forEach(function(key) {
+          try {
+            database.prepare('INSERT OR REPLACE INTO config (key, value, updated_at) VALUES (?,?,?)')
+              .run('admin:' + key, JSON.stringify(changes.config[key]), Date.now());
+          } catch (e) {}
+        });
+        applied.config = true;
+      }
+
+      res.json({ success: true, applied: applied, serverTime: Date.now() });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  });
+
+  // GET /api/m/sync/pull?since=timestamp&device=xxx — 返回自 since 以来的变更
+  expressApp.get('/api/m/sync/pull', (req, res) => {
+    try {
+      const database = getDB(dataRoot);
+      if (!database) return res.status(500).json({ success: false, error: 'DB unavailable' });
+
+      var since = parseInt(req.query.since) || 0;
+      var data = { sessions: [], memories: [], config: null };
+
+      // 会话变更
+      var sessions = database.prepare('SELECT * FROM sessions WHERE timestamp > ? ORDER BY timestamp DESC LIMIT 50').all(since);
+      sessions.forEach(function(s) {
+        var msgs = database.prepare('SELECT role, content, timestamp FROM messages WHERE session_id = ? ORDER BY id ASC').all(s.id);
+        data.sessions.push({
+          id: s.id, userId: s.user_id, title: s.title, parentId: s.parent_id,
+          pinned: s.pinned, roleType: s.role_type, timestamp: s.timestamp, createdAt: s.created_at,
+          messages: msgs
+        });
+      });
+
+      // 记忆变更
+      try {
+        var cols = database.prepare("PRAGMA table_info(memories)").all();
+        var hasUpdated = cols.some(function(c) { return c.name === 'updated_at'; });
+        var memSql = hasUpdated
+          ? 'SELECT * FROM memories WHERE updated_at > ? LIMIT 100'
+          : 'SELECT * FROM memories WHERE created_at > ? LIMIT 100';
+        data.memories = database.prepare(memSql).all(since);
+      } catch (e) {}
+
+      res.json({ success: true, data: data, serverTime: Date.now() });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+  });
+
+  console.log('📱 移动端 Web API 已就绪（含同步端点）');
 }
 
 module.exports = { setupMobileRoutes };

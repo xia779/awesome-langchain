@@ -389,7 +389,7 @@ const Core = {
     const configForStorage = encryptSensitiveFields(this.config);
     const newConfigEncrypted = encryptSensitiveFields(newConfig);
     
-    // 🔧 仅在 SQLite 模式下写入键值对数据库
+    // 🔧 仅在 SQLite 模式下写入键值对数据库（单源化：不再写 JSON）
     // JSON 回退模式下跳过，避免 admin:xxx 前缀键污染配置文件
     try {
       if (Core.db && Core.db.set && Core.db._backend === 'sqlite') {
@@ -400,13 +400,6 @@ const Core = {
       }
     } catch (e) {
       console.warn('⚠️ SQLite 保存失败:', e.message);
-    }
-    
-    // 保存到 JSON（加密副本）
-    try {
-      safeWriteFile(this.CONFIG_FILE, JSON.stringify(configForStorage, null, 2));
-    } catch (e) {
-      console.error('❌ JSON 保存失败:', e.message);
     }
     
     this.emit('configChanged', newConfig, this.config);

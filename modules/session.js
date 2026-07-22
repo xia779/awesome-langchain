@@ -336,7 +336,7 @@ function saveSession(id) {
   delete saveData._apiState;
   delete saveData._draft;
   
-  // 1. 保存到 SQLite
+  // 1. 保存到 SQLite（单源化：不再写 JSON）
   try {
     if (Core.db && Core.db.saveSession) {
       const userId = Core._currentUser || 'admin';
@@ -344,16 +344,6 @@ function saveSession(id) {
     }
   } catch (e) {
     console.warn('⚠️ SQLite 保存会话失败:', e.message);
-  }
-  
-  // 2. 同时保存到 JSON 作为备份
-  try {
-    const dir = getSessionsDir();
-    fs.writeFile(path.join(dir, id + '.json'), JSON.stringify(saveData, null, 2), function(err) {
-      if (err) console.error('❌ JSON 保存会话失败 [' + id + ']:', err.message);
-    });
-  } catch (e) {
-    console.error('❌ JSON 保存会话失败:', e.message);
   }
 }
 
