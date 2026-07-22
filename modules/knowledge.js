@@ -870,6 +870,8 @@ async function importFromUrl(url) {
 }
 
 // ===== SiliconFlow Rerank（bge-reranker-v2-m3）=====
+var _rerankPrivacyNotified = false;
+
 async function rerankResults(query, results, topN) {
   // 门控：需要 API key + 配置未禁用 + 结果数 > 1
   if (!Core || !Core.config) return null;
@@ -878,6 +880,12 @@ async function rerankResults(query, results, topN) {
   apiKey = apiKey.replace(/^Bearer\s+/i, '').trim();
   if (!apiKey) return null;
   if (!results || results.length <= 1) return null;
+
+  // 隐私提示（首次使用时提醒一次）
+  if (!_rerankPrivacyNotified) {
+    _rerankPrivacyNotified = true;
+    console.log('🔒 [隐私提示] Rerank 功能会将查询内容和文档片段发送至 SiliconFlow 云端 (api.siliconflow.cn) 进行排序。如需完全本地化，请设置 config.rerankEnabled = false。');
+  }
 
   try {
     var documents = results.map(function(r) { return (r.text || '').substring(0, 1000); });

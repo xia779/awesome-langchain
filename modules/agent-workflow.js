@@ -97,7 +97,7 @@ async function handleThink(ctx) {
       if (pCtx) agentPrompt += pCtx;
     }
     if (Core.memoryEnhance && Core.memoryEnhance.getEnhancedContext) {
-      var memCtx = Core.memoryEnhance.getEnhancedContext(ctx.task);
+      var memCtx = await Core.memoryEnhance.getEnhancedContext(ctx.task);
       if (memCtx) agentPrompt += '\n\n' + memCtx;
     }
     var data = await Core.api.callAPI(prompt, agentPrompt, 0.7, null, 'ollama');

@@ -516,7 +516,7 @@ async function sendToAgent(task, isDeepThink) {
         if (pCtx) agentPrompt += pCtx;
       }
       if (Core.memoryEnhance && Core.memoryEnhance.getEnhancedContext) {
-        var memCtx = Core.memoryEnhance.getEnhancedContext(task);
+        var memCtx = await Core.memoryEnhance.getEnhancedContext(task);
         if (memCtx) agentPrompt += '\n\n' + memCtx;
       }
       // 📚 注入历史经验教训：避免 Agent 重复犯同样的错误（如 ComfyUI 未启动、CUDA OOM 等）

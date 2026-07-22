@@ -276,10 +276,10 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   // 🔧 智能记忆注入：用户画像 + 关键记忆 + 相关记忆 + 日志
   var memoryContext = '';
   if (Core.memoryEnhance && Core.memoryEnhance.getEnhancedContext) {
-    memoryContext = Core.memoryEnhance.getEnhancedContext(text);
+    memoryContext = await Core.memoryEnhance.getEnhancedContext(text);
   } else if (Core.memory) {
     if (Core.memory.smartContext) {
-      memoryContext = Core.memory.smartContext(text, 8);
+      memoryContext = await Core.memory.smartContext(text, 8);
     } else if (Core.memory.getContext) {
       memoryContext = Core.memory.getContext(10);
     }

@@ -68,45 +68,92 @@ function generateDiff(filePath, newContent) {
   return { diff: output, changeCount: changes, totalLines: maxLen };
 }
 
-// ===== 创建 checkpoint（写入前快照）=====
+// ===== 创建 checkpoint（写入前快照，支持多版本）=====
+var MAX_VERSIONS_PER_FILE = 5;
+
 function createCheckpoint(filePath, sessionId) {
   if (!filePath || !fs.existsSync(filePath)) return null;
   try {
     var dir = getCheckpointDir(sessionId);
     var hash = crypto.createHash('md5').update(filePath).digest('hex').substring(0, 12);
-    var checkpointName = hash + '_' + path.basename(filePath);
+    var baseName = hash + '_' + path.basename(filePath);
+
+    // 读取 manifest 确定版本号
+    var manifestPath = path.join(dir, 'manifest.json');
+    var manifest = {};
+    if (fs.existsSync(manifestPath)) {
+      try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch (e) { manifest = {}; }
+    }
+    var fileEntry = manifest[filePath] || { versions: [], latest: 0 };
+    var nextVersion = fileEntry.latest + 1;
+
+    var checkpointName = baseName + '_v' + nextVersion;
     var checkpointPath = path.join(dir, checkpointName);
 
     fs.copyFileSync(filePath, checkpointPath);
 
-    var metaPath = checkpointPath + '.meta.json';
     var meta = {
       originalPath: filePath,
       checkpointPath: checkpointPath,
+      version: nextVersion,
       sessionId: sessionId || 'default',
       createdAt: new Date().toISOString(),
       size: fs.statSync(filePath).size,
     };
-    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
-    return { success: true, checkpointPath: checkpointPath, meta: meta };
+    fs.writeFileSync(checkpointPath + '.meta.json', JSON.stringify(meta, null, 2));
+
+    // 更新 manifest
+    fileEntry.versions.push({ version: nextVersion, path: checkpointPath, createdAt: meta.createdAt });
+    fileEntry.latest = nextVersion;
+    // 超出上限时删除最旧版本
+    while (fileEntry.versions.length > MAX_VERSIONS_PER_FILE) {
+      var oldest = fileEntry.versions.shift();
+      try { fs.unlinkSync(oldest.path); } catch (e) {}
+      try { fs.unlinkSync(oldest.path + '.meta.json'); } catch (e) {}
+    }
+    manifest[filePath] = fileEntry;
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+    return { success: true, checkpointPath: checkpointPath, version: nextVersion, meta: meta };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 
-// ===== 回滚单个文件 =====
-function rollbackFile(filePath, sessionId) {
+// ===== 回滚单个文件（支持指定版本，默认最新）=====
+function rollbackFile(filePath, sessionId, targetVersion) {
   try {
     var dir = getCheckpointDir(sessionId);
+    var manifestPath = path.join(dir, 'manifest.json');
+
+    // 优先从 manifest 查找
+    if (fs.existsSync(manifestPath)) {
+      var manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+      var fileEntry = manifest[filePath];
+      if (fileEntry && fileEntry.versions.length > 0) {
+        var target;
+        if (targetVersion) {
+          target = fileEntry.versions.find(function(v) { return v.version === targetVersion; });
+        } else {
+          target = fileEntry.versions[fileEntry.versions.length - 1]; // 最新
+        }
+        if (target && fs.existsSync(target.path)) {
+          fs.copyFileSync(target.path, filePath);
+          return { success: true, restored: filePath, version: target.version };
+        }
+      }
+    }
+
+    // 兼容旧格式（无版本号）
     var hash = crypto.createHash('md5').update(filePath).digest('hex').substring(0, 12);
     var checkpointName = hash + '_' + path.basename(filePath);
     var checkpointPath = path.join(dir, checkpointName);
-
-    if (!fs.existsSync(checkpointPath)) {
-      return { success: false, error: '未找到该文件的 checkpoint: ' + filePath };
+    if (fs.existsSync(checkpointPath)) {
+      fs.copyFileSync(checkpointPath, filePath);
+      return { success: true, restored: filePath, version: 'legacy' };
     }
-    fs.copyFileSync(checkpointPath, filePath);
-    return { success: true, restored: filePath };
+
+    return { success: false, error: '未找到该文件的 checkpoint: ' + filePath };
   } catch (e) {
     return { success: false, error: e.message };
   }
@@ -172,6 +219,21 @@ function cleanupCheckpoints(keepSessions) {
   } catch (e) {}
 }
 
+// ===== 查询文件的可用版本 =====
+function listVersions(filePath, sessionId) {
+  try {
+    var dir = getCheckpointDir(sessionId);
+    var manifestPath = path.join(dir, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) return [];
+    var manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    var fileEntry = manifest[filePath];
+    if (!fileEntry) return [];
+    return fileEntry.versions.map(function(v) {
+      return { version: v.version, createdAt: v.createdAt, exists: fs.existsSync(v.path) };
+    });
+  } catch (e) { return []; }
+}
+
 // ===== 模块导出 =====
 module.exports = {
   name: 'file-checkpoint',
@@ -184,9 +246,10 @@ module.exports = {
       rollbackFile: rollbackFile,
       rollbackAll: rollbackAll,
       listCheckpoints: listCheckpoints,
+      listVersions: listVersions,
       cleanup: cleanupCheckpoints,
     };
     setTimeout(function() { cleanupCheckpoints(10); }, 5000);
-    console.log('✅ File-Checkpoint 模块已加载（diff预览 + checkpoint回滚）');
+    console.log('✅ File-Checkpoint 模块已加载（多版本快照 + diff预览 + 回滚）');
   }
 };

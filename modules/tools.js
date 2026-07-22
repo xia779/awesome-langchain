@@ -143,6 +143,10 @@ const tools = {
         var msg = `✅ 文件写入成功：${file_path}`;
         if (diffInfo && diffInfo.changeCount > 0) {
           msg += `\n📝 变更: ${diffInfo.changeCount} 行 (共 ${diffInfo.totalLines} 行)`;
+          // 输出 diff 预览（截断避免过长）
+          var preview = diffInfo.diff.substring(0, 800);
+          if (diffInfo.diff.length > 800) preview += '\n... (diff 已截断)';
+          msg += '\n```\n' + preview + '\n```';
         }
         return msg;
       } catch (err) {
@@ -535,6 +539,9 @@ const tools = {
         var msg = '✅ 编辑成功：替换了 ' + count + ' 处匹配文本\n文件：' + file_path;
         if (diffInfo && diffInfo.changeCount > 0) {
           msg += '\n📝 变更: ' + diffInfo.changeCount + ' 行';
+          var preview = diffInfo.diff.substring(0, 800);
+          if (diffInfo.diff.length > 800) preview += '\n... (diff 已截断)';
+          msg += '\n```\n' + preview + '\n```';
         }
         return msg;
       } catch (err) {

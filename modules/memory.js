@@ -150,16 +150,14 @@ function _tokenize(text) {
   return tokens.filter(function(t) { return stopWords.indexOf(t) < 0; });
 }
 
-function semanticSearch(query, limit) {
+async function semanticSearch(query, limit) {
   limit = limit || 10;
   var userId = (Core._currentUser) || 'admin';
   if (!query || !query.trim()) return [];
 
-  // === 策略 1: 向量召回（如果嵌入可用且有已嵌入的记忆）===
-  var vectorResults = _vectorRecall(query, userId, limit);
+  // === 策略 1: 向量召回（异步，使用真实嵌入）===
+  var vectorResults = await vectorRecallAsync(query, userId, limit);
   if (vectorResults && vectorResults.length > 0) {
-    // 更新 access_count
-    _touchMemories(vectorResults.map(function(m) { return m.id; }));
     return vectorResults;
   }
 
@@ -213,28 +211,7 @@ function semanticSearch(query, limit) {
   return results;
 }
 
-// 向量召回：使用嵌入向量 + 衰减公式
-function _vectorRecall(query, userId, limit) {
-  if (!Core.knowledge || !Core.knowledge._getEmbedding || !Core.knowledge._cosineSimilarity) return null;
-  if (!Core.db || Core.db._backend !== 'sqlite') return null;
-
-  try {
-    // 获取有嵌入的记忆
-    var rows = Core.db.query(
-      "SELECT id, content, tags, importance, created_at, access_count, embedding FROM memories WHERE user_id = ? AND status = 'active' AND embedding IS NOT NULL AND embedding != ''",
-      [userId]
-    );
-    if (!rows || rows.length === 0) return null;
-
-    // 同步获取查询向量（_getEmbedding 是 async，这里用同步缓存方式不可行）
-    // 改为在 async 版本中处理 — 返回 null 让上层走 async 路径
-    return null; // 同步函数无法 await，由 vectorRecallAsync 处理
-  } catch (e) {
-    return null;
-  }
-}
-
-// 异步向量召回（供 getSmartMemoryContext 等异步调用者使用）
+// 异步向量召回（供 semanticSearch / getSmartMemoryContext 等异步调用者使用）
 async function vectorRecallAsync(query, userId, limit) {
   limit = limit || 10;
   userId = userId || (Core._currentUser) || 'admin';
@@ -333,13 +310,13 @@ function isDuplicateMemory(content) {
 }
 
 // 4. 智能上下文注入 — 根据当前对话查询选择最相关的记忆
-function getSmartMemoryContext(currentQuery, maxItems) {
+async function getSmartMemoryContext(currentQuery, maxItems) {
   maxItems = maxItems || 8;
   if (!currentQuery || currentQuery.length < 2) {
     return getMemoryContext(maxItems); // 无查询时降级到最近 N 条
   }
 
-  var relevant = semanticSearch(currentQuery, maxItems);
+  var relevant = await semanticSearch(currentQuery, maxItems);
   if (relevant.length === 0) {
     // 降级：返回最近的记忆
     return getMemoryContext(Math.min(5, maxItems));
@@ -956,7 +933,7 @@ function writeDistilledMemoryFile() {
 
 // ===== 7. 增强上下文注入 =====
 
-function getEnhancedMemoryContext(currentQuery) {
+async function getEnhancedMemoryContext(currentQuery) {
   var parts = [];
 
   // 1. 用户画像
@@ -972,7 +949,7 @@ function getEnhancedMemoryContext(currentQuery) {
 
   // 3. 相关记忆（基于查询）
   if (currentQuery && Core.memory && getSmartMemoryContext) {
-    var smartCtx = getSmartMemoryContext(currentQuery, 5);
+    var smartCtx = await getSmartMemoryContext(currentQuery, 5);
     if (smartCtx) parts.push(smartCtx);
   } else if (Core.memory && getMemoryContext) {
     var basicCtx = getMemoryContext(5);

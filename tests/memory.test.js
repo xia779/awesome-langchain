@@ -129,14 +129,14 @@ test('memory 用户画像', function() {
   helper.cleanTestData();
 });
 
-test('memory getEnhancedContext 返回上下文字符串', function() {
+test('memory getEnhancedContext 返回上下文字符串', async function() {
   var Core = helper.createMockCore();
   memoryMod.init(Core);
 
   Core.memory.saveProfile({ name: '测试', preferences: ['暗色主题'] });
   Core.memory.addWithImportance('API密钥配置', 'config', 'critical');
 
-  var ctx = Core.memory.getEnhancedContext('如何配置API？');
+  var ctx = await Core.memory.getEnhancedContext('如何配置API？');
   assert.ok(typeof ctx === 'string');
   helper.cleanTestData();
 });
