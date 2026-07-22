@@ -29,6 +29,7 @@ const { setupMobileRoutes } = require('./web-server');
 let mainWindow = null;
 let tray = null;
 let server = null;
+let actualPort = null; // 实际监听的端口（8080 被占用时自动递增）
 
 // ===== 数据路径（动态获取）=====
 const DATA_ROOT = process.env.AI_AGENT_DATA_ROOT || 
@@ -843,7 +844,12 @@ async function startWebServer() {
   }
 
   try {
-    await tryListen(8080);
+    const resolvedPort = await tryListen(8080);
+    actualPort = resolvedPort;
+    // 通知渲染进程实际端口（PWA/移动端连接依赖）
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('server:port', resolvedPort);
+    }
   } catch (err) {
     console.error('❌ 启动服务器失败:', err.message);
     // 不阻止应用启动，继续创建窗口
@@ -903,6 +909,28 @@ function createWindow() {
       }
       event.preventDefault();
     }
+  });
+
+  // 🔒 导航拦截：阻止渲染进程跳转到外部 URL，外链一律用系统浏览器打开
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const parsed = new URL(url);
+    const isSafe = parsed.protocol === 'file:' ||
+      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1');
+    if (!isSafe) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
+  // 🔒 新窗口拦截：target=_blank 等场景，外链走系统浏览器
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    const parsed = new URL(url);
+    const isSafe = parsed.protocol === 'file:' ||
+      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1');
+    if (!isSafe) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
   });
 
   mainWindow.on('close', (event) => {
@@ -975,25 +1003,55 @@ function createWindow() {
 }
 
 function setupTray() {
-  if (!fs.existsSync(TRAY_ICON_PATH)) { console.warn('⚠️ 托盘图标不存在:', TRAY_ICON_PATH); return; }
-  let icon = nativeImage.createFromPath(TRAY_ICON_PATH);
-  if (icon.isEmpty()) { console.warn('⚠️ 托盘图标加载失败'); return; }
-  if (process.platform === 'darwin') { icon = icon.resize({ width: 16, height: 16 }); }
-  tray = new Tray(icon);
-  const contextMenu = Menu.buildFromTemplate([
-    { label: '显示窗口', click: () => { if (mainWindow) mainWindow.show(); } },
-    { label: '退出', click: () => { app.isQuitting = true; app.quit(); } }
-  ]);
-  tray.setContextMenu(contextMenu);
-  tray.setToolTip('AI Agent');
-  tray.on('click', () => {
-    if (!mainWindow) { createWindow(); } else { mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show(); }
-  });
+  // 多路径探测：开发环境 __dirname，打包后 resources/ 或 app.getAppPath()
+  const candidates = [
+    TRAY_ICON_PATH,
+    path.join(app.getAppPath(), 'icon.ico'),
+    path.join(process.resourcesPath || '', 'icon.ico'),
+    path.join(__dirname, 'build', 'icon.ico'),
+  ];
+
+  let icon = null;
+  for (const p of candidates) {
+    try {
+      if (p && fs.existsSync(p)) {
+        const img = nativeImage.createFromPath(p);
+        if (!img.isEmpty()) { icon = img; break; }
+      }
+    } catch (e) { /* try next */ }
+  }
+
+  if (!icon) {
+    // 兜底：创建 16x16 空白图标，确保托盘功能不丢失
+    console.warn('⚠️ 托盘图标未找到，使用默认空白图标');
+    icon = nativeImage.createEmpty();
+  }
+
+  if (process.platform === 'darwin' && !icon.isEmpty()) {
+    icon = icon.resize({ width: 16, height: 16 });
+  }
+
+  try {
+    tray = new Tray(icon);
+    const contextMenu = Menu.buildFromTemplate([
+      { label: '显示窗口', click: () => { if (mainWindow) mainWindow.show(); } },
+      { label: '退出', click: () => { app.isQuitting = true; app.quit(); } }
+    ]);
+    tray.setContextMenu(contextMenu);
+    tray.setToolTip('AI Agent');
+    tray.on('click', () => {
+      if (!mainWindow) { createWindow(); } else { mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show(); }
+    });
+  } catch (e) {
+    console.warn('⚠️ 托盘创建失败:', e.message);
+    tray = null;
+  }
 }
 
 // ===== IPC 处理器 =====
 ipcMain.on('app:get-path-sync', (event, arg) => { event.returnValue = app.getPath(arg); });
 ipcMain.on('get-user-data-path', (event) => { event.returnValue = DATA_ROOT; });
+ipcMain.on('get-server-port', (event) => { event.returnValue = actualPort || 8080; });
 
 ipcMain.on('show-notification', (event, arg) => {
   try { 
@@ -1356,6 +1414,26 @@ app.whenReady().then(async () => {
   } catch (e) {
     console.warn('⚠️ GPU 缓存清理异常:', e.message);
   }
+
+  // 🔧 GPU 缓存目录重定向到可写位置（避免 0x5 权限错误）
+  try {
+    const gpuCachePath = path.join(DATA_ROOT, '.gpu-cache');
+    if (!fs.existsSync(gpuCachePath)) fs.mkdirSync(gpuCachePath, { recursive: true });
+    app.setPath('gpuCacheDir', gpuCachePath);
+  } catch (e) {
+    console.warn('⚠️ GPU 缓存目录设置失败:', e.message);
+  }
+
+  // 🔧 GPU/Network 子进程崩溃监听（写崩溃标记，下次启动自动清理）
+  app.on('child-process-gone', (event, details) => {
+    if (details.type === 'GPU' || details.type === 'Network') {
+      console.warn(`⚠️ ${details.type} 进程退出: reason=${details.reason}, exitCode=${details.exitCode}`);
+      try {
+        const userDataPath = app.getPath('userData');
+        fs.writeFileSync(path.join(userDataPath, '.crash-marker'), `${details.type}:${Date.now()}`, 'utf8');
+      } catch (e) {}
+    }
+  });
 
   // 🔧 启动时清除 HTTP 缓存（保留 localStorage/IndexedDB 等用户数据）
   try {

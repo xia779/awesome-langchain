@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.6/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -318,7 +319,7 @@ async function loadNetworkInfo(){try{const r=await fetch('/api/m/network');const
 function toggleSidebar(f){const s=document.getElementById('sidebar'),o=document.getElementById('sidebarOverlay');const op=f!==undefined?f:!s.classList.contains('open');s.classList.toggle('open',op);o.classList.toggle('open',op)}
 function toggleSettings(f){const p=document.getElementById('settingsPanel'),o=document.getElementById('settingsOverlay');const op=f!==undefined?f:!p.classList.contains('open');p.classList.toggle('open',op);o.classList.toggle('open',op)}
 function scrollBottom(){const a=document.getElementById('chatArea');a.scrollTop=a.scrollHeight}
-function renderMd(t){if(!t)return '';try{return marked.parse(t)}catch(e){return esc(t)}}
+function renderMd(t){if(!t)return '';try{var html=marked.parse(t);if(window.DOMPurify){return DOMPurify.sanitize(html,{ADD_ATTR:['target']})}return html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,'').replace(/on\w+\s*=\s*"[^"]*"/gi,'').replace(/on\w+\s*=\s*'[^']*'/gi,'')}catch(e){return esc(t)}}
 function esc(s){if(!s)return '';const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
 // ===== Phase 4-4: Mobile Enhancement =====
