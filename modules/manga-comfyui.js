@@ -9,7 +9,7 @@ var path = null;
 // ===== 配置 =====
 var COMFYUI_BASE = 'http://127.0.0.1:8188';        // 直连（WebSocket 用）
 var COMFYUI_PROXY = 'http://127.0.0.1:8080/api/comfyui';  // 代理（fetch 用，避免 CORS 403）
-var MANGA_DIR = 'E:\\my-ai-data\\manga_pipeline';
+var MANGA_DIR = null;  // 运行时由 init 按数据根解析（Core.DATA_ROOT / AI_AGENT_DATA_ROOT）
 var IMAGES_DIR = null;  // 运行时初始化
 
 // ===== 状态 =====
@@ -587,6 +587,10 @@ module.exports = {
     Core = _Core;
     fs = require('fs');
     path = require('path');
+
+    // 数据目录：跟随 Core 数据根，支持 AI_AGENT_DATA_ROOT 环境变量覆盖
+    var dataRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
+    MANGA_DIR = path.join(dataRoot, 'manga_pipeline');
 
     // 初始化图片目录
     IMAGES_DIR = path.join(MANGA_DIR, 'images');

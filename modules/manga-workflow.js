@@ -15,8 +15,14 @@ var COMFYUI_PROXY = 'http://127.0.0.1:8080/api/comfyui';  // 代理（fetch 用�
 var TTS_URL = 'http://127.0.0.1:8081';
 var AUDIOLDM_URL = 'http://127.0.0.1:8082';
 var MUSICGEN_URL = 'http://127.0.0.1:8083';
-var MANGA_DIR = 'E:\\my-ai-data\\manga_pipeline';
+var MANGA_DIR = null;  // 运行时由 init 按数据根解析（Core.DATA_ROOT / AI_AGENT_DATA_ROOT）
 var OLLAMA_MODEL = 'llama3.2:3b';  // 剧本生成用模型（已验证可生成JSON）
+
+// ffmpeg 可执行文件目录：跟随数据根，支持 AI_AGENT_DATA_ROOT 环境变量覆盖
+function getFfmpegBinDir() {
+  var dataRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
+  return path.join(dataRoot, 'ffmpeg', 'ffmpeg-master-latest-win64-gpl', 'bin');
+}
 
 // ===== 状态 =====
 var _pipelineRunning = false;
@@ -624,7 +630,7 @@ async function composeStoryboard(scriptData, charImages, sceneImages, voices) {
   ensureDir(storyboardDir);
 
   var panels = [];
-  var ffmpeg = 'E:\\my-ai-data\\ffmpeg\\ffmpeg-master-latest-win64-gpl\\bin\\ffmpeg.exe';
+  var ffmpeg = path.join(getFfmpegBinDir(), 'ffmpeg.exe');
 
   for (var i = 0; i < scriptData.scenes.length; i++) {
     var scene = scriptData.scenes[i];
@@ -700,8 +706,8 @@ async function renderVideo(scriptData, panels, sfxResults, musicResults) {
   ensureDir(renderDir);
 
   var outputFile = path.join(renderDir, scriptData.title.replace(/[^\w\u4e00-\u9fa5]/g, '_') + '_final.mp4');
-  var ffmpeg = 'E:\\my-ai-data\\ffmpeg\\ffmpeg-master-latest-win64-gpl\\bin\\ffmpeg.exe';
-  var ffprobe = 'E:\\my-ai-data\\ffmpeg\\ffmpeg-master-latest-win64-gpl\\bin\\ffprobe.exe';
+  var ffmpeg = path.join(getFfmpegBinDir(), 'ffmpeg.exe');
+  var ffprobe = path.join(getFfmpegBinDir(), 'ffprobe.exe');
 
   var validPanels = panels.filter(function(p) { return p.image && fs.existsSync(p.image); });
   if (validPanels.length === 0) {
@@ -1141,6 +1147,10 @@ module.exports = {
     Core = _Core;
     fs = require('fs');
     path = require('path');
+
+    // 数据目录：跟随 Core 数据根，支持 AI_AGENT_DATA_ROOT 环境变量覆盖
+    var dataRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
+    MANGA_DIR = path.join(dataRoot, 'manga_pipeline');
 
     // 挂载到 Core
     Core.mangaWorkflow = {

@@ -6,8 +6,9 @@
 var fs = require('fs');
 var path = require('path');
 
-var LOG_DIR = 'E:\\my-ai-data\\manga_pipeline\\execution_logs';
-var REPORT_DIR = 'E:\\my-ai-data\\manga_pipeline\\distillation_reports';
+var DATA_ROOT = process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
+var LOG_DIR = path.join(DATA_ROOT, 'manga_pipeline', 'execution_logs');
+var REPORT_DIR = path.join(DATA_ROOT, 'manga_pipeline', 'distillation_reports');
 var SKILL_FILE = process.env.USERPROFILE + '\\.qoderworkcn\\skills\\manga-workflow-debug\\SKILL.md';
 
 var args = process.argv.slice(2);
@@ -131,7 +132,7 @@ function updateSkill(a) {
 //  写入 RAG 知识库（JSON 文件格式，与 knowledge.js 兼容）
 // ================================================================
 
-var KNOWLEDGE_DIR = 'E:\\my-ai-data\\knowledge';
+var KNOWLEDGE_DIR = path.join(DATA_ROOT, 'knowledge');
 var OLLAMA_BASE = 'http://127.0.0.1:11434';
 var EMBEDDING_MODEL = 'nomic-embed-text';
 
@@ -246,7 +247,7 @@ async function writeToKnowledgeBase(analysis) {
 //  写入长期记忆（SQLite，与 memory.js 兼容）
 // ================================================================
 
-var DB_PATH = 'E:\\my-ai-data\\users\\admin\\ai-agent.db';
+var DB_PATH = path.join(DATA_ROOT, 'users', 'admin', 'ai-agent.db');
 
 function writeToMemory(analysis) {
   if (analysis.total_runs === 0) return false;
@@ -311,7 +312,7 @@ function jaccard(a, b) {
 function writeToMemoryJsonFallback(analysis) {
   // SQLite 不可用时的 JSON 回退
   try {
-    var memFile = 'E:\\my-ai-data\\manga_pipeline\\distillation_reports\\memory_distill.json';
+    var memFile = path.join(REPORT_DIR, 'memory_distill.json');
     var mems = [];
     try { mems = JSON.parse(fs.readFileSync(memFile, 'utf-8')); } catch (_) {}
     mems.push({

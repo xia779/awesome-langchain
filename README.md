@@ -1,12 +1,12 @@
 # AI Agent Pro
 
-基于 Electron 的本地多模型 AI 智能体桌面助手，支持 72 个功能模块、多模型聚合、MCP 协议扩展、LangGraph 状态机和三层安全防护。
+基于 Electron 的本地多模型 AI 智能体桌面助手，支持 83 个功能模块、多模型聚合、MCP 协议扩展、LangGraph 状态机和三层安全防护。
 
 ## 功能特性
 
 ### 核心能力
 
-- **多模型聚合** — 支持 OpenAI、Claude、Gemini、通义千问、DeepSeek、硅基流动等 20+ 模型服务商，按任务类型自动路由
+- **多模型聚合** — 本地 Ollama + DeepSeek、通义千问、豆包、硅基流动及任意 OpenAI 兼容服务，按任务类型自动路由
 - **Agent 智能体循环** — 支持工具调用、多步推理、自动纠错重试，完整的 THINK→ACT→OBSERVE 循环
 - **MCP 协议** — 完整的 Model Context Protocol 支持（Tools + Resources + Prompts），可连接外部 MCP 服务器扩展能力
 - **流式输出** — 打字机效果 + 实时 Markdown 渲染，响应流畅无卡顿
@@ -60,7 +60,7 @@
 ├── core-v10.js         # Kahn 拓扑排序模块加载器
 ├── main.js             # Electron 主进程
 ├── index.html          # 渲染进程 UI
-├── modules/            # 72 个功能模块（自动发现 + 拓扑排序加载）
+├── modules/            # 83 个功能模块（自动发现 + 拓扑排序加载）
 │   ├── api.js          # 多服务路由 + 消息发送
 │   ├── agent-loop.js   # Agent 智能体循环 + 状态机集成
 │   ├── agent-workflow.js    # LangGraph 状态机
@@ -72,7 +72,7 @@
 │   ├── chat-handler.js      # 普通聊天处理
 │   ├── session.js           # 会话管理（树形层级）
 │   ├── theme.js             # 主题系统（防抖 + 选择性渲染）
-│   └── ...                  # 其余 60+ 模块
+│   └── ...                  # 其余 70+ 模块
 ├── tests/              # 12 个测试套件，189 个测试用例
 └── .github/workflows/  # GitHub Actions CI
 ```
@@ -105,7 +105,7 @@ npm run dist:linux
 ## 技术栈
 
 - **Electron** 42.4.1 + Node.js 22.x
-- **模块系统** — 自定义 Kahn 拓扑排序加载器（`core-v10.js`），72 个模块自动发现 + 依赖解析
+- **模块系统** — 自定义 Kahn 拓扑排序加载器（`core-v10.js`），83 个模块自动发现 + 依赖解析
 - **数据库** — better-sqlite3（本地 SQLite）
 - **文档处理** — pdf-lib、mammoth、docx、xlsx、pptxgenjs
 - **图像处理** — sharp、tesseract.js（OCR）
