@@ -141,6 +141,23 @@ select{background:var(--bg3);color:var(--t1);padding:6px 10px;border-radius:6px;
 .welcome .card .wmi{font-size:24px;margin-bottom:6px;color:var(--pri);font-family:'Material Icons Outlined';font-style:normal}
 .welcome .card .lb{font-size:11px;color:var(--t2)}
 .agent-tag{display:inline-block;font-size:11px;padding:2px 8px;background:rgba(59,130,246,.15);color:var(--pri);border-radius:10px;margin-bottom:6px}
+.agent-trace{border:1px solid var(--bdr);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.at-hdr{display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:12px;color:var(--pri);background:rgba(59,130,246,.08);border-bottom:1px solid var(--bdr)}
+.at-hdr .mi-out{font-size:15px}
+.at-list{padding:6px 10px;display:flex;flex-direction:column;gap:4px}
+.at-step{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 2px;flex-wrap:wrap}
+.at-ico{font-size:15px}
+.at-ico.run{color:var(--pri);animation:bn 1s infinite}
+.at-ico.ok{color:var(--ok)}
+.at-ico.err{color:var(--err)}
+.at-n{color:var(--t3);font-size:11px;min-width:14px}
+.at-act{font-weight:600;color:var(--t1)}
+.at-par{color:var(--t3);font-size:11px;font-family:monospace;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.at-time{color:var(--t3);font-size:11px}
+.at-res{width:100%;font-size:11px;color:var(--t2);background:var(--bg2);border-radius:6px;padding:4px 8px;margin-top:2px;white-space:pre-wrap;word-break:break-all;max-height:80px;overflow:auto}
+.at-res.fail{color:var(--err)}
+.at-answer{margin-top:4px}
+.node-chip{display:none;font-size:10px;color:var(--ok);background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:1px 7px;margin-left:6px;white-space:nowrap}
 .copy-btn{position:absolute;top:6px;right:6px;padding:3px 8px;background:rgba(255,255,255,.1);border-radius:4px;font-size:11px;color:var(--t2);opacity:0;transition:opacity .2s;cursor:pointer;border:none}
 pre:hover .copy-btn{opacity:1}.copy-btn:hover{background:rgba(255,255,255,.2)}
 
@@ -298,7 +315,7 @@ details.dr-det .body{padding:12px}
         <button class="icon-btn" onclick="openDrawer('roles')" title="角色切换"><span class="mi-out">theaters</span></button>
         <button class="icon-btn" onclick="openDrawer('settings')" title="设置"><span class="mi-out">settings</span></button>
       </div>
-      <div class="sb-status"><span class="dot" id="sdot"></span><span id="stxt">连接中...</span></div>
+      <div class="sb-status"><span class="dot" id="sdot"></span><span id="stxt">连接中...</span><span class="node-chip" id="node-chip"></span></div>
     </div>
   </div>
   <div class="ov" id="overlay" onclick="closeSidebar()"></div>
@@ -610,7 +627,7 @@ var activeRole=null;
 function connect(){
   var p=location.protocol==='https:'?'wss:':'ws:';
   ws=new WebSocket(p+'//'+location.host);
-  ws.onopen=function(){reconnD=1000;setSt(true,'已连接')};
+  ws.onopen=function(){reconnD=1000;setSt(true,'已连接');refreshNodes()};
   ws.onmessage=function(e){
     var m=JSON.parse(e.data);
     if(m.id&&pending[m.id]){var c=pending[m.id];delete pending[m.id];m.type==='error'?c.reject(new Error(m.payload?m.payload.error||m.error:'错误')):c.resolve(m.payload);return}
@@ -626,6 +643,10 @@ function handleEv(m){var d=m.payload||{};
   if(m.type==='chat.stream'&&d.sessionId===curSid)appendChunk(d.chunk);
   else if(m.type==='chat.complete'&&d.sessionId===curSid)finishStream(d.message,null);
   else if(m.type==='chat.error'&&d.sessionId===curSid)finishStream(null,d.error);
+  else if(m.type==='agent.step')onAgentStep(d);
+  else if(m.type==='agent.complete')onAgentComplete(d);
+  else if(m.type==='node.online'){toast('节点上线: '+(d.name||d.nodeId));refreshNodes()}
+  else if(m.type==='node.offline'){toast('节点离线: '+(d.nodeId||''));refreshNodes()}
   else if(m.type==='event.status')toast(d.message);
   else if(m.type==='event.notification')toast(d.title||d.body||'通知');
   else if(m.type==='event.typing'&&d.sessionId===curSid)setStatus(d.isTyping?'正在输入...':'已就绪');
@@ -698,6 +719,52 @@ function finishStream(msg,error){
   sBuf='';sEl=null;scrollToBot();loadSessions();loadGRStats();
   if(ttsOn&&msg&&msg.content)speak(msg.content)}
 
+// ===== Agent 执行追踪 =====
+var agentTrace=null;
+function ensureAgentTrace(sid){
+  if(agentTrace&&agentTrace.sid===sid)return agentTrace;
+  var c=document.getElementById('chat');
+  var d=document.createElement('div');d.className='message msg-ai';
+  d.innerHTML='<div class="av">AI</div><div class="mb"><div class="agent-trace"><div class="at-hdr"><span class="mi-out">smart_toy</span><span class="at-title">Agent 执行中...</span></div><div class="at-list"></div></div><div class="at-answer"></div></div>';
+  c.appendChild(d);
+  agentTrace={sid:sid,listEl:d.querySelector('.at-list'),ansEl:d.querySelector('.at-answer'),titleEl:d.querySelector('.at-title')};
+  scrollToBot();
+  return agentTrace}
+function onAgentStep(d){
+  if(d.sessionId!==curSid)return;
+  var tr=ensureAgentTrace(d.sessionId);
+  if(d.status==='thinking'){
+    tr.titleEl.textContent='Agent 步骤 '+d.step+'/'+(d.maxSteps||'?')+'：思考中...';
+    setStatus('Agent 步骤 '+d.step+'/'+(d.maxSteps||'?')+'：思考中...');
+    return}
+  var rowId='at-step-'+d.step;
+  var row=tr.listEl.querySelector('#'+rowId);
+  if(!row){row=document.createElement('div');row.className='at-step';row.id=rowId;tr.listEl.appendChild(row)}
+  var icon=d.status==='running'?'<span class="mi-out at-ico run">play_circle</span>'
+    :d.status==='done'?(d.success?'<span class="mi-out at-ico ok">check_circle</span>':'<span class="mi-out at-ico err">error</span>'):'';
+  var html=icon+'<span class="at-n">'+d.step+'</span><span class="at-act">'+esc(d.actionZh||d.action||'')+'</span>';
+  if(d.params)html+='<span class="at-par">'+esc(JSON.stringify(d.params).substring(0,80))+'</span>';
+  if(d.status==='done'){
+    tr.titleEl.textContent='Agent 执行中...（已完成 '+d.step+' 步）';
+    if(d.time!=null)html+='<span class="at-time">'+d.time+'ms</span>';
+    if(d.resultPreview)html+='<div class="at-res'+(d.success?'':' fail')+'">'+esc(d.resultPreview.substring(0,300))+'</div>'}
+  row.innerHTML=html;
+  scrollToBot()}
+function onAgentComplete(d){
+  streaming=false;setStatus('已就绪');
+  if(d.sessionId!==curSid){agentTrace=null;loadSessions();return}
+  var tr=agentTrace;
+  if(tr){
+    tr.titleEl.textContent='Agent 完成（共 '+d.totalSteps+' 步）';
+    tr.ansEl.innerHTML=renderMd(d.answer);hlEl(tr.ansEl);addCopyBtns(tr.ansEl)}
+  msgs.push({role:'ai',content:d.answer,agent:'Agent'});
+  agentTrace=null;scrollToBot();loadSessions();loadGRStats();
+  if(ttsOn&&d.answer)speak(d.answer)}
+async function refreshNodes(){try{var d=await send('node.list');var ns=d.nodes||[];var on=ns.filter(function(x){return x.online}).length;
+  var el=document.getElementById('node-chip');if(!el)return;
+  if(on>0){el.style.display='';el.textContent=on+' 节点在线';el.title=ns.map(function(x){return x.name+' ['+x.capabilities.join(',')+']'}).join('\n')}
+  else el.style.display='none'}catch(e){}}
+
 async function sendMessage(){
   var inp=document.getElementById('msg-input'),t=inp.value.trim();if(!t||streaming)return;
   inp.value='';autoResize(inp);msgs.push({role:'user',content:t});renderMsgs();
@@ -707,9 +774,16 @@ async function sendMessage(){
   if(appConfig.temperature)opts.temperature=parseFloat(appConfig.temperature);
   if(appConfig.systemInstruction)opts.systemInstruction=appConfig.systemInstruction;
   if(modes.deepThink)opts.isDeepThink=true;
-  if(modes.agent)opts.isAgent=true;
   if(modes.webSearch)opts.webSearch=true;
   if(activeRole)opts.systemInstruction=activeRole.desc+(opts.systemInstruction?'\n'+opts.systemInstruction:'');
+  if(modes.agent){
+    // Agent 模式：走 ReAct 循环，步骤经 agent.step 事件流式推送
+    streaming=true;setStatus('Agent 启动中...');
+    try{var r=await send('agent.execute',{task:t,sessionId:curSid,provider:opts.provider,model:opts.model});
+      if(r&&r.sessionId&&!curSid){curSid=r.sessionId}
+      if(r&&!r.started){finishStream(null,r.error||'Agent 启动失败')}}
+    catch(e){finishStream(null,e.message)}
+    return}
   try{await send('chat.send',opts)}catch(e){finishStream(null,e.message)}}
 
 function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}}

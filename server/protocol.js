@@ -49,6 +49,15 @@ var PROTOCOL = {
   MEMORY_ADD:        'memory.add',        // payload: { content, tags? }
   MEMORY_DELETE:     'memory.delete',     // payload: { id }
 
+  // === Nodes (multi-device execution) ===
+  NODE_REGISTER:     'node.register',     // N→S: { nodeId, name, platform, capabilities }
+  NODE_EXECUTE:      'node.execute',      // S→N: { callId, tool, params }
+  NODE_RESULT:       'node.result',       // N→S: { callId, result, error }
+  NODE_STATUS:       'node.status',       // N→S: { nodeId, cpu, mem, uptime }
+  NODE_LIST:         'node.list',         // C→S: response { nodes: [...] }
+  NODE_ONLINE:       'node.online',       // S→C event: { nodeId, name, platform, capabilities }
+  NODE_OFFLINE:      'node.offline',      // S→C event: { nodeId }
+
   // === System ===
   SYSTEM_STATUS:     'system.status',     // response: { models, memory, uptime, ... }
   SYSTEM_MODELS:     'system.models',     // response: { models: [...] }

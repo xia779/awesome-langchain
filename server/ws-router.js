@@ -5,10 +5,16 @@ const PROTOCOL = require('./protocol');
 function createRouter(Core) {
   var handlers = {};    // type → handler(payload, ctx) → result
   var clients = new Map(); // ws → { id, userId }
+  var disconnectHooks = []; // fn(clientInfo, ws) — called when a client disconnects
 
   // Register a request handler
   function handle(type, fn) {
     handlers[type] = fn;
+  }
+
+  // Register a disconnect listener (used by node-proxy to clean up offline nodes)
+  function onDisconnect(fn) {
+    disconnectHooks.push(fn);
   }
 
   // Broadcast event to all connected clients
@@ -78,6 +84,9 @@ function createRouter(Core) {
     ws.on('close', function() {
       clients.delete(ws);
       Core.log('Client disconnected:', clientId, 'remaining:', clients.size);
+      disconnectHooks.forEach(function(fn) {
+        try { fn(clientInfo, ws); } catch (e) { console.error('[WS] disconnect hook error:', e.message); }
+      });
     });
 
     ws.on('error', function(err) {
@@ -91,6 +100,7 @@ function createRouter(Core) {
     broadcast: broadcast,
     sendTo: sendTo,
     onConnection: onConnection,
+    onDisconnect: onDisconnect,
     getClients: function() { return clients; }
   };
 }

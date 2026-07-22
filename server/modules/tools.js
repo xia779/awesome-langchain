@@ -523,6 +523,18 @@ async function executeTool(toolName, params) {
     var check = Core.guardrails.checkToolExecution(toolName, params);
     if (!check.safe) return '[BLOCKED] ' + check.reason;
   }
+  // 节点路由：有具备能力的在线节点时，优先路由到节点（桌面端环境）远程执行。
+  // 仅传输层失败（节点离线/超时）才回退到服务端本地；
+  // 节点返回的字符串结果（包括 [ERROR] 开头）是合法工具结果，直接返回。
+  if (Core.nodeProxy && Core.nodeProxy.canRoute(toolName)) {
+    try {
+      var remoteResult = await Core.nodeProxy.execute(toolName, params);
+      console.log('[tools] ' + toolName + ' → 节点远程执行');
+      return remoteResult;
+    } catch (e) {
+      console.warn('[tools] 节点执行 ' + toolName + ' 失败，回退服务端本地:', e.message);
+    }
+  }
   return await tool.handler(params);
 }
 
