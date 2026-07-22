@@ -195,6 +195,8 @@ function init(_Core) {
 
     // VoxCPM2 流式播放：请求 /stream 端点，PCM16 分块到达即用 Web Audio API 排播。
     // 相比阻塞模式（整句生成完才出声），首包延迟从整句时间降到首个片段时间。
+    // 缓冲策略：先累积约 1s 音频再开播（预缓冲吸收抖动），预缓冲块合并为单个
+    // AudioBuffer 减少拼接缝；生成速度约 0.85x 实时，长文本欠载时以短停顿续播。
     async _voxcpmSpeakStream(text, options) {
       var self = this;
       var voice = options.voice || this.voxcpmVoice || 'default';
@@ -242,26 +244,76 @@ function init(_Core) {
       var nextStartTime = 0;
       var leftover = null; // 上一块剩余的奇数字节
       var totalSamples = 0;
+      var underruns = 0;
 
-      function scheduleChunk(bytes) {
-        // 拷入新 buffer 保证 Int16 对齐
-        var copy = new Uint8Array(bytes);
-        var int16 = new Int16Array(copy.buffer, 0, copy.byteLength / 2);
-        if (int16.length === 0) return;
-        var f32 = new Float32Array(int16.length);
-        for (var i = 0; i < int16.length; i++) f32[i] = int16[i] / 32768;
+      // —— 缓冲策略参数 ——
+      // 实测 VoxCPM2 2B 生成速率约 0.85x 实时（0.16s/块、间隔~190ms），
+      // 播放终将追上生成；预缓冲积累提前量，吸收 GPU 调度/网络/GC 抖动。
+      var PREBUFFER_SECONDS = 1.0;      // 累积满 1.0s 音频再开播
+      var PREBUFFER_TIMEOUT_MS = 2500;  // 超时仍未攒满则用已有音频开播，避免死等
+      var UNDERRUN_LEAD = 0.15;         // 欠载后重新排播的提前量（秒）
+
+      var pendingChunks = [];   // 尚未排播的 Float32Array 队列
+      var pendingSamples = 0;
+      var playbackStarted = false;
+
+      // 排播一段 Float32 音频：沿 nextStartTime 时间轴严格连续
+      function scheduleFloats(f32) {
+        if (!f32 || f32.length === 0) return;
         var buf = ctx.createBuffer(1, f32.length, sampleRate);
         buf.getChannelData(0).set(f32);
         var src = ctx.createBufferSource();
         src.buffer = buf;
         src.connect(gain);
         var now = ctx.currentTime;
-        if (nextStartTime < now) nextStartTime = now + 0.08;
+        if (nextStartTime < now + 0.02) {
+          // 欠载：播放追上了生成，带提前量重排（产生短停顿而非爆音）
+          nextStartTime = now + UNDERRUN_LEAD;
+          underruns++;
+        }
         src.start(nextStartTime);
         nextStartTime += buf.duration;
         self._streamSources.push(src);
         totalSamples += f32.length;
       }
+
+      // 把预缓冲队列合并为单个大 buffer 一次排播（减少小块拼接的调度缝）
+      function flushPending() {
+        if (pendingSamples === 0) return;
+        var merged = new Float32Array(pendingSamples);
+        var off = 0;
+        for (var i = 0; i < pendingChunks.length; i++) {
+          merged.set(pendingChunks[i], off);
+          off += pendingChunks[i].length;
+        }
+        pendingChunks = [];
+        pendingSamples = 0;
+        scheduleFloats(merged);
+      }
+
+      function startPlayback() {
+        if (playbackStarted) return;
+        playbackStarted = true;
+        if (self._streamPrebufTimer) { clearTimeout(self._streamPrebufTimer); self._streamPrebufTimer = null; }
+        nextStartTime = ctx.currentTime + 0.1; // 开播提前量
+        flushPending();
+      }
+
+      function bytesToFloats(bytes) {
+        // 拷入新 buffer 保证 Int16 对齐
+        var copy = new Uint8Array(bytes);
+        var int16 = new Int16Array(copy.buffer, 0, copy.byteLength / 2);
+        if (int16.length === 0) return null;
+        var f32 = new Float32Array(int16.length);
+        for (var i = 0; i < int16.length; i++) f32[i] = int16[i] / 32768;
+        return f32;
+      }
+
+      // 兜底：预缓冲一直攒不满（短文本/生成慢）时超时强制开播
+      this._streamPrebufTimer = setTimeout(function() {
+        self._streamPrebufTimer = null;
+        if (!playbackStarted && pendingSamples > 0) startPlayback();
+      }, PREBUFFER_TIMEOUT_MS);
 
       var reader = response.body.getReader();
       try {
@@ -281,7 +333,20 @@ function init(_Core) {
           }
           var usable = bytes.byteLength - (bytes.byteLength % 2);
           if (bytes.byteLength % 2 !== 0) leftover = bytes.subarray(usable);
-          if (usable > 0) scheduleChunk(bytes.subarray(0, usable));
+          if (usable <= 0) continue;
+
+          var f32 = bytesToFloats(bytes.subarray(0, usable));
+          if (!f32) continue;
+
+          if (!playbackStarted) {
+            // 预缓冲阶段：只累积不播放，攒够目标时长再开播
+            pendingChunks.push(f32);
+            pendingSamples += f32.length;
+            if (pendingSamples / sampleRate >= PREBUFFER_SECONDS) startPlayback();
+          } else {
+            // 播放阶段：到达即排播，延续时间轴
+            scheduleFloats(f32);
+          }
         }
       } catch (e) {
         this._voxcpmAbortController = null;
@@ -291,9 +356,16 @@ function init(_Core) {
 
       this._voxcpmAbortController = null;
 
+      // 流结束：若仍未开播（短文本不足预缓冲量），立即播出全部
+      startPlayback();
+
       if (totalSamples === 0) {
         this._cleanupStream();
         throw new Error('流式合成未返回音频数据');
+      }
+
+      if (underruns > 0) {
+        console.log('[Voice] 流式播放欠载 ' + underruns + ' 次（生成慢于实时，短停顿续播）');
       }
 
       // 等待已排播的音频播放完毕
@@ -307,6 +379,7 @@ function init(_Core) {
 
     // 清理流式播放资源：停止所有已排播音频、关闭上下文、兑现未完成的 Promise。
     _cleanupStream() {
+      if (this._streamPrebufTimer) { clearTimeout(this._streamPrebufTimer); this._streamPrebufTimer = null; }
       if (this._streamDoneTimer) { clearTimeout(this._streamDoneTimer); this._streamDoneTimer = null; }
       if (this._streamSources) {
         for (var i = 0; i < this._streamSources.length; i++) {
