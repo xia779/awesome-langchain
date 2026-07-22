@@ -230,6 +230,8 @@ module.exports = {
       resolveSymbol: resolveSymbol,
       searchSymbol: searchSymbol,
       getMarketStatus: getMarketStatus,
+      fetchQuotes: fetchQuotes,     // 结构化快照（供 market-data 降级链使用）
+      parseQuotes: parseQuotes,
     };
     console.log('✅ A股行情模块已加载（数据源：腾讯行情 + 名称联想）');
   }
