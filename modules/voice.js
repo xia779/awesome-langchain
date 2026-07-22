@@ -103,11 +103,22 @@ function init(_Core) {
     //  优先级：VoxCPM2 (本地GPU) → Fish Speech 1.5 → edge-tts → 云端 SiliconFlow → 浏览器 speechSynthesis
     // ================================================================
 
+    // 对外入口：包一层，把"被更新的朗读取消"（AbortError）静默为 false，
+    // 避免各调用点出现未处理的 Promise rejection；其余错误照常抛出。
     async speak(text, options) {
+      try {
+        return await this._speak(text, options);
+      } catch (e) {
+        if (e && e.name === 'AbortError') return false; // 被取消，正常现象
+        throw e;
+      }
+    },
+
+    async _speak(text, options) {
       options = options || {};
 
-      // 停止之前的朗读
-      this.stopSpeaking();
+      // 停止之前的朗读，并中止上一次仍在进行中的 TTS 请求（配合服务端过期请求丢弃，避免堆积）
+      this.cancelSpeak();
 
       // 🔧 先探测本地音频服务是否在线，离线则跳过全部本地通道（避免 503/ConnectTimeout 刷屏）
       var localOk = await this._probeLocalService();
@@ -1081,10 +1092,34 @@ function init(_Core) {
 
   // 试听某个音色
   voice.previewVoice = function(name) {
+    var self = this;
     var sample = '你好，这是「' + (name === 'default' ? '默认' : name) + '」音色的试听效果，希望你能喜欢。';
     var profile = this.voiceProfiles[this.voiceProfile] || this.voiceProfiles.default;
+
+    // 立即给出反馈：按钮进入加载态（生成需要数秒，避免用户以为没反应而反复点击）
+    this._setPreviewLoading(name, true);
+
     this.speak(sample, { voice: name, speed: profile.speed, rate: profile.speed, pitch: profile.pitch, volume: profile.volume })
-      .catch(function(e) { console.warn('试听失败:', e.message); });
+      .catch(function(e) { if (e && e.name !== 'AbortError') console.warn('试听失败:', e.message); })
+      .then(function() { self._setPreviewLoading(name, false); });
+  };
+
+  // 切换试听按钮的加载态（旋转图标）。loading=false 时恢复为播放图标。
+  voice._setPreviewLoading = function(name, loading) {
+    try {
+      var sel = '.voice-preview-btn[data-voice="' + this._escAttr(name) + '"]';
+      var btns = document.querySelectorAll(sel);
+      for (var i = 0; i < btns.length; i++) {
+        var ic = btns[i].querySelector('.material-icons-outlined');
+        if (loading) {
+          btns[i].classList.add('preview-loading');
+          if (ic) ic.textContent = 'autorenew';
+        } else {
+          btns[i].classList.remove('preview-loading');
+          if (ic) ic.textContent = 'play_circle';
+        }
+      }
+    } catch (e) { /* DOM 未就绪时忽略 */ }
   };
 
   // 上传参考音频 → 新建克隆音色

@@ -2270,6 +2270,10 @@
     .voice-del-btn { color: var(--text-secondary); }
     .voice-del-btn:hover { background: rgba(239,68,68,0.15); color: #ef4444; }
     .voice-preview-btn .material-icons-outlined, .voice-del-btn .material-icons-outlined { font-size: 20px; }
+    /* 试听加载态：图标旋转，提示正在生成（GPU 合成需数秒） */
+    .voice-preview-btn.preview-loading { cursor: progress; opacity: 0.8; }
+    .voice-preview-btn.preview-loading .material-icons-outlined { animation: voicePreviewSpin 0.8s linear infinite; }
+    @keyframes voicePreviewSpin { to { transform: rotate(360deg); } }
 
     body.light-theme .settings-group {
       border-color: #e2e8f0;

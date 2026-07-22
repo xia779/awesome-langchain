@@ -25,7 +25,7 @@ import argparse
 import tempfile
 import threading
 import traceback
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse
 
 # ===== Configuration =====
@@ -38,6 +38,10 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 _model = None
 _model_lock = threading.Lock()
 _model_config = {"version": "2b", "loaded": False, "load_time": 0}
+
+# 请求序号：用于丢弃过期的排队请求（GPU 只跑最新一次合成，避免点击堆积）
+_req_seq = 0
+_req_seq_lock = threading.Lock()
 
 
 def get_device():
@@ -122,15 +126,20 @@ def synthesize(text, reference_audio=None, reference_text=None,
         import numpy as np
         import soundfile as sf
 
-        # Build generation kwargs for the voxcpm 2.x generate() API:
-        #   generate(text, reference_wav_path=...) -> np.ndarray (1D float32 waveform)
-        # voxcpm 2.x has NO `speed` / `voice_design` params, and voice cloning only
-        # needs the reference audio (reference_wav_path); no transcript required.
-        # (speed / reference_text / voice_design are kept in the signature for HTTP
-        #  backward-compat but are not forwarded to generate().)
+        # VoxCPM 2.x generate() 说明：
+        #   generate(text, reference_wav_path=...) -> np.ndarray (1D float32 波形)
+        #   - 声音克隆只需参考音频 reference_wav_path（无需文本转写）。
+        #   - 音色设计（voice_design）：VoxCPM2 通过"控制指令前缀"实现，即把
+        #     自然语言音色描述用括号拼到文本最前面（官方 CLI `voxcpm design --control`
+        #     的机制，等价于 build_final_text: "({control}){text}"）。
+        #   - 2.x generate() 没有独立的 speed 参数（保留在签名里仅为 HTTP 兼容）。
+        # 音色设计：把控制指令作为括号前缀拼到文本前
+        if voice_design and str(voice_design).strip():
+            text = "(" + str(voice_design).strip() + ")" + text
+
         gen_kwargs = {"text": text}
 
-        # Zero-shot voice clone: reference audio path
+        # 零样本声音克隆：参考音频路径
         if reference_audio and os.path.exists(reference_audio):
             gen_kwargs["reference_wav_path"] = reference_audio
 
@@ -262,8 +271,21 @@ class VoxCPMHandler(BaseHTTPRequestHandler):
                                 reference_text = f.read().strip()
                         break
 
+            # 分配请求序号：用于丢弃过期请求（用户连续点击试听/切换时，只合成最新一次）
+            global _req_seq
+            with _req_seq_lock:
+                _req_seq += 1
+                my_seq = _req_seq
+
             # Serialize inference (GPU single-thread)
             with self._lock:
+                # 拿到锁后检查：若已有更新的请求排队，则本次为过期请求，直接丢弃
+                with _req_seq_lock:
+                    latest_seq = _req_seq
+                if my_seq != latest_seq:
+                    print(f"[voxcpm] Skip stale request #{my_seq} (latest=#{latest_seq})", file=sys.stderr)
+                    self._json(200, {"success": False, "stale": True, "error": "已被更新的请求取代"})
+                    return
                 result = synthesize(
                     text=text,
                     reference_audio=reference_audio,
@@ -316,7 +338,7 @@ def main():
         print("[voxcpm] Preloading model...", file=sys.stderr)
         load_model(version=args.model, model_path=args.model_path)
 
-    server = HTTPServer(("127.0.0.1", args.port), VoxCPMHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), VoxCPMHandler)
     print(f"[voxcpm] Service ready: http://127.0.0.1:{args.port}", file=sys.stderr)
     print("[voxcpm] Endpoints: POST /synthesize | POST /v1/audio/speech", file=sys.stderr)
     print("[voxcpm] Health: GET /health", file=sys.stderr)
