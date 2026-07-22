@@ -1148,6 +1148,26 @@ const tools = {
       } catch (e) { return '❌ 查询任务失败: ' + e.message; }
     },
   },
+  list_deliverables: {
+    description: "列出最近的交付物",
+    parameters: {
+      type: "object",
+      properties: {
+        type: { type: "string", description: "按类型过滤: report/ppt/webapp/excel/manga/other" }
+      },
+      required: []
+    },
+    handler: async (params) => {
+      try {
+        if (!Core.deliverables) return "❌ 交付物模块未加载";
+        const filter = params.type ? { type: params.type } : undefined;
+        const items = Core.deliverables.list(filter);
+        if (!items.length) return "📦 暂无交付物记录。";
+        const lines = items.map(d => "  • [" + d.type + "] " + d.title + " (ID: " + d.id + ", " + new Date(d.createdAt).toLocaleString() + ")");
+        return "📦 交付物列表 (" + items.length + "):\n" + lines.join("\n");
+      } catch (e) { return "❌ 查询交付物失败: " + e.message; }
+    },
+  },
 };
 
 // ===== 获取工具定义（用于 Ollama API） =====
