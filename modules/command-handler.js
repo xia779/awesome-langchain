@@ -638,6 +638,45 @@ async function handleCommand(text) {
     }
     return true;
   }
+  // ===== /goal 命令 — 目标模式（持续推进直到完成）=====
+  if (text.startsWith('/goal ')) {
+    var goalText = text.slice(6).trim();
+    if (!goalText) { Core.session.addMessage('用法: /goal <目标描述>\n\n示例: /goal 分析本周A股走势并生成报告', 'ai'); return true; }
+    if (!Core.taskQueue) { Core.session.addMessage('❌ 任务队列模块未加载', 'ai'); return true; }
+    var sessionId = null;
+    try { sessionId = Core.session.getCurrentId(); } catch (e) {}
+    var result = Core.taskQueue.create({ prompt: goalText, title: goalText.substring(0, 30), mode: 'goal', sessionId: sessionId });
+    if (result.success) {
+      Core.session.addMessage('🎯 目标已设定（ID: ' + result.taskId + '）\n\n「' + goalText + '」\n\nAgent 将在后台持续推进直到完成，完成后桌面通知你。输入 /resume ' + result.taskId + ' 查看进度。', 'ai');
+    } else {
+      Core.session.addMessage('❌ 目标设定失败: ' + result.error, 'ai');
+    }
+    return true;
+  }
+  // ===== /resume 命令 — 查看/恢复任务 =====
+  if (text.startsWith('/resume')) {
+    var taskId = text.slice(7).trim();
+    if (!Core.taskQueue) { Core.session.addMessage('❌ 任务队列模块未加载', 'ai'); return true; }
+    if (!taskId) {
+      // 列出所有目标模式任务
+      var goals = Core.taskQueue.list('goal');
+      if (!goals || goals.length === 0) { Core.session.addMessage('📋 当前没有进行中的目标。用 /goal <描述> 设定新目标。', 'ai'); return true; }
+      var listStr = goals.map(function(t) { return '  ' + (t.status === 'done' ? '✅' : t.status === 'error' ? '❌' : '🔄') + ' [' + t.id + '] ' + t.title + ' (' + t.status + ', ' + t.progress + '%)'; }).join('\n');
+      Core.session.addMessage('🎯 目标列表:\n' + listStr + '\n\n输入 /resume <ID> 查看详情', 'ai');
+      return true;
+    }
+    var task = Core.taskQueue.get(taskId);
+    if (!task) { Core.session.addMessage('❌ 未找到任务: ' + taskId, 'ai'); return true; }
+    if (task.status === 'done') {
+      var res = Core.taskQueue.getResult(taskId);
+      Core.session.addMessage('✅ 目标「' + task.title + '」已完成！\n\n' + (res && res.result ? res.result.substring(0, 3000) : '（无输出）'), 'ai');
+    } else if (task.status === 'error') {
+      Core.session.addMessage('❌ 目标「' + task.title + '」执行失败: ' + (task.error || '未知错误') + '\n\n可重新提交: /goal ' + task.title, 'ai');
+    } else {
+      Core.session.addMessage('🔄 目标「' + task.title + '」正在执行中...\n状态: ' + task.status + '，进度: ' + task.progress + '%' + (task.progressText ? '（' + task.progressText + '）' : ''), 'ai');
+    }
+    return true;
+  }
   return false;
 }
 

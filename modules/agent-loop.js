@@ -357,7 +357,8 @@ function evaluateAnswer(answer) {
 }
 // ===== Agent 智能体循环 =====
 async function sendToAgent(task, isDeepThink) {
-  const maxSteps = isDeepThink ? 40 : 20;
+  var _cfgMaxSteps = (Core && Core.config && Core.config.maxAgentSteps) || 20;
+  const maxSteps = isDeepThink ? (_cfgMaxSteps * 2) : _cfgMaxSteps;
   let context = '';
   let step = 0;
   let finalAnswer = '';
