@@ -520,18 +520,18 @@ function uninstallPlugin(pluginId) {
 // ===== 插件版本更新检查 =====
 async function checkPluginUpdates() {
   const updates = [];
-  const installed = listPlugins();
-  for (const plugin of installed) {
-    if (!plugin.manifest || !plugin.manifest.updateUrl) continue;
+  for (const pluginId of Object.keys(loadedPlugins)) {
+    const p = loadedPlugins[pluginId];
+    if (!p.manifest || !p.manifest.updateUrl) continue;
     try {
-      const resp = await fetch(plugin.manifest.updateUrl, { signal: AbortSignal.timeout(8000) });
+      const resp = await fetch(p.manifest.updateUrl, { signal: AbortSignal.timeout(8000) });
       if (!resp.ok) continue;
       const remote = await resp.json();
-      if (remote.version && remote.version !== plugin.manifest.version) {
+      if (remote.version && remote.version !== p.manifest.version) {
         updates.push({
-          id: plugin.id,
-          name: plugin.manifest.name || plugin.id,
-          currentVersion: plugin.manifest.version || '0.0.0',
+          id: pluginId,
+          name: p.manifest.name || pluginId,
+          currentVersion: p.manifest.version || '0.0.0',
           remoteVersion: remote.version,
           downloadUrl: remote.downloadUrl || remote.zipUrl || null,
         });
