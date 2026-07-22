@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
+const crypto = require('crypto');
 
 let Core = null;
 
@@ -18,11 +19,27 @@ function getKnowledgeDir() {
 
 const CHUNK_SIZE = 500;   // 每个文档块的最大字符数
 const OVERLAP = 100;      // 块与块之间的重叠字符数
-const EMBEDDING_MODEL = 'nomic-embed-text';
+const DEFAULT_EMBEDDING_MODEL = 'bge-m3';
+const FALLBACK_EMBEDDING_MODEL = 'nomic-embed-text';
 const OLLAMA_BASE = 'http://127.0.0.1:11434';
 
 // ===== 嵌入模型可用性缓存 =====
 let embeddingAvailable = null; // null = 未检测, true = 可用, false = 不可用
+let activeEmbeddingModel = null; // 实际使用的嵌入模型名（检测后缓存）
+
+// 获取用户配置的嵌入模型（优先 config，默认 bge-m3）
+function getPreferredEmbeddingModel() {
+  if (Core && Core.config && Core.config.embeddingModel) {
+    return Core.config.embeddingModel;
+  }
+  return DEFAULT_EMBEDDING_MODEL;
+}
+
+// 获取当前实际生效的嵌入模型（考虑可用性回退）
+function getEmbeddingModel() {
+  if (activeEmbeddingModel) return activeEmbeddingModel;
+  return getPreferredEmbeddingModel();
+}
 
 // ===== 确保目录存在 =====
 function ensureDir() {
@@ -32,9 +49,9 @@ function ensureDir() {
   }
 }
 
-// ===== 检测嵌入模型是否可用 =====
-async function checkEmbeddingModel() {
-  if (embeddingAvailable !== null) return embeddingAvailable;
+// ===== 检测嵌入模型是否可用（支持 fallback 链）=====
+async function checkEmbeddingModel(force) {
+  if (embeddingAvailable !== null && !force) return embeddingAvailable;
 
   try {
     const resp = await fetch(`${OLLAMA_BASE}/api/tags`, {
@@ -43,21 +60,43 @@ async function checkEmbeddingModel() {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     const models = (data.models || []).map(m => m.name || m.model || '');
-    const found = models.some(m =>
-      m.includes(EMBEDDING_MODEL) || m.startsWith(EMBEDDING_MODEL + ':')
+
+    // 优先检测用户配置/默认模型
+    const preferred = getPreferredEmbeddingModel();
+    const foundPreferred = models.some(m =>
+      m.includes(preferred) || m.startsWith(preferred + ':')
     );
 
-    if (found) {
+    if (foundPreferred) {
       embeddingAvailable = true;
-      console.log(`✅ 嵌入模型 ${EMBEDDING_MODEL} 已就绪`);
-    } else {
-      embeddingAvailable = false;
-      console.warn(`⚠️ 嵌入模型 ${EMBEDDING_MODEL} 未安装`);
-      console.warn(`💡 安装方法: ollama pull ${EMBEDDING_MODEL}`);
-      console.warn(`📂 知识库将使用 BM25 文本检索（无需嵌入模型，功能正常）`);
+      activeEmbeddingModel = preferred;
+      console.log(`✅ 嵌入模型 ${preferred} 已就绪`);
+      return true;
     }
+
+    // 回退到 fallback 模型
+    if (preferred !== FALLBACK_EMBEDDING_MODEL) {
+      const foundFallback = models.some(m =>
+        m.includes(FALLBACK_EMBEDDING_MODEL) || m.startsWith(FALLBACK_EMBEDDING_MODEL + ':')
+      );
+      if (foundFallback) {
+        embeddingAvailable = true;
+        activeEmbeddingModel = FALLBACK_EMBEDDING_MODEL;
+        console.log(`⚠️ ${preferred} 未安装，回退到 ${FALLBACK_EMBEDDING_MODEL}`);
+        console.log(`💡 推荐安装: ollama pull ${preferred}`);
+        return true;
+      }
+    }
+
+    // 都不可用
+    embeddingAvailable = false;
+    activeEmbeddingModel = null;
+    console.warn(`⚠️ 嵌入模型 ${preferred} 和 ${FALLBACK_EMBEDDING_MODEL} 均未安装`);
+    console.warn(`💡 安装方法: ollama pull ${preferred}`);
+    console.warn(`📂 知识库将使用 BM25 文本检索（无需嵌入模型，功能正常）`);
   } catch (e) {
     embeddingAvailable = false;
+    activeEmbeddingModel = null;
     console.warn('⚠️ 无法检测 Ollama 服务，嵌入模型不可用:', e.message.split('\n')[0]);
     console.warn('📂 知识库将使用 BM25 文本检索');
   }
@@ -166,14 +205,15 @@ async function getEmbedding(text) {
   if (embeddingAvailable === false) return null;
 
   try {
+    const model = getEmbeddingModel();
     const resp = await fetch(`${OLLAMA_BASE}/api/embeddings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: EMBEDDING_MODEL,
-        prompt: text.substring(0, 2000), // 限制输入长度，防止 OOM
+        model: model,
+        prompt: text.substring(0, 8000), // bge-m3 支持较长输入
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(30000),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -326,6 +366,17 @@ async function uploadDocument(filePathOrContent) {
       throw new Error('参数必须是文件路径字符串或 { content, fileName } 对象');
     }
 
+    // 计算内容哈希（用于去重）
+    const contentHash = crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+
+    // 检查是否已存在相同内容的文档
+    const existingIndex = listDocuments();
+    const existingDoc = existingIndex.find(d => d.contentHash === contentHash);
+    if (existingDoc) {
+      console.log(`⏭️ 文档内容未变化，跳过重复上传: ${fileName} (hash: ${contentHash.substring(0, 12)}...)`);
+      return { success: true, skipped: true, id: existingDoc.id, fileName: existingDoc.fileName, contentHash };
+    }
+
     // 切分文档
     const chunks = chunkDocument(content);
     if (chunks.length === 0) {
@@ -366,10 +417,11 @@ async function uploadDocument(filePathOrContent) {
     const metadata = {
       id: docId,
       fileName: fileName,
+      contentHash: contentHash,
       uploadedAt: new Date().toISOString(),
       totalChunks: chunks.length,
       hasEmbeddings: embeddingSuccessCount > 0,
-      embeddingModel: embeddingSuccessCount > 0 ? EMBEDDING_MODEL : null,
+      embeddingModel: embeddingSuccessCount > 0 ? getEmbeddingModel() : null,
     };
 
     const chunksWithVectors = chunkTexts.map((text, i) => ({
@@ -398,6 +450,7 @@ async function uploadDocument(filePathOrContent) {
     index.push({
       id: docId,
       fileName: metadata.fileName,
+      contentHash: contentHash,
       chunkCount: metadata.totalChunks,
       hasEmbeddings: metadata.hasEmbeddings,
       uploadedAt: metadata.uploadedAt,
@@ -411,7 +464,7 @@ async function uploadDocument(filePathOrContent) {
     } else {
       embedMsg = '（使用 BM25 文本检索模式）';
       if (!hasEmbedding) {
-        embedMsg += `\n💡 如需语义检索，请安装嵌入模型: ollama pull ${EMBEDDING_MODEL}`;
+        embedMsg += `\n💡 如需语义检索，请安装嵌入模型: ollama pull ${getPreferredEmbeddingModel()}`;
       }
     }
 
@@ -523,10 +576,13 @@ async function deleteDocument(docId) {
 
 // ===== 重建嵌入向量（当嵌入模型安装后，为已有文档补充向量）=====
 async function rebuildEmbeddings() {
-  const hasEmbedding = await checkEmbeddingModel();
+  const hasEmbedding = await checkEmbeddingModel(true);
   if (!hasEmbedding) {
-    return { success: false, error: `嵌入模型 ${EMBEDDING_MODEL} 不可用，请先安装: ollama pull ${EMBEDDING_MODEL}` };
+    const model = getPreferredEmbeddingModel();
+    return { success: false, error: `嵌入模型 ${model} 不可用，请先安装: ollama pull ${model}` };
   }
+
+  const currentModel = getEmbeddingModel();
 
   ensureDir();
   const dir = getKnowledgeDir();
@@ -554,7 +610,7 @@ async function rebuildEmbeddings() {
 
       if (modified) {
         data.metadata.hasEmbeddings = true;
-        data.metadata.embeddingModel = EMBEDDING_MODEL;
+        data.metadata.embeddingModel = currentModel;
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
         console.log(`✅ 已补充向量: ${file}`);
       }
@@ -584,6 +640,84 @@ async function rebuildEmbeddings() {
   };
 }
 
+// ===== 嵌入模型迁移（模型切换后自动重新嵌入旧文档）=====
+let _migrationRunning = false;
+async function migrateEmbeddings() {
+  if (_migrationRunning) return { success: false, error: '迁移正在进行中' };
+  const hasEmbedding = await checkEmbeddingModel(true);
+  if (!hasEmbedding) return { success: false, error: '无可用嵌入模型' };
+
+  const currentModel = getEmbeddingModel();
+  ensureDir();
+  const dir = getKnowledgeDir();
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json') && f !== 'index.json');
+
+  // 找出需要迁移的文档
+  const toMigrate = [];
+  for (const file of files) {
+    try {
+      const filePath = path.join(dir, file);
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      const docModel = data.metadata && data.metadata.embeddingModel;
+      if (docModel && docModel !== currentModel) {
+        toMigrate.push({ file, filePath, data });
+      }
+    } catch (e) { /* skip corrupt files */ }
+  }
+
+  if (toMigrate.length === 0) {
+    return { success: true, migrated: 0, message: '所有文档已使用当前模型，无需迁移' };
+  }
+
+  _migrationRunning = true;
+  let migratedDocs = 0;
+  let migratedChunks = 0;
+
+  try {
+    for (const { file, filePath, data } of toMigrate) {
+      let modified = false;
+      for (const chunk of (data.chunks || [])) {
+        if (chunk.text) {
+          const embedding = await getEmbedding(chunk.text);
+          if (embedding) {
+            chunk.embedding = embedding;
+            modified = true;
+            migratedChunks++;
+          }
+        }
+      }
+      if (modified) {
+        data.metadata.embeddingModel = currentModel;
+        data.metadata.hasEmbeddings = true;
+        data.metadata.migratedAt = new Date().toISOString();
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        migratedDocs++;
+        console.log(`🔄 嵌入迁移: ${file} → ${currentModel}`);
+      }
+    }
+
+    // 更新 index.json
+    const indexPath = path.join(dir, 'index.json');
+    if (fs.existsSync(indexPath)) {
+      try {
+        const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+        for (const doc of index) {
+          if (toMigrate.some(t => t.data.metadata.id === doc.id)) {
+            doc.hasEmbeddings = true;
+            doc.embeddingModel = currentModel;
+          }
+        }
+        fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+      } catch (e) { /* non-critical */ }
+    }
+
+    console.log(`✅ 嵌入迁移完成: ${migratedDocs} 文档, ${migratedChunks} 块 → ${currentModel}`);
+    return { success: true, migrated: migratedDocs, chunks: migratedChunks, model: currentModel };
+  } finally {
+    _migrationRunning = false;
+  }
+}
+
 // ===== 获取知识库统计信息 =====
 function getStats() {
   const docs = listDocuments();
@@ -598,7 +732,7 @@ function getStats() {
     totalChunks: allChunks.length,
     chunksWithEmbeddings: withEmbeddings,
     chunksWithoutEmbeddings: allChunks.length - withEmbeddings,
-    embeddingModel: embeddingAvailable ? EMBEDDING_MODEL : null,
+    embeddingModel: embeddingAvailable ? getEmbeddingModel() : null,
     embeddingAvailable: !!embeddingAvailable,
     vectorBackend: (Core && Core.config && Core.config.vectorBackend) || 'json',
     searchMode: searchMode,
@@ -734,6 +868,69 @@ async function importFromUrl(url) {
   });
 }
 
+// ===== SiliconFlow Rerank（bge-reranker-v2-m3）=====
+async function rerankResults(query, results, topN) {
+  // 门控：需要 API key + 配置未禁用 + 结果数 > 1
+  if (!Core || !Core.config) return null;
+  if (Core.config.rerankEnabled === false) return null;
+  var apiKey = Core.config.siliconFlowKey || '';
+  apiKey = apiKey.replace(/^Bearer\s+/i, '').trim();
+  if (!apiKey) return null;
+  if (!results || results.length <= 1) return null;
+
+  try {
+    var documents = results.map(function(r) { return (r.text || '').substring(0, 1000); });
+    var body = JSON.stringify({
+      model: 'BAAI/bge-reranker-v2-m3',
+      query: query.substring(0, 2000),
+      documents: documents,
+      top_n: topN || results.length,
+    });
+
+    var resp = await fetch('https://api.siliconflow.cn/v1/rerank', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey,
+      },
+      body: body,
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!resp.ok) {
+      console.warn('⚠️ Rerank API HTTP ' + resp.status + '，降级为 RRF 排序');
+      return null;
+    }
+
+    var data = await resp.json();
+    if (!data.results || !Array.isArray(data.results) || data.results.length === 0) {
+      return null;
+    }
+
+    // 按 rerank 分数重排
+    var reranked = data.results.map(function(item) {
+      var original = results[item.index];
+      if (!original) return null;
+      return {
+        text: original.text,
+        fileName: original.fileName,
+        docId: original.docId,
+        index: original.index,
+        score: item.relevance_score,
+        rerankScore: item.relevance_score,
+        rrfScore: original.rrfScore || original.score,
+      };
+    }).filter(Boolean);
+
+    reranked.sort(function(a, b) { return b.rerankScore - a.rerankScore; });
+    console.log('✅ Rerank 完成: ' + reranked.length + ' 条结果重排（top score: ' + (reranked[0] ? reranked[0].rerankScore.toFixed(4) : 'N/A') + '）');
+    return reranked;
+  } catch (e) {
+    console.warn('⚠️ Rerank 失败，降级为 RRF 排序:', e.message);
+    return null;
+  }
+}
+
 // ===== Reciprocal Rank Fusion (RRF) — 融合多路检索结果 =====
 function _rrfFuse(rankingsList, k) {
   k = k || 60; // RRF 常数，默认 60
@@ -792,6 +989,13 @@ async function searchWithCitations(query, topK, options) {
     return { results: [], citations: '', context: '' };
   }
 
+  // Rerank 重排（SiliconFlow bge-reranker-v2-m3，失败自动降级为 RRF 顺序）
+  var rerankCandidates = finalResults.slice(0, topK * 3); // 取较多候选供 rerank
+  var reranked = await rerankResults(query, rerankCandidates, topK);
+  if (reranked && reranked.length > 0) {
+    finalResults = reranked;
+  }
+
   // 过滤低分 + 截取 topK
   finalResults = finalResults.filter(function(r) { return (r.rrfScore || r.score) >= minScore; });
   finalResults = finalResults.slice(0, topK);
@@ -835,6 +1039,122 @@ function searchSuggestions(partial, limit) {
   return Object.values(matches).slice(0, limit);
 }
 
+// ===== 目录同步（增量索引：扫描目录，新增/变更文件自动入库，已删除文件自动移除）=====
+const SUPPORTED_EXTS = ['.txt', '.md', '.pdf', '.docx', '.doc', '.xlsx', '.xls', '.csv'];
+
+async function syncDirectory(dirPath) {
+  if (!dirPath || !fs.existsSync(dirPath)) {
+    return { success: false, error: '目录不存在: ' + dirPath };
+  }
+
+  ensureDir();
+  const stats = { added: 0, updated: 0, skipped: 0, removed: 0, errors: 0 };
+
+  // 递归扫描目录中的支持文件
+  function scanDir(dir) {
+    let files = [];
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          files = files.concat(scanDir(fullPath));
+        } else if (SUPPORTED_EXTS.includes(path.extname(entry.name).toLowerCase())) {
+          files.push(fullPath);
+        }
+      }
+    } catch (e) { /* permission errors etc */ }
+    return files;
+  }
+
+  const diskFiles = scanDir(dirPath);
+  const diskHashes = new Set();
+
+  // 上传新增/变更文件
+  for (const filePath of diskFiles) {
+    try {
+      const content = await readFileContent(filePath);
+      const hash = crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+      diskHashes.add(hash);
+
+      const result = await uploadDocument(filePath);
+      if (result.skipped) {
+        stats.skipped++;
+      } else if (result.success) {
+        stats.added++;
+      } else {
+        stats.errors++;
+      }
+    } catch (e) {
+      stats.errors++;
+      console.warn('⚠️ 同步文件失败:', filePath, e.message);
+    }
+  }
+
+  // 移除已不在磁盘上的文档（仅限来源于该目录的）
+  const index = listDocuments();
+  const normalizedDir = path.resolve(dirPath);
+  for (const doc of index) {
+    // 如果文档有 sourcePath 且在该目录下，但 hash 不在磁盘集合中 → 已删除
+    if (doc.sourcePath && doc.sourcePath.startsWith(normalizedDir) && doc.contentHash && !diskHashes.has(doc.contentHash)) {
+      await deleteDocument(doc.id);
+      stats.removed++;
+    }
+  }
+
+  console.log(`✅ 目录同步完成: ${dirPath} | 新增 ${stats.added}, 跳过 ${stats.skipped}, 移除 ${stats.removed}, 错误 ${stats.errors}`);
+  return { success: true, ...stats, dirPath };
+}
+
+// ===== 目录监听（fs.watch + 防抖，文件变化自动增量同步）=====
+const _watchers = {}; // dirPath → { watcher, timer }
+
+function watchDirectory(dirPath, debounceMs) {
+  if (!dirPath || !fs.existsSync(dirPath)) {
+    return { success: false, error: '目录不存在: ' + dirPath };
+  }
+  if (_watchers[dirPath]) {
+    return { success: true, message: '已在监听中' };
+  }
+
+  debounceMs = debounceMs || 3000;
+  let timer = null;
+
+  try {
+    const watcher = fs.watch(dirPath, { recursive: true }, (eventType, filename) => {
+      if (!filename) return;
+      const ext = path.extname(filename).toLowerCase();
+      if (!SUPPORTED_EXTS.includes(ext)) return;
+
+      // 防抖：多次变化合并为一次同步
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        console.log(`🔄 检测到文件变化，开始增量同步: ${dirPath}`);
+        syncDirectory(dirPath).catch(e => {
+          console.warn('⚠️ 自动同步失败:', e.message);
+        });
+      }, debounceMs);
+    });
+
+    _watchers[dirPath] = { watcher, timer };
+    console.log(`👁️ 开始监听目录: ${dirPath} (防抖 ${debounceMs}ms)`);
+    return { success: true, message: '开始监听: ' + dirPath };
+  } catch (e) {
+    return { success: false, error: '监听失败: ' + e.message };
+  }
+}
+
+function unwatchDirectory(dirPath) {
+  if (_watchers[dirPath]) {
+    _watchers[dirPath].watcher.close();
+    if (_watchers[dirPath].timer) clearTimeout(_watchers[dirPath].timer);
+    delete _watchers[dirPath];
+    console.log(`👁️ 停止监听目录: ${dirPath}`);
+    return { success: true };
+  }
+  return { success: false, error: '该目录未在监听中' };
+}
+
 module.exports = {
   init(_Core) {
     Core = _Core;
@@ -848,8 +1168,14 @@ module.exports = {
       deleteDocument,
       getKnowledgeDir,
       rebuildEmbeddings,
+      migrateEmbeddings,
       getStats,
       saveConversation,
+      syncDirectory,
+      watchDirectory,
+      unwatchDirectory,
+      rerankResults,
+      getEmbeddingModel,
       // 内部函数暴露（供 knowledge-distill 模块使用）
       _loadAllChunks: loadAllChunks,
       _getEmbedding: getEmbedding,
@@ -861,9 +1187,23 @@ module.exports = {
 
     // 异步初始化：检测嵌入模型（不阻塞启动）
     ensureDir();
-    checkEmbeddingModel().then(() => {
+    checkEmbeddingModel().then((available) => {
       const stats = getStats();
       console.log(`✅ 知识库模块已加载 | ${stats.totalDocs} 文档, ${stats.totalChunks} 分块 | 模式: ${stats.searchMode}`);
+
+      // 后台自动迁移：如果有文档使用旧模型，异步重新嵌入
+      if (available) {
+        migrateEmbeddings().then(result => {
+          if (result.migrated > 0) {
+            console.log(`🔄 后台嵌入迁移完成: ${result.migrated} 文档 → ${result.model}`);
+          }
+        }).catch(() => {});
+      }
+
+      // 自动监听配置的知识库目录
+      if (Core.config && Core.config.knowledgeWatchDir) {
+        watchDirectory(Core.config.knowledgeWatchDir);
+      }
     });
   }
 };
