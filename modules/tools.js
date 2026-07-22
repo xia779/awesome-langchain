@@ -1087,6 +1087,60 @@ const tools = {
       } catch (e) { return '❌ 行情查询失败: ' + e.message; }
     },
   },
+
+  // ===== 后台长任务（接入 task-queue）=====
+  background_task: {
+    description: '提交一个后台长任务（如深度分析、批量处理、长文生成）。任务在后台异步执行，不阻塞当前对话。完成后会桌面通知。适合耗时超过30秒的任务。',
+    parameters: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: '任务描述/提示词，告诉AI要做什么' },
+        title: { type: 'string', description: '任务标题（简短，用于通知显示）' },
+      },
+      required: ['prompt']
+    },
+    handler: async function (params) {
+      if (!Core.taskQueue) return '❌ 任务队列模块未加载';
+      try {
+        const result = Core.taskQueue.create({
+          prompt: params.prompt,
+          title: params.title || '后台任务',
+        });
+        if (!result.success) return '❌ 提交后台任务失败: ' + (result.error || '未知错误');
+        return '✅ 后台任务已提交（ID: ' + result.taskId + '，标题: ' + result.title + '）。完成后会桌面通知你，也可以问我"任务进度"查看状态。';
+      } catch (e) { return '❌ 提交后台任务失败: ' + e.message; }
+    },
+  },
+
+  // ===== 查询后台任务状态 =====
+  task_status: {
+    description: '查询后台任务的状态和结果。可以查指定任务ID，也可以列出所有任务。',
+    parameters: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: '任务ID（可选，不填则列出所有任务）' },
+      },
+      required: []
+    },
+    handler: async function (params) {
+      if (!Core.taskQueue) return '❌ 任务队列模块未加载';
+      try {
+        if (params.task_id) {
+          const task = Core.taskQueue.get(params.task_id);
+          if (!task) return '❌ 未找到任务: ' + params.task_id;
+          if (task.status === 'done' || task.status === 'error') {
+            const res = Core.taskQueue.getResult(params.task_id);
+            if (task.status === 'error') return '❌ 任务「' + task.title + '」执行失败: ' + (task.error || '未知错误');
+            return '✅ 任务「' + task.title + '」已完成。\n结果: ' + (res && res.result ? String(res.result).substring(0, 2000) : '（无输出）');
+          }
+          return '📋 任务「' + task.title + '」状态: ' + task.status + '，进度: ' + (task.progress || 0) + '%' + (task.progressText ? '（' + task.progressText + '）' : '');
+        }
+        const tasks = Core.taskQueue.list();
+        if (!tasks || tasks.length === 0) return '📋 当前没有后台任务。';
+        return '📋 后台任务列表:\n' + tasks.map(t => '  • [' + t.status + '] ' + t.title + ' (ID: ' + t.id + ', ' + (t.progress || 0) + '%)').join('\n');
+      } catch (e) { return '❌ 查询任务失败: ' + e.message; }
+    },
+  },
 };
 
 // ===== 获取工具定义（用于 Ollama API） =====

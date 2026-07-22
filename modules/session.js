@@ -1211,6 +1211,15 @@ function addMessage(content, role, type) {
   if (type) msg.type = type;
   sessions[currentSessionId].messages.push(msg);
   debouncedAutoSave(currentSessionId);
+  // 自动压缩：超过阈值时异步触发（配置 autoCompress !== false 开启，5分钟冷却）
+  var _sess = sessions[currentSessionId];
+  if (_sess.messages.length > COMPRESS_THRESHOLD && Core && Core.config && Core.config.autoCompress !== false) {
+    var cooldown = 5 * 60 * 1000;
+    if (!_sess._compressedAt || (Date.now() - _sess._compressedAt > cooldown)) {
+      var sid = currentSessionId;
+      setTimeout(function() { compressLongConversation(sid); }, 2000);
+    }
+  }
   var container = document.getElementById('chatContainer');
   if (container) {
     renderSingleMessage(msg, sessions[currentSessionId].messages.length - 1, container);

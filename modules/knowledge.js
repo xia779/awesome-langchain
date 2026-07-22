@@ -417,6 +417,7 @@ async function uploadDocument(filePathOrContent) {
     const metadata = {
       id: docId,
       fileName: fileName,
+      sourcePath: (typeof filePathOrContent === 'string') ? path.resolve(filePathOrContent) : null,
       contentHash: contentHash,
       uploadedAt: new Date().toISOString(),
       totalChunks: chunks.length,

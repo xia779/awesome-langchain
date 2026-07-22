@@ -444,6 +444,12 @@ function installPlugin(sourcePath) {
         if (entries.length === 1 && fs.statSync(path.join(tmpDir, entries[0])).isDirectory()) {
           extractedDir = path.join(tmpDir, entries[0]);
         }
+        // 安全：Zip Slip 路径穿越检测
+        const zipSlipCheck = validateExtractedPaths(tmpDir);
+        if (!zipSlipCheck.ok) {
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+          return { success: false, error: zipSlipCheck.error };
+        }
         // 验证 plugin.json 存在
         if (!fs.existsSync(path.join(extractedDir, 'plugin.json'))) {
           fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -517,23 +523,71 @@ function uninstallPlugin(pluginId) {
   }
 }
 
+// ===== 安全工具函数 =====
+
+/** 比较两个 semver 版本号，返回 1(a>b) / -1(a<b) / 0(相等) */
+function compareSemver(a, b) {
+  const pa = String(a || '0.0.0').split('.').map(Number);
+  const pb = String(b || '0.0.0').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const na = pa[i] || 0, nb = pb[i] || 0;
+    if (na > nb) return 1;
+    if (na < nb) return -1;
+  }
+  return 0;
+}
+
+/** 强制 https，拒绝 http/ftp 等明文协议 */
+function assertHttps(url, label) {
+  if (!url || typeof url !== 'string') return { ok: false, error: (label || 'URL') + ' 为空' };
+  if (!url.startsWith('https://')) {
+    return { ok: false, error: (label || 'URL') + ' 必须使用 https 协议（拒绝: ' + url.substring(0, 60) + '）' };
+  }
+  return { ok: true };
+}
+
+/** Zip Slip 防护：验证解压后所有文件路径未逃逸出目标目录 */
+function validateExtractedPaths(extractDir) {
+  const resolvedBase = path.resolve(extractDir);
+  function walk(dir) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.resolve(path.join(dir, entry.name));
+      if (!fullPath.startsWith(resolvedBase + path.sep) && fullPath !== resolvedBase) {
+        return { ok: false, error: 'Zip Slip 路径穿越检测: ' + fullPath };
+      }
+      if (entry.isDirectory()) {
+        const sub = walk(fullPath);
+        if (!sub.ok) return sub;
+      }
+    }
+    return { ok: true };
+  }
+  return walk(extractDir);
+}
+
 // ===== 插件版本更新检查 =====
 async function checkPluginUpdates() {
   const updates = [];
   for (const pluginId of Object.keys(loadedPlugins)) {
     const p = loadedPlugins[pluginId];
     if (!p.manifest || !p.manifest.updateUrl) continue;
+    // 安全：强制 https
+    const urlCheck = assertHttps(p.manifest.updateUrl, 'updateUrl');
+    if (!urlCheck.ok) { console.warn('⚠️ 插件 ' + pluginId + ': ' + urlCheck.error); continue; }
     try {
       const resp = await fetch(p.manifest.updateUrl, { signal: AbortSignal.timeout(8000) });
       if (!resp.ok) continue;
       const remote = await resp.json();
-      if (remote.version && remote.version !== p.manifest.version) {
+      // 安全：semver 比较，仅远端版本更高时才提示更新
+      if (remote.version && compareSemver(remote.version, p.manifest.version) > 0) {
         updates.push({
           id: pluginId,
           name: p.manifest.name || pluginId,
           currentVersion: p.manifest.version || '0.0.0',
           remoteVersion: remote.version,
           downloadUrl: remote.downloadUrl || remote.zipUrl || null,
+          sha256: remote.sha256 || null,
         });
       }
     } catch (e) { /* skip unreachable update servers */ }
@@ -541,15 +595,26 @@ async function checkPluginUpdates() {
   return updates;
 }
 
-async function updatePlugin(pluginId, downloadUrl) {
+async function updatePlugin(pluginId, downloadUrl, expectedSha256) {
   if (!downloadUrl) return { success: false, error: '无下载地址' };
+  // 安全：强制 https
+  const urlCheck = assertHttps(downloadUrl, 'downloadUrl');
+  if (!urlCheck.ok) return { success: false, error: urlCheck.error };
   try {
+    const crypto = require('crypto');
     const os = require('os');
     const tmpZip = path.join(os.tmpdir(), 'plugin-update-' + pluginId + '-' + Date.now() + '.zip');
     // 下载 ZIP
     const resp = await fetch(downloadUrl, { signal: AbortSignal.timeout(60000) });
     if (!resp.ok) return { success: false, error: '下载失败: HTTP ' + resp.status };
     const buffer = Buffer.from(await resp.arrayBuffer());
+    // 安全：sha256 完整性校验
+    if (expectedSha256) {
+      const actualHash = crypto.createHash('sha256').update(buffer).digest('hex');
+      if (actualHash.toLowerCase() !== expectedSha256.toLowerCase()) {
+        return { success: false, error: 'SHA256 校验失败（期望: ' + expectedSha256.substring(0, 16) + '… 实际: ' + actualHash.substring(0, 16) + '…），已拒绝安装' };
+      }
+    }
     fs.writeFileSync(tmpZip, buffer);
     // 安装（会先卸载旧版）
     const result = installPlugin(tmpZip);
