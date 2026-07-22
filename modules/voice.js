@@ -184,7 +184,12 @@ function init(_Core) {
     // 优先流式播放（首包延迟低，边生成边播）；失败自动回退阻塞模式。
     async _voxcpmSpeak(text, options) {
       try {
-        return await this._voxcpmSpeakStream(text, options);
+        var sentences = this._splitSentences(text);
+        if (sentences.length > 1) {
+          // 多句走流水线：第 N 句播放时 GPU 预生成第 N+1 句，句间自然停顿兼作生成预算补偿
+          return await this._voxcpmSpeakPipeline(sentences, options);
+        }
+        return await this._voxcpmSpeakStream(sentences[0] || text, options);
       } catch (e) {
         if (e && e.name === 'AbortError') throw e; // 取消直接向上抛，不回退
         console.warn('流式TTS不可用，回退阻塞模式:', e.message);
@@ -375,6 +380,251 @@ function init(_Core) {
         var remainMs = Math.max(0, (endAt - ctx.currentTime) * 1000) + 150;
         self._streamDoneTimer = setTimeout(function() { self._cleanupStream(); }, remainMs);
       });
+    },
+
+    // 多句流水线播放：长文切句后共享一个 AudioContext 时间轴逐句合成。
+    // 第 N 句播放时 GPU 预生成第 N+1 句（请求天然串行）；句间 0.4s 自然
+    // 停顿既符合听感，又补偿生成预算（实测生成约 0.9x 实时）。首句预缓冲，
+    // 后续句即到即排；欠载以短停顿续播。已播部分后某句失败则优雅提前结束
+    // （不抛错、不重播），一句都没播才抛错触发阻塞回退。
+    async _voxcpmSpeakPipeline(sentences, options) {
+      var self = this;
+      var voice = options.voice || this.voxcpmVoice || 'default';
+      var speed = options.speed || options.rate || 1.0;
+      var voiceDesign = options.voiceDesign || null;
+
+      this._voxcpmAbortController = new AbortController();
+      var signal = this._voxcpmAbortController.signal;
+
+      var sampleRate = 48000;
+      var AudioCtx = window.AudioContext || window.webkitAudioContext;
+      var ctx;
+      try { ctx = new AudioCtx({ sampleRate: sampleRate }); } catch (e) { ctx = new AudioCtx(); }
+      if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+      this._streamCtx = ctx;
+      this._streamSources = [];
+
+      var gain = ctx.createGain();
+      gain.gain.value = options.volume !== undefined ? options.volume : 1.0;
+      gain.connect(ctx.destination);
+
+      var nextStartTime = 0;
+      var totalSamples = 0;
+      var underruns = 0;
+      var playbackStarted = false;
+      var pendingChunks = [];
+      var pendingSamples = 0;
+
+      var PREBUFFER_SECONDS = 1.0;      // 首句预缓冲目标
+      var PREBUFFER_TIMEOUT_MS = 2500;  // 预缓冲兜底超时
+      var UNDERRUN_LEAD = 0.15;         // 欠载续播提前量（秒）
+      var SENTENCE_PAUSE = 0.4;         // 句间自然停顿（秒），兼作每句请求首包开销的预算补偿
+
+      function scheduleFloats(f32) {
+        if (!f32 || f32.length === 0) return;
+        var buf = ctx.createBuffer(1, f32.length, sampleRate);
+        buf.getChannelData(0).set(f32);
+        var src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(gain);
+        var now = ctx.currentTime;
+        if (nextStartTime < now + 0.02) {
+          // 欠载：播放追上生成，带提前量续播（短停顿而非爆音）
+          nextStartTime = now + UNDERRUN_LEAD;
+          underruns++;
+        }
+        src.start(nextStartTime);
+        nextStartTime += buf.duration;
+        self._streamSources.push(src);
+        totalSamples += f32.length;
+      }
+
+      function flushPending() {
+        if (pendingSamples === 0) return;
+        var merged = new Float32Array(pendingSamples);
+        var off = 0;
+        for (var i = 0; i < pendingChunks.length; i++) {
+          merged.set(pendingChunks[i], off);
+          off += pendingChunks[i].length;
+        }
+        pendingChunks = [];
+        pendingSamples = 0;
+        scheduleFloats(merged);
+      }
+
+      function startPlayback() {
+        if (playbackStarted) return;
+        playbackStarted = true;
+        if (self._streamPrebufTimer) { clearTimeout(self._streamPrebufTimer); self._streamPrebufTimer = null; }
+        nextStartTime = ctx.currentTime + 0.1;
+        flushPending();
+      }
+
+      function bytesToFloats(bytes) {
+        var copy = new Uint8Array(bytes);
+        var int16 = new Int16Array(copy.buffer, 0, copy.byteLength / 2);
+        if (int16.length === 0) return null;
+        var f32 = new Float32Array(int16.length);
+        for (var i = 0; i < int16.length; i++) f32[i] = int16[i] / 32768;
+        return f32;
+      }
+
+      // 句间停顿：已开播则延长时间轴，未开播则往预缓冲队列追加静音段
+      function insertPause() {
+        if (playbackStarted) {
+          nextStartTime += SENTENCE_PAUSE;
+        } else {
+          var n = Math.round(SENTENCE_PAUSE * sampleRate);
+          pendingChunks.push(new Float32Array(n));
+          pendingSamples += n;
+        }
+      }
+
+      this._streamPrebufTimer = setTimeout(function() {
+        self._streamPrebufTimer = null;
+        if (!playbackStarted && pendingSamples > 0) startPlayback();
+      }, PREBUFFER_TIMEOUT_MS);
+
+      for (var si = 0; si < sentences.length; si++) {
+        if (signal.aborted) break;
+        var sentence = sentences[si];
+
+        var bodyData = { text: sentence, voice: voice, speed: speed };
+        if (voiceDesign) bodyData.voice_design = voiceDesign;
+        if (options.referenceAudio) bodyData.reference_audio = options.referenceAudio;
+        if (options.referenceText) bodyData.reference_text = options.referenceText;
+
+        var response;
+        try {
+          response = await fetch('http://127.0.0.1:8080/api/tts-voxcpm/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(bodyData),
+            signal: signal
+          });
+        } catch (e) {
+          // 网络错误/取消：一字未播则抛上触发回退，否则提前结束播放已排内容
+          if (totalSamples === 0 && pendingSamples === 0) {
+            this._voxcpmAbortController = null;
+            this._cleanupStream();
+            throw e;
+          }
+          break;
+        }
+
+        var ctype = response.headers.get('Content-Type') || '';
+        if (!response.ok || ctype.indexOf('json') !== -1) {
+          var errData = {};
+          try { errData = await response.json(); } catch (e2) {}
+          this._voxcpmAbortController = null;
+          if (errData && errData.stale) { this._cleanupStream(); return false; }
+          var msg = 'HTTP ' + response.status + ': ' + (errData.error || response.statusText);
+          if (totalSamples === 0 && pendingSamples === 0) { this._cleanupStream(); throw new Error(msg); }
+          console.warn('[Voice] 流水线第' + (si + 1) + '句合成失败，提前结束:', msg);
+          break;
+        }
+
+        var rate = parseInt(response.headers.get('X-Sample-Rate') || '48000', 10) || 48000;
+        if (rate !== sampleRate) sampleRate = rate;
+
+        if (si > 0 && (totalSamples > 0 || pendingSamples > 0)) insertPause();
+
+        var leftover = null;
+        var reader = response.body.getReader();
+        try {
+          while (true) {
+            var r = await reader.read();
+            if (r.done) break;
+            var chunk = r.value;
+            if (!chunk || chunk.byteLength === 0) continue;
+            var bytes;
+            if (leftover) {
+              bytes = new Uint8Array(leftover.byteLength + chunk.byteLength);
+              bytes.set(leftover, 0);
+              bytes.set(chunk, leftover.byteLength);
+              leftover = null;
+            } else {
+              bytes = chunk;
+            }
+            var usable = bytes.byteLength - (bytes.byteLength % 2);
+            if (bytes.byteLength % 2 !== 0) leftover = bytes.subarray(usable);
+            if (usable <= 0) continue;
+
+            var f32 = bytesToFloats(bytes.subarray(0, usable));
+            if (!f32) continue;
+
+            if (!playbackStarted) {
+              // 首句预缓冲阶段：累积到目标时长再开播
+              pendingChunks.push(f32);
+              pendingSamples += f32.length;
+              if (pendingSamples / sampleRate >= PREBUFFER_SECONDS) startPlayback();
+            } else {
+              scheduleFloats(f32);
+            }
+          }
+        } catch (e) {
+          this._voxcpmAbortController = null;
+          this._cleanupStream();
+          throw e;
+        }
+      }
+
+      this._voxcpmAbortController = null;
+      startPlayback(); // 首句过短未触发预缓冲时立即开播
+
+      if (totalSamples === 0) {
+        this._cleanupStream();
+        throw new Error('流式合成未返回音频数据');
+      }
+
+      if (underruns > 0) {
+        console.log('[Voice] 流水线播放欠载 ' + underruns + ' 次（生成慢于实时，短停顿续播）');
+      }
+
+      var endAt = nextStartTime;
+      return new Promise(function(resolve) {
+        self._streamResolve = resolve;
+        var remainMs = Math.max(0, (endAt - ctx.currentTime) * 1000) + 150;
+        self._streamDoneTimer = setTimeout(function() { self._cleanupStream(); }, remainMs);
+      });
+    },
+
+    // 长文本切句（供流水线使用）：
+    // 1) 按中英文句末标点与换行切分（英文句号等仅在后随空白时切，避免切断 3.5 这类小数）；
+    // 2) 超长分句（>70字）按逗号二次切分（英文逗号后随数字不切，避免切断 12,345）；
+    // 3) 过滤纯标点碎片；4) 合并过碎分句（前句<15字且合并后≤45字才合并；
+    //    每次请求有约 0.5s 首包开销，碎句太多反而更慢）
+    _splitSentences(text) {
+      var raw = String(text == null ? '' : text).replace(/\r\n?/g, '\n');
+      var parts = raw.split(/(?<=[。！？；…\n]|[.!?;]\s)\s*/);
+      var out = [];
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i].trim();
+        if (!p) continue;
+        if (p.length <= 70) { out.push(p); continue; }
+        var subs = p.split(/(?<=[，、,：:])(?![0-9])\s*/);
+        var buf = '';
+        for (var j = 0; j < subs.length; j++) {
+          var s = subs[j];
+          if (buf && (buf.length + s.length) > 70) { out.push(buf); buf = s; }
+          else buf += s;
+        }
+        if (buf) out.push(buf);
+      }
+      out = out.filter(function(s) { return /[\u4e00-\u9fa5A-Za-z0-9]/.test(s); });
+      var merged = [];
+      for (var k = 0; k < out.length; k++) {
+        var cur = out[k];
+        var last = merged.length ? merged[merged.length - 1] : null;
+        if (last !== null && last.length < 15 && last.length + cur.length <= 45) {
+          // 非中文相接处补空格（避免英文合并成 "world.Next"；中文相接无需空格）
+          var sep = (/[^\u4e00-\u9fa5]$/.test(last) && /^[^\u4e00-\u9fa5]/.test(cur)) ? ' ' : '';
+          merged[merged.length - 1] = last + sep + cur;
+        } else {
+          merged.push(cur);
+        }
+      }
+      return merged;
     },
 
     // 清理流式播放资源：停止所有已排播音频、关闭上下文、兑现未完成的 Promise。
