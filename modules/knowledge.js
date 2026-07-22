@@ -947,21 +947,69 @@ function _rrfFuse(rankingsList, k) {
   return fused.map(function(f) { return { text: f.item.text, fileName: f.item.fileName, docId: f.item.docId, index: f.item.index, score: f.score, rrfScore: f.score }; });
 }
 
+// ===== 查询改写（LLM 指代消解 + 扩展，提升召回率）=====
+async function rewriteQuery(query, conversationContext) {
+  // 门控：配置未禁用 + API 可用 + 查询足够短（长查询无需改写）
+  if (!Core || !Core.config || Core.config.queryRewrite === false) return query;
+  if (!Core.api || !Core.api.callAPI) return query;
+  if (!query || query.length > 100) return query; // 长查询已足够明确
+
+  try {
+    var contextHint = '';
+    if (conversationContext && conversationContext.length > 0) {
+      // 取最近 2 条消息作为指代消解上下文
+      var recent = conversationContext.slice(-2).map(function(m) {
+        return (m.role === 'user' ? '用户: ' : 'AI: ') + (m.content || '').substring(0, 200);
+      }).join('\n');
+      contextHint = '\n最近对话:\n' + recent;
+    }
+
+    var systemPrompt = '你是查询改写助手。将用户的搜索查询改写为更适合知识库检索的形式。\n' +
+      '规则：1)消解代词(它/这个/那个→具体名称) 2)补充省略的主语/对象 3)展开缩写 4)保持简洁，不超过30字\n' +
+      '只输出改写后的查询，不要解释。如果原查询已经足够明确，原样输出。';
+
+    var result = await Core.api.callAPI(
+      query,
+      systemPrompt,
+      0.1,
+      null, null,
+      [{ role: 'system', content: systemPrompt }, { role: 'user', content: '改写查询: "' + query + '"' + contextHint }],
+      { disableTools: true }
+    );
+
+    if (result && result.message && result.message.content) {
+      var rewritten = result.message.content.trim().replace(/^["']|["']$/g, '');
+      if (rewritten && rewritten.length >= 2 && rewritten.length <= 80 && rewritten !== '无') {
+        if (rewritten !== query) {
+          console.log('🔍 查询改写: "' + query + '" → "' + rewritten + '"');
+        }
+        return rewritten;
+      }
+    }
+    return query;
+  } catch (e) {
+    return query; // 静默降级
+  }
+}
+
 // ===== 带引用的搜索（Phase 3-1 核心：混合 RRF + 相关度阈值 + 引用格式）=====
 async function searchWithCitations(query, topK, options) {
   options = options || {};
   var minScore = options.minScore || 0.01; // RRF 最低分阈值
   topK = topK || 5;
 
+  // 查询改写（指代消解 + 扩展）
+  var rewrittenQuery = await rewriteQuery(query, options.conversationContext);
+
   ensureDir();
   var allChunks = loadAllChunks();
   if (allChunks.length === 0) return { results: [], citations: '', context: '' };
 
-  // 尝试获取向量结果
+  // 尝试获取向量结果（使用改写后的查询）
   var queryEmbedding = null;
   var chunksWithEmbeddings = allChunks.filter(function(c) { return c.embedding; });
   if (chunksWithEmbeddings.length > 0) {
-    queryEmbedding = await getEmbedding(query);
+    queryEmbedding = await getEmbedding(rewrittenQuery);
   }
 
   var vectorResults = [];
@@ -973,8 +1021,8 @@ async function searchWithCitations(query, topK, options) {
     vectorResults = vectorResults.slice(0, topK * 2);
   }
 
-  // BM25 结果
-  var bm25Results = bm25Search(query, allChunks, topK * 2);
+  // BM25 结果（使用改写后的查询）
+  var bm25Results = bm25Search(rewrittenQuery, allChunks, topK * 2);
 
   // RRF 融合
   var finalResults;
@@ -1175,6 +1223,7 @@ module.exports = {
       watchDirectory,
       unwatchDirectory,
       rerankResults,
+      rewriteQuery,
       getEmbeddingModel,
       // 内部函数暴露（供 knowledge-distill 模块使用）
       _loadAllChunks: loadAllChunks,
