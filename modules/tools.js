@@ -1168,6 +1168,36 @@ const tools = {
       } catch (e) { return "❌ 查询交付物失败: " + e.message; }
     },
   },
+
+  // ===== 深度研究 =====
+  deep_research: {
+    description: '启动深度研究任务：自动拆解问题→并行检索多个来源→深度阅读→撰写带引用的结构化报告。适合需要全面调研的复杂主题。耗时2-5分钟。',
+    parameters: {
+      type: 'object',
+      properties: {
+        topic: { type: 'string', description: '研究主题，如"2026年A股半导体板块投资价值分析"' },
+        format: { type: 'string', description: '输出格式: markdown(默认) 或 word', enum: ['markdown', 'word'] }
+      },
+      required: ['topic']
+    },
+    handler: async function(params) {
+      if (!Core.deepResearch) return '❌ 深度研究模块未加载';
+      try {
+        var result = await Core.deepResearch.start(params.topic, {
+          outputFormat: params.format || 'markdown'
+        });
+        if (!result.success) return '❌ 深度研究失败: ' + (result.error || '未知错误');
+        var duration = Math.round(result.duration / 1000);
+        var output = '✅ 深度研究完成（耗时 ' + duration + 's，' + result.sources + ' 个来源，' + result.pagesRead + ' 页深度阅读）\n\n';
+        output += result.report.substring(0, 3000);
+        if (result.report.length > 3000) output += '\n\n...(报告截断，完整版已保存到交付物)';
+        if (result.output && result.output.files && result.output.files.length > 0) {
+          output += '\n\n📁 文件: ' + result.output.files.map(function(f) { return f.path; }).join(', ');
+        }
+        return output;
+      } catch (e) { return '❌ 深度研究异常: ' + e.message; }
+    },
+  },
 };
 
 // ===== 获取工具定义（用于 Ollama API） =====

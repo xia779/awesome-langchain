@@ -677,6 +677,34 @@ async function handleCommand(text) {
     }
     return true;
   }
+  // ===== /research 命令 — 深度研究（多步检索 + 带引用报告）=====
+  if (text.startsWith('/research ')) {
+    var researchTopic = text.slice(10).trim();
+    if (!researchTopic) { Core.session.addMessage('用法: /research <研究主题>\n\n示例: /research 2026年A股半导体板块投资价值分析', 'ai'); return true; }
+    if (!Core.deepResearch) { Core.session.addMessage('❌ 深度研究模块未加载', 'ai'); return true; }
+    Core.session.addMessage('🔬 开始深度研究：「' + researchTopic + '」\n\n正在拆解子问题并并行检索，预计需要 2-5 分钟...', 'ai');
+    try {
+      var result = await Core.deepResearch.start(researchTopic, {
+        onProgress: function(p) {
+          // 进度通过 console 输出（避免频繁刷新 UI）
+          console.log('🔬 [Research ' + p.progress + '%] ' + p.message);
+        }
+      });
+      if (result.success) {
+        var duration = Math.round(result.duration / 1000);
+        var outputInfo = '';
+        if (result.output && result.output.files && result.output.files.length > 0) {
+          outputInfo = '\n\n📁 报告已保存: ' + result.output.files.map(function(f) { return f.path; }).join(', ');
+        }
+        Core.session.addMessage('✅ 深度研究完成！（耗时 ' + duration + ' 秒，检索 ' + result.sources + ' 个来源，阅读 ' + result.pagesRead + ' 个页面）\n\n' + result.report.substring(0, 4000) + (result.report.length > 4000 ? '\n\n...(报告已截断，完整版见交付物文件)' : '') + outputInfo, 'ai');
+      } else {
+        Core.session.addMessage('❌ 深度研究失败: ' + (result.error || '未知错误'), 'ai');
+      }
+    } catch (e) {
+      Core.session.addMessage('❌ 深度研究异常: ' + e.message, 'ai');
+    }
+    return true;
+  }
   return false;
 }
 

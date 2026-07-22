@@ -74,6 +74,8 @@ const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主�
   参数: {"tasks": [{"action": "工具名", "params": {...}}, ...]}
 - handoff_to_agent: 将子任务委派给专业代理执行（适合需要专业领域知识的子任务）
   参数: {"target": "code|research|writer|math|translate", "task": "任务描述", "context": "可选背景信息"}
+- deep_research: 深度研究——自动拆解问题→并行检索多来源→深度阅读→撰写带引用的结构化报告。适合需要全面调研的复杂主题，耗时2-5分钟
+  参数: {"topic": "研究主题", "format": "markdown|word"}
 - complete: 任务完成，给出最终回答
   参数: {"answer": "最终回答内容（必须是中文）"}
 
@@ -162,7 +164,8 @@ var ACTION_ZH_MAP = {
   'complete': '完成任务',
   'memory_search': '记忆检索',
   'knowledge_search': '知识检索',
-  'stock_quote': '行情查询'
+  'stock_quote': '行情查询',
+  'deep_research': '深度研究'
 };
 function translateAction(action) {
   return ACTION_ZH_MAP[action] || action;
@@ -280,7 +283,7 @@ async function _executeAgentActionRaw(action, params) {
          'run_command',
          'browser_navigate', 'browser_screenshot', 'browser_click', 'browser_type', 'browser_extract', 'browser_wait',
          'github_pr', 'github_issue', 'github_repo', 'github_release',
-         'image_search', 'image_download', 'stock_quote'].includes(action)) {
+         'image_search', 'image_download', 'stock_quote', 'deep_research'].includes(action)) {
       try {
         const result = await Core.toolsRegistry.executeTool(action, mappedParams);
         return result;
