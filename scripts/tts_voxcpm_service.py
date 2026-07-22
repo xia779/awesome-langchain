@@ -238,6 +238,8 @@ class VoxCPMHandler(BaseHTTPRequestHandler):
         p = urlparse(self.path).path
         if p in ("/synthesize", "/v1/audio/speech"):
             self._synthesize()
+        elif p == "/synthesize_stream":
+            self._synthesize_stream()
         else:
             self._json(404, {"error": "Not found"})
 
@@ -300,6 +302,103 @@ class VoxCPMHandler(BaseHTTPRequestHandler):
         except Exception as e:
             traceback.print_exc(file=sys.stderr)
             self._json(500, {"success": False, "error": str(e)})
+
+    def _synthesize_stream(self):
+        """流式合成: 用 generate_streaming 边生成边输出 PCM16 原始字节流(无 WAV 头)。
+
+        - 采样率放在响应头 X-Sample-Rate; 客户端用 Web Audio API 分段解码播放。
+        - HTTP/1.0 不带 Content-Length, 以连接关闭表示流结束。
+        - 相比 /synthesize(整段生成完才返回), 首包延迟从"整句生成时间"降到"首个片段生成时间"。
+        """
+        global _req_seq
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length).decode("utf-8")) if length > 0 else {}
+
+            text = body.get("text", "")
+            if not text:
+                self._json(400, {"success": False, "error": "Missing text parameter"})
+                return
+
+            voice = body.get("voice", "default")
+            reference_audio = body.get("reference_audio", None)
+            voice_design = body.get("voice_design", None)
+
+            # 音色名 -> 参考音频路径 (与 _synthesize 一致)
+            if voice and voice != "default" and not reference_audio:
+                ref_dir = os.path.join(MODEL_DIR, "references")
+                for ext in (".wav", ".mp3", ".flac", ".ogg", ".m4a"):
+                    candidate = os.path.join(ref_dir, voice + ext)
+                    if os.path.exists(candidate):
+                        reference_audio = candidate
+                        break
+
+            # 音色设计: 控制指令前缀
+            if voice_design and str(voice_design).strip():
+                text = "(" + str(voice_design).strip() + ")" + text
+
+            # 请求序号 (过期丢弃, 与 _synthesize 一致)
+            with _req_seq_lock:
+                _req_seq += 1
+                my_seq = _req_seq
+
+            import numpy as np
+
+            with self._lock:
+                with _req_seq_lock:
+                    latest_seq = _req_seq
+                if my_seq != latest_seq:
+                    print(f"[voxcpm] Skip stale stream #{my_seq} (latest=#{latest_seq})", file=sys.stderr)
+                    self._json(200, {"success": False, "stale": True, "error": "已被更新的请求取代"})
+                    return
+
+                model = load_model()
+                sample_rate = getattr(getattr(model, "tts_model", None), "sample_rate", 48000)
+
+                gen_kwargs = {"text": text}
+                if reference_audio and os.path.exists(reference_audio):
+                    gen_kwargs["reference_wav_path"] = reference_audio
+
+                # 发送响应头 (无 Content-Length, HTTP/1.0 以关闭连接表示结束)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("X-Sample-Rate", str(sample_rate))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+
+                print(f"[voxcpm] Streaming synthesize...", file=sys.stderr)
+                t0 = time.time()
+                first_chunk_time = None
+                total_samples = 0
+
+                for chunk in model.generate_streaming(**gen_kwargs):
+                    audio_np = np.array(chunk, dtype=np.float32)
+                    if audio_np.ndim > 1:
+                        audio_np = audio_np.squeeze()
+                    if audio_np.size == 0:
+                        continue
+                    if first_chunk_time is None:
+                        first_chunk_time = time.time() - t0
+                    # float32 [-1,1] -> PCM16 字节, 立即写出并 flush (真流式)
+                    pcm16 = (np.clip(audio_np, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
+                    self.wfile.write(pcm16)
+                    self.wfile.flush()
+                    total_samples += audio_np.size
+
+                elapsed = time.time() - t0
+                dur = total_samples / sample_rate if sample_rate else 0
+                fc = f"{first_chunk_time:.2f}" if first_chunk_time is not None else "n/a"
+                print(f"[voxcpm] Stream done ({elapsed:.2f}s total, first chunk {fc}s, {dur:.1f}s audio)", file=sys.stderr)
+
+        except (BrokenPipeError, ConnectionResetError):
+            print("[voxcpm] Client disconnected mid-stream", file=sys.stderr)
+        except Exception as e:
+            traceback.print_exc(file=sys.stderr)
+            # 若响应头尚未发出, 尝试返回 JSON 错误; 已发出则只能关闭连接
+            try:
+                self._json(500, {"success": False, "error": str(e)})
+            except Exception:
+                pass
 
     def _json(self, code, data):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")

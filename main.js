@@ -536,6 +536,56 @@ async function startWebServer() {
     }
   });
 
+  // ===== VoxCPM2 流式 TTS 端点（边生成边传 PCM16，首包延迟低）=====
+  app2.post('/api/tts-voxcpm/stream', async (req, res) => {
+    try {
+      const { text, voice = 'default', speed = 1.0, reference_audio, reference_text, voice_design } = req.body;
+      if (!text) return res.status(400).json({ success: false, error: '缺少文本' });
+
+      const http = require('http');
+      const postData = JSON.stringify({ text, voice, speed, reference_audio, reference_text, voice_design });
+
+      const proxyReq = http.request({
+        hostname: '127.0.0.1',
+        port: VOXCPM_PORT,
+        path: '/synthesize_stream',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+        timeout: 300000
+      }, (proxyRes) => {
+        const ct = String(proxyRes.headers['content-type'] || '');
+        if (ct.indexOf('application/json') !== -1) {
+          // 上游返回 JSON（过期请求/错误），原样转发
+          let data = '';
+          proxyRes.on('data', c => data += c);
+          proxyRes.on('end', () => {
+            res.status(proxyRes.statusCode).set('Content-Type', 'application/json; charset=utf-8').send(data);
+          });
+          return;
+        }
+        // PCM16 字节流：透传采样率头并 pipe 流式转发
+        res.status(proxyRes.statusCode);
+        res.set('Content-Type', 'application/octet-stream');
+        res.set('X-Sample-Rate', String(proxyRes.headers['x-sample-rate'] || '48000'));
+        res.set('Access-Control-Allow-Origin', '*');
+        proxyRes.pipe(res);
+      });
+
+      proxyReq.on('error', (err) => {
+        res.status(503).json({ success: false, error: 'VoxCPM 服务未启动 (端口 ' + VOXCPM_PORT + '): ' + err.message });
+      });
+      proxyReq.on('timeout', () => { proxyReq.destroy(); });
+
+      // 客户端中止时，同步断开上游连接（避免 GPU 继续生成被抛弃的音频）
+      req.on('close', () => { try { proxyReq.destroy(); } catch (e) {} });
+
+      proxyReq.write(postData);
+      proxyReq.end();
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // VoxCPM 音色列表
   app2.get('/api/tts-voxcpm/voices', async (req, res) => {
     try {

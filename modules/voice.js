@@ -181,7 +181,151 @@ function init(_Core) {
     },
 
     // VoxCPM2 本地 GPU TTS（48kHz 高保真，零样本克隆，音色设计）
+    // 优先流式播放（首包延迟低，边生成边播）；失败自动回退阻塞模式。
     async _voxcpmSpeak(text, options) {
+      try {
+        return await this._voxcpmSpeakStream(text, options);
+      } catch (e) {
+        if (e && e.name === 'AbortError') throw e; // 取消直接向上抛，不回退
+        console.warn('流式TTS不可用，回退阻塞模式:', e.message);
+        this._cleanupStream();
+        return await this._voxcpmSpeakBlocking(text, options);
+      }
+    },
+
+    // VoxCPM2 流式播放：请求 /stream 端点，PCM16 分块到达即用 Web Audio API 排播。
+    // 相比阻塞模式（整句生成完才出声），首包延迟从整句时间降到首个片段时间。
+    async _voxcpmSpeakStream(text, options) {
+      var self = this;
+      var voice = options.voice || this.voxcpmVoice || 'default';
+      var speed = options.speed || options.rate || 1.0;
+      var voiceDesign = options.voiceDesign || null;
+
+      this._voxcpmAbortController = new AbortController();
+      var signal = this._voxcpmAbortController.signal;
+
+      var bodyData = { text: text, voice: voice, speed: speed };
+      if (voiceDesign) bodyData.voice_design = voiceDesign;
+      if (options.referenceAudio) bodyData.reference_audio = options.referenceAudio;
+      if (options.referenceText) bodyData.reference_text = options.referenceText;
+
+      var response = await fetch('http://127.0.0.1:8080/api/tts-voxcpm/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData),
+        signal: signal
+      });
+
+      var ctype = response.headers.get('Content-Type') || '';
+      if (!response.ok || ctype.indexOf('json') !== -1) {
+        this._voxcpmAbortController = null;
+        var errData = {};
+        try { errData = await response.json(); } catch (e2) {}
+        if (errData && errData.stale) return false; // 过期请求=已被取代，视为取消
+        throw new Error('HTTP ' + response.status + ': ' + (errData.error || response.statusText));
+      }
+
+      var sampleRate = parseInt(response.headers.get('X-Sample-Rate') || '48000', 10) || 48000;
+
+      // Web Audio 流式播放上下文
+      var AudioCtx = window.AudioContext || window.webkitAudioContext;
+      var ctx;
+      try { ctx = new AudioCtx({ sampleRate: sampleRate }); } catch (e) { ctx = new AudioCtx(); }
+      if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+      this._streamCtx = ctx;
+      this._streamSources = [];
+
+      var gain = ctx.createGain();
+      gain.gain.value = options.volume !== undefined ? options.volume : 1.0;
+      gain.connect(ctx.destination);
+
+      var nextStartTime = 0;
+      var leftover = null; // 上一块剩余的奇数字节
+      var totalSamples = 0;
+
+      function scheduleChunk(bytes) {
+        // 拷入新 buffer 保证 Int16 对齐
+        var copy = new Uint8Array(bytes);
+        var int16 = new Int16Array(copy.buffer, 0, copy.byteLength / 2);
+        if (int16.length === 0) return;
+        var f32 = new Float32Array(int16.length);
+        for (var i = 0; i < int16.length; i++) f32[i] = int16[i] / 32768;
+        var buf = ctx.createBuffer(1, f32.length, sampleRate);
+        buf.getChannelData(0).set(f32);
+        var src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(gain);
+        var now = ctx.currentTime;
+        if (nextStartTime < now) nextStartTime = now + 0.08;
+        src.start(nextStartTime);
+        nextStartTime += buf.duration;
+        self._streamSources.push(src);
+        totalSamples += f32.length;
+      }
+
+      var reader = response.body.getReader();
+      try {
+        while (true) {
+          var r = await reader.read();
+          if (r.done) break;
+          var chunk = r.value;
+          if (!chunk || chunk.byteLength === 0) continue;
+          var bytes;
+          if (leftover) {
+            bytes = new Uint8Array(leftover.byteLength + chunk.byteLength);
+            bytes.set(leftover, 0);
+            bytes.set(chunk, leftover.byteLength);
+            leftover = null;
+          } else {
+            bytes = chunk;
+          }
+          var usable = bytes.byteLength - (bytes.byteLength % 2);
+          if (bytes.byteLength % 2 !== 0) leftover = bytes.subarray(usable);
+          if (usable > 0) scheduleChunk(bytes.subarray(0, usable));
+        }
+      } catch (e) {
+        this._voxcpmAbortController = null;
+        this._cleanupStream();
+        throw e; // AbortError 或读取错误，交由上层决定是否回退
+      }
+
+      this._voxcpmAbortController = null;
+
+      if (totalSamples === 0) {
+        this._cleanupStream();
+        throw new Error('流式合成未返回音频数据');
+      }
+
+      // 等待已排播的音频播放完毕
+      var endAt = nextStartTime;
+      return new Promise(function(resolve) {
+        self._streamResolve = resolve;
+        var remainMs = Math.max(0, (endAt - ctx.currentTime) * 1000) + 150;
+        self._streamDoneTimer = setTimeout(function() { self._cleanupStream(); }, remainMs);
+      });
+    },
+
+    // 清理流式播放资源：停止所有已排播音频、关闭上下文、兑现未完成的 Promise。
+    _cleanupStream() {
+      if (this._streamDoneTimer) { clearTimeout(this._streamDoneTimer); this._streamDoneTimer = null; }
+      if (this._streamSources) {
+        for (var i = 0; i < this._streamSources.length; i++) {
+          try { this._streamSources[i].stop(); } catch (e) {}
+        }
+        this._streamSources = [];
+      }
+      if (this._streamCtx) {
+        try { this._streamCtx.close(); } catch (e) {}
+        this._streamCtx = null;
+      }
+      if (this._streamResolve) {
+        var rr = this._streamResolve; this._streamResolve = null;
+        rr(true);
+      }
+    },
+
+    // VoxCPM2 阻塞模式（整段音频返回后再播放；流式失败时的回退路径）
+    async _voxcpmSpeakBlocking(text, options) {
       var voice = options.voice || this.voxcpmVoice || 'default';
       var speed = options.speed || options.rate || 1.0;
       var voiceDesign = options.voiceDesign || null;
@@ -295,6 +439,7 @@ function init(_Core) {
         this._fishAbortController.abort();
         this._fishAbortController = null;
       }
+      this._cleanupStream(); // 停止流式播放（Web Audio）
       this.stopSpeaking();
     },
 
@@ -1063,6 +1208,16 @@ function init(_Core) {
     html += '<button id="voiceUploadBtn" class="btn-primary btn-full" style="margin-top:8px;">'
       + '<span class="material-icons-outlined material-icons-inline">upload_file</span>上传参考音频 · 新建克隆音色</button>';
 
+    // 分区：AI 音色设计（用一句自然语言描述想要的声音，按描述的风格朗读）
+    var savedDesign = this.voiceDesignDesc || '';
+    html += '<label class="settings-group-title" style="margin-top:16px;">AI 音色设计</label>'
+      + '<div class="description-text">用一句话描述你想要的声音，AI 会按这个风格朗读（无需参考音频）。例如：温柔甜美的年轻女声、低沉有磁性的中年男声。</div>'
+      + '<div class="voice-design-row">'
+      +   '<input id="voiceDesignInput" class="voice-design-input" type="text" maxlength="60" '
+      +     'placeholder="例如：温柔甜美的年轻女声" value="' + this._escAttr(savedDesign) + '" />'
+      +   '<button id="voiceDesignPreviewBtn" class="voice-design-preview-btn" title="按描述试听"><span class="material-icons-outlined">play_circle</span></button>'
+      + '</div>';
+
     // 分区 2：语速 / 语调预设
     html += '<label class="settings-group-title" style="margin-top:16px;">语速 / 语调</label>'
       + '<div class="voice-card-list">';
@@ -1120,6 +1275,31 @@ function init(_Core) {
         }
       }
     } catch (e) { /* DOM 未就绪时忽略 */ }
+  };
+
+  // 按自然语言描述试听设计音色（voiceDesign → 服务端控制指令前缀）
+  voice.previewVoiceDesign = function(desc) {
+    desc = String(desc || '').trim();
+    if (!desc) return;
+    this.voiceDesignDesc = desc;
+    if (Core && Core.saveConfig) Core.saveConfig({ voiceDesignDesc: desc });
+    else if (Core && Core.config) Core.config.voiceDesignDesc = desc;
+
+    var sample = '你好，这是按「' + desc + '」设计的音色试听效果，希望你能喜欢。';
+    var profile = this.voiceProfiles[this.voiceProfile] || this.voiceProfiles.default;
+
+    function setBtnLoading(loading) {
+      var btn = document.getElementById('voiceDesignPreviewBtn');
+      if (!btn) return;
+      var ic = btn.querySelector('.material-icons-outlined');
+      if (loading) { btn.classList.add('preview-loading'); if (ic) ic.textContent = 'autorenew'; }
+      else { btn.classList.remove('preview-loading'); if (ic) ic.textContent = 'play_circle'; }
+    }
+    setBtnLoading(true);
+
+    this.speak(sample, { voiceDesign: desc, speed: profile.speed, rate: profile.speed, pitch: profile.pitch, volume: profile.volume })
+      .catch(function(e) { if (e && e.name !== 'AbortError') console.warn('音色设计试听失败:', e.message); })
+      .then(function() { setBtnLoading(false); });
   };
 
   // 上传参考音频 → 新建克隆音色
@@ -1182,6 +1362,13 @@ function init(_Core) {
         if (fi) fi.click();
         return;
       }
+      if (e.target.closest('#voiceDesignPreviewBtn')) {
+        var di = document.getElementById('voiceDesignInput');
+        var desc = di ? di.value.trim() : '';
+        if (!desc) { window.alert('请先输入一句音色描述，例如：温柔甜美的年轻女声'); if (di) di.focus(); return; }
+        self.previewVoiceDesign(desc);
+        return;
+      }
       var prevBtn = e.target.closest('.voice-preview-btn');
       if (prevBtn) { e.stopPropagation(); self.previewVoice(prevBtn.getAttribute('data-voice')); return; }
       var delBtn = e.target.closest('.voice-del-btn');
@@ -1227,6 +1414,7 @@ function init(_Core) {
     if (Core.config.voxcpmVoice) voice.voxcpmVoice = Core.config.voxcpmVoice;
     if (Core.config.voiceProfile && voice.voiceProfiles[Core.config.voiceProfile]) voice.voiceProfile = Core.config.voiceProfile;
     if (typeof Core.config.autoRead === 'boolean') voice.autoReadEnabled = Core.config.autoRead;
+    if (Core.config.voiceDesignDesc) voice.voiceDesignDesc = Core.config.voiceDesignDesc;
   }
 
   // ===== 侧边栏 / 导航 UI 绑定 =====
