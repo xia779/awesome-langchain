@@ -819,6 +819,63 @@ async function handleCommand(text) {
     }
     return true;
   }
+
+  // 🔧 #12b: 管线命令 — 接入 pipeline-ppt / pipeline-webapp / pipeline-report
+  if (text.startsWith('/ppt ')) {
+    var topic = text.slice(5).trim();
+    if (!topic) { Core.session.addMessage('用法: /ppt <主题>', 'ai'); return true; }
+    Core.session.addMessage('📊 正在生成 PPT: ' + topic + ' ...', 'ai');
+    (async function() {
+      try {
+        var result = await Core.pipelinePpt.fromTopic(topic);
+        if (result.success) {
+          Core.session.addMessage('✅ PPT 已生成: ' + result.filePath, 'ai');
+        } else {
+          Core.session.addMessage('❌ PPT 生成失败: ' + (result.error || '未知错误'), 'ai');
+        }
+      } catch (e) { Core.session.addMessage('❌ PPT 生成异常: ' + e.message, 'ai'); }
+    })();
+    return true;
+  }
+
+  if (text.startsWith('/webapp ')) {
+    var desc = text.slice(8).trim();
+    if (!desc) { Core.session.addMessage('用法: /webapp <应用描述>', 'ai'); return true; }
+    Core.session.addMessage('🌐 正在生成 Web App: ' + desc + ' ...', 'ai');
+    (async function() {
+      try {
+        var result = await Core.pipelineWebapp.fromDescription(desc);
+        if (result.success) {
+          var previewUrl = Core.pipelineWebapp.getPreviewUrl(result.filePath);
+          Core.session.addMessage('✅ Web App 已生成!\n文件: ' + result.filePath + '\n预览: ' + (previewUrl || '无'), 'ai');
+        } else {
+          Core.session.addMessage('❌ Web App 生成失败: ' + (result.error || '未知错误'), 'ai');
+        }
+      } catch (e) { Core.session.addMessage('❌ Web App 生成异常: ' + e.message, 'ai'); }
+    })();
+    return true;
+  }
+
+  if (text.startsWith('/report ')) {
+    var reportArgs = text.slice(8).trim();
+    if (!reportArgs) { Core.session.addMessage('用法: /report <标题> | <内容>\n格式: /report 周报 | 本周完成了...', 'ai'); return true; }
+    var pipeIdx = reportArgs.indexOf('|');
+    var rTitle = pipeIdx > 0 ? reportArgs.slice(0, pipeIdx).trim() : '报告';
+    var rContent = pipeIdx > 0 ? reportArgs.slice(pipeIdx + 1).trim() : reportArgs;
+    Core.session.addMessage('📄 正在生成报告: ' + rTitle + ' ...', 'ai');
+    (async function() {
+      try {
+        var result = await Core.pipelineReport.generatePdf({ title: rTitle, content: rContent });
+        if (result.success) {
+          Core.session.addMessage('✅ 报告已生成: ' + result.filePath, 'ai');
+        } else {
+          Core.session.addMessage('❌ 报告生成失败: ' + (result.error || '未知错误'), 'ai');
+        }
+      } catch (e) { Core.session.addMessage('❌ 报告生成异常: ' + e.message, 'ai'); }
+    })();
+    return true;
+  }
+
   return false;
 }
 

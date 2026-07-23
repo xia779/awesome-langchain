@@ -316,7 +316,19 @@ function bm25Search(query, chunks, topK) {
 }
 
 // ===== 读取所有已存储的 chunks =====
+// 🔧 #16: loadAllChunks 缓存层（避免每次搜索都重读磁盘）
+var _chunksCache = null;
+var _chunksCacheTime = 0;
+var CHUNKS_CACHE_TTL = 60000; // 1 分钟 TTL（兜底，正常靠 invalidate 刷新）
+
+function invalidateChunksCache() { _chunksCache = null; }
+
 function loadAllChunks() {
+  // 缓存命中
+  if (_chunksCache && (Date.now() - _chunksCacheTime < CHUNKS_CACHE_TTL)) {
+    return _chunksCache;
+  }
+
   const dir = getKnowledgeDir();
   if (!fs.existsSync(dir)) return [];
 
@@ -344,6 +356,8 @@ function loadAllChunks() {
     }
   }
 
+  _chunksCache = allChunks;
+  _chunksCacheTime = Date.now();
   return allChunks;
 }
 
@@ -368,6 +382,15 @@ async function uploadDocument(filePathOrContent) {
 
     // 计算内容哈希（用于去重）
     const contentHash = crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+
+    // 🔧 #14: auto_ 文档幂等性 — 同名覆写而非新建
+    if (fileName.startsWith('auto_')) {
+      const existingByName = listDocuments().find(d => d.fileName === fileName);
+      if (existingByName) {
+        console.log('🔄 auto_ 文档覆写: ' + fileName + ' (旧 ID: ' + existingByName.id + ')');
+        await deleteDocument(existingByName.id);
+      }
+    }
 
     // 检查是否已存在相同内容的文档
     const existingIndex = listDocuments();
@@ -457,6 +480,7 @@ async function uploadDocument(filePathOrContent) {
       uploadedAt: metadata.uploadedAt,
     });
     fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+    invalidateChunksCache(); // 🔧 #16: 写入后失效缓存
 
     // 构建返回消息
     let embedMsg = '';
@@ -567,6 +591,7 @@ async function deleteDocument(docId) {
       index = index.filter(d => d.id !== docId);
       fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
     }
+    invalidateChunksCache(); // 🔧 #16: 删除后失效缓存
 
     return { success: true };
   } catch (err) {

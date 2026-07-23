@@ -396,6 +396,8 @@ async function callAPI(prompt, systemMsg, temperature, model, provider, messages
     options: { temperature: _tempFloat(temperature), num_predict: -1 }
   };
   if (tools.length > 0) bodyObj.tools = tools;
+  // 🔧 #12: 接入 prompt-cache（Ollama keep_alive 减少冷启动）
+  if (Core.promptCache && Core.promptCache.enhanceOllama) Core.promptCache.enhanceOllama(bodyObj);
 
   const response = await fetch('http://127.0.0.1:11434/api/chat', {
     method: 'POST',
@@ -565,15 +567,19 @@ async function callAPIStream(prompt, systemMsg, temperature, model, provider, on
     return msg;
   });
 
+  var streamPayload = {
+    model: fullModel,
+    messages: chatMessages,
+    stream: true,
+    options: { temperature: _tempFloat(temperature), num_predict: -1 }
+  };
+  // 🔧 #12: 接入 prompt-cache（Ollama keep_alive）
+  if (Core.promptCache && Core.promptCache.enhanceOllama) Core.promptCache.enhanceOllama(streamPayload);
+
   const fetchOpts = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: fullModel,
-      messages: chatMessages,
-      stream: true,
-      options: { temperature: _tempFloat(temperature), num_predict: -1 }
-    })
+    body: JSON.stringify(streamPayload)
   };
   if (signal) fetchOpts.signal = signal;
 

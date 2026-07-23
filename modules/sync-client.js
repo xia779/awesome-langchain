@@ -284,12 +284,17 @@ function _httpPost(url, data) {
     try {
       var parsed = new (require('url').URL)(url);
       var body = JSON.stringify(data);
+      var headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) };
+      // 🔧 B02 兼容: 注入认证 Token
+      if (Core && typeof Core.getAuthToken === 'function') {
+        headers['x-auth-token'] = Core.getAuthToken();
+      }
       var options = {
         hostname: parsed.hostname,
         port: parsed.port,
         path: parsed.pathname,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        headers: headers,
         timeout: 15000
       };
       var req = http.request(options, function(res) {
@@ -312,11 +317,17 @@ function _httpGet(url) {
   return new Promise(function(resolve) {
     try {
       var parsed = new (require('url').URL)(url);
+      var headers = {};
+      // 🔧 B02 兼容: 注入认证 Token
+      if (Core && typeof Core.getAuthToken === 'function') {
+        headers['x-auth-token'] = Core.getAuthToken();
+      }
       var options = {
         hostname: parsed.hostname,
         port: parsed.port,
         path: parsed.pathname + parsed.search,
         method: 'GET',
+        headers: headers,
         timeout: 15000
       };
       var req = http.request(options, function(res) {

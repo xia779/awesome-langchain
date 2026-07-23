@@ -693,7 +693,36 @@ function init(core) {
   
   // 使用固定路径
   sessionsDir = getSessionsDir();
-  
+
+  // 🔧 #13: 一次性迁移旧版 provider 分散目录到统一 sessions/
+  (function migrateLegacySessionDirs() {
+    var base = (Core && Core.DATA_ROOT) || 'E:\\my-ai-data';
+    var legacyDirs = ['sessions_deepseek', 'sessions_ollama', 'sessions_qwen'];
+    legacyDirs.forEach(function(dirName) {
+      var legacyPath = path.join(base, dirName);
+      try {
+        if (!fs.existsSync(legacyPath)) return;
+        var files = fs.readdirSync(legacyPath).filter(function(f) { return f.endsWith('.json'); });
+        if (files.length > 0) {
+          files.forEach(function(f) {
+            var src = path.join(legacyPath, f);
+            var dest = path.join(sessionsDir, f);
+            if (!fs.existsSync(dest)) {
+              fs.copyFileSync(src, dest);
+            }
+          });
+          console.log('📦 已迁移 ' + files.length + ' 个会话从 ' + dirName + ' → sessions/');
+        }
+        // 清理旧目录（移到 .trash 而非删除）
+        var trashDir = path.join(base, '.trash');
+        if (!fs.existsSync(trashDir)) fs.mkdirSync(trashDir, { recursive: true });
+        fs.renameSync(legacyPath, path.join(trashDir, dirName + '_' + Date.now()));
+      } catch (e) {
+        console.warn('⚠️ 迁移 ' + dirName + ' 失败:', e.message);
+      }
+    });
+  })();
+
   loadSessions();
   
   // 🔧 加载后渲染当前会话的消息和侧边栏
