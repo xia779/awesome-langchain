@@ -311,11 +311,18 @@ module.exports = {
       trackTokens: trackTokenUsage,
       trackError: trackError,
       report: getReport,
-      reset: resetMetrics
+      reset: resetMetrics,
+      // 🔧 B18: 提供销毁接口，模块卸载/热更新时清理定时器
+      destroy: function() { if (_flushTimer) { clearInterval(_flushTimer); _flushTimer = null; _flush(); } }
     };
 
     // 定期持久化（每 2 分钟）
     _flushTimer = setInterval(_flush, 120000);
+
+    // 🔧 B18: 进程退出时也 flush 一次
+    if (typeof process !== 'undefined' && process.on) {
+      process.on('beforeExit', function() { if (_flushTimer) _flush(); });
+    }
 
     console.log('\u2705 \u53ef\u89c2\u6d4b\u6027\u6a21\u5757\u5df2\u52a0\u8f7d\uff08\u5de5\u5177: ' + _metrics.toolCalls.length + ', Agent: ' + _metrics.agentRuns.length + ', Token: ' + _metrics.tokenUsage.length + '\uff09');
   }

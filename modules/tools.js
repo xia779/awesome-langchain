@@ -239,7 +239,13 @@ const tools = {
       // 检查是否匹配任何已知命令
       var riskLevel = 'unknown'; // unknown, safe, medium, high
       for (var i = 0; i < HIGH_RISK_PREFIXES.length; i++) {
-        if (cmdLower.startsWith(HIGH_RISK_PREFIXES[i].toLowerCase()) || cmdLower.indexOf(HIGH_RISK_PREFIXES[i].toLowerCase()) !== -1) {
+        var hp = HIGH_RISK_PREFIXES[i].toLowerCase();
+        // 🔧 B11: startsWith 精确前缀匹配 + 正则模式匹配（支持 powershell.*invoke-expression）
+        if (hp.indexOf('.*') !== -1) {
+          // 正则模式（如 powershell.*invoke-expression）
+          if (new RegExp(hp.replace(/\.\*/g, '.*')).test(cmdLower)) { riskLevel = 'high'; break; }
+        } else if (cmdLower.startsWith(hp) || cmdLower.indexOf(' ' + hp) !== -1 || cmdLower.indexOf('|' + hp) !== -1 || cmdLower.indexOf('&&' + hp) !== -1) {
+          // 前缀匹配 或 管道/链式命令中的子命令匹配
           riskLevel = 'high'; break;
         }
       }

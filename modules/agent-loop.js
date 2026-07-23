@@ -525,9 +525,17 @@ async function sendToAgent(task, isDeepThink) {
     statusSpan.textContent = '🤔 步骤 ' + step + '/' + maxSteps + '：思考中...';
 
     // 🔧 限制 context 长度，防止多步累积后 API 请求体过大导致 400 错误
+    // 🔧 B10: 截断时保留早期步骤的错误摘要，避免 Agent 重复调用失败工具
     var trimmedContext = context || '';
     if (trimmedContext.length > 12000) {
-      trimmedContext = '...(早期步骤已省略)...\n' + trimmedContext.substring(trimmedContext.length - 12000);
+      var _cutPart = trimmedContext.substring(0, trimmedContext.length - 10000);
+      var _errSummary = '';
+      // 提取被截断部分的错误信息
+      var _errMatches = _cutPart.match(/\[步骤\d+\][\s\S]*?(?:❌|失败|错误|error|Error)[^\n]*/g);
+      if (_errMatches && _errMatches.length > 0) {
+        _errSummary = '⚠️ 早期步骤错误摘要:\n' + _errMatches.slice(-5).join('\n') + '\n\n';
+      }
+      trimmedContext = '...(早期步骤已省略)...\n' + _errSummary + trimmedContext.substring(trimmedContext.length - 10000);
     }
     const prompt = `任务：${task}\n\n历史执行记录：${trimmedContext || '（无）'}\n\n请决定下一步行动。注意：只输出纯JSON，不要有任何其他文字。`;
 

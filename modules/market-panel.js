@@ -46,7 +46,8 @@ async function renderBoardText() {
     lines.push('行情获取失败: ' + board.quotes[0].error);
   } else {
     board.quotes.forEach(function(q) {
-      var arrow = q.changePct > 0 ? '↑' : (q.changePct < 0 ? '↓' : '→');
+      // 🔧 B17: changePct 为 null 时显示 '--' 而非误导性的 '→'
+      var arrow = q.changePct == null ? '·' : (q.changePct > 0 ? '↑' : (q.changePct < 0 ? '↓' : '→'));
       var name = q.name || (board.watchlist.find(function(w) { return w.code === q.code; }) || {}).name || q.code;
       lines.push(arrow + ' ' + name + ' (' + q.code + ')  ' + (q.price != null ? q.price : '--') +
         '  ' + fmtPct(q.changePct) + '   量 ' + (q.vol != null ? q.vol : '--') +
@@ -121,6 +122,14 @@ function ensureWatching() {
   });
 }
 
+// 🔧 B17: 取消盯盘订阅（清空自选股或模块卸载时调用）
+function stopWatching() {
+  if (_watchSubId != null && Core.marketData && Core.marketData.unsubscribe) {
+    try { Core.marketData.unsubscribe(_watchSubId); } catch (e) {}
+    _watchSubId = null;
+  }
+}
+
 function registerCommands() {
   if (!Core.custom || !Core.custom.registerCommand) return;
   var reg = function(name, zh, handler) {
@@ -135,7 +144,10 @@ function registerCommands() {
   });
   reg('/zdel', '删除自选: /zdel 600519', function(args) {
     var sym = Core.stockQuote.resolveSymbol((args || '').trim()) || (args || '').trim();
-    showMsg(Core.marketDb.removeWatch(sym) ? '已删除: ' + sym : '未找到: ' + sym);
+    var removed = Core.marketDb.removeWatch(sym);
+    showMsg(removed ? '已删除: ' + sym : '未找到: ' + sym);
+    // 🔧 B17: 自选股清空时取消订阅，避免空轮询浪费资源
+    if (removed && Core.marketDb.listWatch().length === 0) stopWatching();
   });
   reg('/zlist', '自选股列表', function() {
     var list = Core.marketDb.listWatch();
@@ -159,6 +171,7 @@ module.exports = {
       renderBoardText: renderBoardText,
       renderMinute: renderMinute,
       addWatch: addWatch,
+      stopWatching: stopWatching,
       sparkline: sparkline,
     };
     registerCommands();

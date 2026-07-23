@@ -573,6 +573,10 @@ function renameSession(id, newTitle) {
 
 // ===== 级联删除 =====
 function deleteSessionWithChildren(id) {
+  // 🔧 B12: 删除前记住当前会话的父节点，删除后优先跳转到父节点而非无关根节点
+  var _deletedParentId = sessions[id] ? sessions[id].parentId : null;
+  var _wasCurrent = (currentSessionId === id);
+
   try {
     var childrenIds = getChildrenIds(id);
     for (var i = 0; i < childrenIds.length; i++) { deleteSessionWithChildren(childrenIds[i]); }
@@ -600,9 +604,27 @@ function deleteSessionWithChildren(id) {
       }
     }
   } catch (err) { console.error('❌ 删除会话失败:', err.message); }
-  var ids = Object.keys(sessions).filter(function(k) { return !sessions[k].parentId; });
-  if (ids.length > 0) { currentSessionId = ids[0]; renderMessages(currentSessionId); highlightChatItem(currentSessionId); }
-  else { newChat('chat', null); }
+
+  // 🔧 B12: 智能跳转 — 优先跳到被删会话的父节点，其次跳到同级兄弟，最后才跳到根节点
+  if (_wasCurrent) {
+    // 1. 尝试跳到父节点
+    if (_deletedParentId && sessions[_deletedParentId]) {
+      currentSessionId = _deletedParentId;
+    }
+    // 2. 尝试跳到同父级的兄弟节点
+    else if (_deletedParentId) {
+      var siblings = Object.keys(sessions).filter(function(k) { return sessions[k].parentId === _deletedParentId; });
+      if (siblings.length > 0) currentSessionId = siblings[0];
+    }
+    // 3. 跳到第一个根节点
+    if (!sessions[currentSessionId]) {
+      var ids = Object.keys(sessions).filter(function(k) { return !sessions[k].parentId; });
+      if (ids.length > 0) { currentSessionId = ids[0]; }
+      else { newChat('chat', null); return; }
+    }
+    renderMessages(currentSessionId);
+    highlightChatItem(currentSessionId);
+  }
   renderChatList();
 }
 

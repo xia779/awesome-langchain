@@ -906,6 +906,116 @@ async function handleCommand(text) {
     return true;
   }
 
+  // 🔧 接线: pipeline-excel — Excel 生成
+  if (text.startsWith('/excel ')) {
+    var excelArgs = text.slice(7).trim();
+    if (!excelArgs) { Core.session.addMessage('用法:\n/excel csv <标题> | <CSV内容>\n/excel data <标题> | <JSON数组>', 'ai'); return true; }
+    (async function() {
+      try {
+        var pipeIdx2 = excelArgs.indexOf('|');
+        var eTitle = pipeIdx2 > 0 ? excelArgs.slice(0, pipeIdx2).trim() : 'Excel';
+        var eContent = pipeIdx2 > 0 ? excelArgs.slice(pipeIdx2 + 1).trim() : '';
+        var eResult;
+        if (excelArgs.startsWith('csv ')) {
+          eTitle = eTitle.replace(/^csv\s+/, '');
+          eResult = Core.pipelineExcel.fromCsv(eContent, eTitle);
+        } else if (excelArgs.startsWith('data ')) {
+          eTitle = eTitle.replace(/^data\s+/, '');
+          var jsonData = JSON.parse(eContent);
+          eResult = Core.pipelineExcel.fromData(eTitle, jsonData);
+        } else {
+          eResult = Core.pipelineExcel.fromCsv(eContent, eTitle);
+        }
+        if (eResult.success) Core.session.addMessage('✅ Excel 已生成: ' + eResult.filePath, 'ai');
+        else Core.session.addMessage('❌ Excel 生成失败: ' + (eResult.error || '未知错误'), 'ai');
+      } catch (e) { Core.session.addMessage('❌ Excel 生成异常: ' + e.message, 'ai'); }
+    })();
+    return true;
+  }
+
+  // 🔧 接线: skill-market — 技能市场搜索与安装
+  if (text.startsWith('/sm ') || text === '/sm') {
+    var smAction = text.slice(4).trim();
+    if (!smAction || smAction === 'list') {
+      (async function() {
+        try {
+          var installed = Core.skillMarket.listInstalled();
+          var msg = '📦 已安装技能:\n';
+          if (installed && installed.length) {
+            installed.forEach(function(s, i) { msg += (i+1) + '. ' + s.name + ' - ' + (s.description || '') + '\n'; });
+          } else { msg = '📦 暂无已安装技能'; }
+          // 尝试拉取远程注册表
+          var remote = await Core.skillMarket.fetchRegistry();
+          if (remote && remote.length) {
+            msg += '\n🌐 可用技能 (' + remote.length + '):\n';
+            remote.slice(0, 10).forEach(function(s, i) { msg += (i+1) + '. ' + s.name + ' - ' + (s.description || '') + '\n'; });
+          }
+          Core.session.addMessage(msg, 'ai');
+        } catch (e) { Core.session.addMessage('❌ 技能市场加载失败: ' + e.message, 'ai'); }
+      })();
+      return true;
+    }
+    if (smAction.startsWith('search ')) {
+      var query = smAction.slice(7).trim();
+      (async function() {
+        try {
+          var results = await Core.skillMarket.search(query);
+          if (results && results.length) {
+            var msg = '🔍 搜索 "' + query + '" 结果:\n';
+            results.forEach(function(s, i) { msg += (i+1) + '. ' + s.name + ' - ' + (s.description || '') + '\n'; });
+            Core.session.addMessage(msg, 'ai');
+          } else { Core.session.addMessage('🔍 未找到匹配技能', 'ai'); }
+        } catch (e) { Core.session.addMessage('❌ 搜索失败: ' + e.message, 'ai'); }
+      })();
+      return true;
+    }
+    if (smAction.startsWith('install ')) {
+      var skillId = smAction.slice(8).trim();
+      (async function() {
+        try {
+          Core.session.addMessage('📥 正在安装技能: ' + skillId + ' ...', 'ai');
+          var instResult = await Core.skillMarket.install(skillId);
+          if (instResult.success) Core.session.addMessage('✅ 技能已安装: ' + skillId, 'ai');
+          else Core.session.addMessage('❌ 安装失败: ' + (instResult.error || '未知错误'), 'ai');
+        } catch (e) { Core.session.addMessage('❌ 安装异常: ' + e.message, 'ai'); }
+      })();
+      return true;
+    }
+    Core.session.addMessage('用法:\n/sm - 查看已安装和可用技能\n/sm search <关键词> - 搜索技能\n/sm install <技能ID> - 安装技能', 'ai');
+    return true;
+  }
+
+  // 🔧 接线: sync-client — 跨端同步
+  if (text === '/sync' || text.startsWith('/sync ')) {
+    var syncAction = text.slice(6).trim() || 'status';
+    if (syncAction === 'status') {
+      try {
+        var syncStatus = Core.syncClient.status();
+        var syncMsg = '🔄 同步状态:\n' +
+          '设备: ' + syncStatus.deviceId + '\n' +
+          '已启用: ' + (syncStatus.enabled ? '是' : '否') + '\n' +
+          '服务器: ' + (syncStatus.serverUrl || '未配置') + '\n' +
+          '最后同步: ' + (syncStatus.lastSync ? new Date(syncStatus.lastSync).toLocaleString('zh-CN') : '从未');
+        if (syncStatus.recentLog && syncStatus.recentLog.length) {
+          syncMsg += '\n最近操作:\n' + syncStatus.recentLog.map(function(l) { return '  · ' + l.action + ' ' + (l.success ? '✅' : '❌'); }).join('\n');
+        }
+        Core.session.addMessage(syncMsg, 'ai');
+      } catch (e) { Core.session.addMessage('❌ 获取同步状态失败: ' + e.message, 'ai'); }
+      return true;
+    }
+    if (syncAction === 'now' || syncAction === 'push') {
+      Core.session.addMessage('🔄 正在同步...', 'ai');
+      Core.syncClient.sync().then(function(r) {
+        Core.session.addMessage('✅ 同步完成: 推送 ' + (r.pushed||0) + ' 条, 拉取 ' + (r.pulled||0) + ' 条', 'ai');
+      }).catch(function(e) {
+        Core.session.addMessage('❌ 同步失败: ' + e.message + '\n提示: 需先配置 AI_SERVER_URL 环境变量', 'ai');
+      });
+      return true;
+    }
+    Core.session.addMessage('用法:\n/sync status - 查看同步状态\n/sync now - 立即同步', 'ai');
+    return true;
+  }
+
   return false;
 }
 

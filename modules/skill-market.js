@@ -8,7 +8,8 @@ const http = require('http');
 let Core = null;
 
 // ===== 市场配置 =====
-const DEFAULT_REGISTRY = 'https://raw.githubusercontent.com/user/ai-agent-skills/main/registry.json';
+// 🔧 修复: 默认 registry 使用用户自己的 GitHub 仓库（与 version.json 一致）
+const DEFAULT_REGISTRY = 'https://raw.githubusercontent.com/xia779/my-ai-update/main/skill-registry.json';
 let _localRegistry = [];
 let _remoteRegistry = null;
 let _lastFetch = 0;
@@ -89,6 +90,9 @@ async function installSkill(skillIdOrUrl, options) {
 // ===== 从 URL 安装 =====
 async function _installFromUrl(url, opts) {
   try {
+    // 🔧 安全: 仅允许 HTTPS（防止中间人注入恶意技能）
+    if (!url.startsWith('https://')) return { success: false, error: '仅支持 HTTPS 链接' };
+
     // 下载 ZIP 或 JSON
     var content = await _httpGetRaw(url);
     if (!content) return { success: false, error: '下载失败' };
@@ -120,17 +124,38 @@ async function _installFromUrl(url, opts) {
 
 function _installFromData(skillData) {
   try {
-    var skillId = skillData.id || ('market-' + Date.now().toString(36));
+    // 🔧 安全: 字段白名单 + 路径遍历防护
+    var skillId = String(skillData.id || ('market-' + Date.now().toString(36)));
+    // 阻止路径遍历：只允许字母、数字、横线
+    if (!/^[a-z0-9-]+$/i.test(skillId)) return { success: false, error: '技能 ID 含非法字符' };
+
     var skillDir = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'skills', skillId);
+    // 二次验证：确保目标路径在 skills 目录内
+    var skillsRoot = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'skills');
+    if (!skillDir.startsWith(skillsRoot)) return { success: false, error: '路径越界' };
+
     if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
 
-    fs.writeFileSync(path.join(skillDir, 'skill.json'), JSON.stringify(skillData, null, 2), 'utf8');
+    // 白名单字段：只保留安全的元数据
+    var safeData = {
+      id: skillId,
+      name: String(skillData.name || skillId).slice(0, 100),
+      description: String(skillData.description || '').slice(0, 500),
+      version: String(skillData.version || '1.0.0').slice(0, 20),
+      triggerKeywords: Array.isArray(skillData.triggerKeywords) ? skillData.triggerKeywords.slice(0, 20) : [],
+      installedAt: Date.now(),
+      installedFrom: 'market'
+    };
+
+    fs.writeFileSync(path.join(skillDir, 'skill.json'), JSON.stringify(safeData, null, 2), 'utf8');
     if (skillData.systemPrompt || skillData.prompt) {
-      fs.writeFileSync(path.join(skillDir, 'prompt.md'), skillData.systemPrompt || skillData.prompt, 'utf8');
+      // 限制 prompt 大小（防止超大文件写入）
+      var promptContent = String(skillData.systemPrompt || skillData.prompt).slice(0, 50000);
+      fs.writeFileSync(path.join(skillDir, 'prompt.md'), promptContent, 'utf8');
     }
 
     if (Core.skills && Core.skills.refreshSkills) Core.skills.refreshSkills();
-    return { success: true, skillId: skillId, name: skillData.name, path: skillDir };
+    return { success: true, skillId: skillId, name: safeData.name, path: skillDir };
   } catch (e) {
     return { success: false, error: '安装失败: ' + e.message };
   }
@@ -182,25 +207,29 @@ function listInstalled() {
 function _httpGet(url) {
   return new Promise(function(resolve, reject) {
     var client = url.startsWith('https') ? https : http;
-    client.get(url, { timeout: 10000 }, function(res) {
+    var req = client.get(url, { timeout: 10000 }, function(res) {
       var chunks = [];
       res.on('data', function(c) { chunks.push(c); });
       res.on('end', function() {
         try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
         catch (e) { reject(new Error('JSON parse error')); }
       });
-    }).on('error', reject).on('timeout', function() { reject(new Error('timeout')); });
+    });
+    req.on('error', reject);
+    req.on('timeout', function() { req.destroy(); reject(new Error('timeout')); });
   });
 }
 
 function _httpGetRaw(url) {
   return new Promise(function(resolve, reject) {
     var client = url.startsWith('https') ? https : http;
-    client.get(url, { timeout: 15000 }, function(res) {
+    var req = client.get(url, { timeout: 15000 }, function(res) {
       var chunks = [];
       res.on('data', function(c) { chunks.push(c); });
       res.on('end', function() { resolve(Buffer.concat(chunks).toString('utf8')); });
-    }).on('error', reject).on('timeout', function() { reject(new Error('timeout')); });
+    });
+    req.on('error', reject);
+    req.on('timeout', function() { req.destroy(); reject(new Error('timeout')); });
   });
 }
 

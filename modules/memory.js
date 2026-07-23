@@ -277,6 +277,7 @@ function _touchMemories(ids) {
 }
 
 // 3. 记忆去重 — 检查是否已有高度相似的记忆
+// 🔧 B08: 优化 O(N²) → O(N*K) — 先用倒排索引快速筛选候选集，只对有共同词的记忆做 Jaccard
 function isDuplicateMemory(content) {
   if (!content || content.length < 5) return true;
   var existing = listMemories(200);
@@ -285,23 +286,31 @@ function isDuplicateMemory(content) {
   var newTokens = _tokenize(content);
   if (newTokens.length < 2) return false;
 
+  // 构建新记忆的 token 集合
+  var newSet = {};
+  newTokens.forEach(function(t) { newSet[t] = true; });
+
   for (var i = 0; i < existing.length; i++) {
     var existTokens = _tokenize(existing[i].content);
     if (existTokens.length < 2) continue;
 
-    // Jaccard 相似度
-    var setA = {};
-    newTokens.forEach(function(t) { setA[t] = true; });
-    var setB = {};
-    existTokens.forEach(function(t) { setB[t] = true; });
+    // 快速预筛：至少 1 个共同 token 才值得做 Jaccard
+    var hasCommon = false;
+    var existSet = {};
+    for (var j = 0; j < existTokens.length; j++) {
+      existSet[existTokens[j]] = true;
+      if (newSet[existTokens[j]]) hasCommon = true;
+    }
+    if (!hasCommon) continue; // 无共同词，跳过
 
+    // Jaccard 相似度
     var intersection = 0;
     var union = 0;
-    Object.keys(setA).forEach(function(t) {
-      if (setB[t]) intersection++;
+    Object.keys(newSet).forEach(function(t) {
+      if (existSet[t]) intersection++;
       union++;
     });
-    Object.keys(setB).forEach(function(t) { if (!setA[t]) union++; });
+    Object.keys(existSet).forEach(function(t) { if (!newSet[t]) union++; });
 
     var jaccard = union > 0 ? intersection / union : 0;
     if (jaccard > 0.6) return true; // 60% 以上相似度视为重复

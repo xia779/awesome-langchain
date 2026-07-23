@@ -96,7 +96,11 @@ async function connectServer(serverId) {
   }
 
   try {
-    var env = Object.assign({}, process.env, serverConfig.env || {});
+    // 🔧 B06: 环境变量白名单 — 仅传递必要的系统变量，防止 API key 泄露
+    var _safeEnvKeys = ['PATH', 'PATHEXT', 'SYSTEMROOT', 'TEMP', 'TMP', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'LANG', 'LC_ALL', 'PYTHONPATH', 'PYTHONIOENCODING'];
+    var filteredEnv = {};
+    _safeEnvKeys.forEach(function(k) { if (process.env[k]) filteredEnv[k] = process.env[k]; });
+    var env = Object.assign(filteredEnv, serverConfig.env || {});
     var child = spawn(serverConfig.command, serverConfig.args || [], {
       env: env,
       stdio: ['pipe', 'pipe', 'pipe'],
