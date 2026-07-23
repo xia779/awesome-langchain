@@ -705,6 +705,55 @@ async function handleCommand(text) {
     }
     return true;
   }
+  // ===== /learn 命令 — 文档→技能 =====
+  if (text.startsWith('/learn ')) {
+    var learnPath = text.slice(7).trim();
+    if (!learnPath) { Core.session.addMessage('用法: /learn <文件路径>\n\n示例: /learn E:\\docs\\交易策略手册.md', 'ai'); return true; }
+    if (!Core.skillGenerator) { Core.session.addMessage('❌ 技能生成器模块未加载', 'ai'); return true; }
+    Core.session.addMessage('📚 正在分析文档并提取技能: ' + learnPath + '\n\n请稍候...', 'ai');
+    try {
+      var result = await Core.skillGenerator.fromFile(learnPath);
+      if (result.success) {
+        Core.session.addMessage('✅ 技能生成成功！\n\n🎯 名称: ' + result.name + '\n📝 描述: ' + result.description + '\n📋 步骤: ' + result.steps + ' 步\n📁 路径: ' + result.path + '\n\n技能已安装，可通过技能面板激活使用。', 'ai');
+      } else {
+        Core.session.addMessage('❌ 技能生成失败: ' + (result.error || '未知错误'), 'ai');
+      }
+    } catch (e) {
+      Core.session.addMessage('❌ 技能生成异常: ' + e.message, 'ai');
+    }
+    return true;
+  }
+  // ===== /watch 命令 — 条件监控 =====
+  if (text.startsWith('/watch')) {
+    var watchArgs = text.slice(6).trim();
+    if (!Core.watcher) { Core.session.addMessage('❌ 监控模块未加载', 'ai'); return true; }
+    if (!watchArgs || watchArgs === 'list') {
+      var watchers = Core.watcher.list();
+      if (watchers.length === 0) { Core.session.addMessage('📋 当前没有监控。\n\n用法: /watch 茅台跌破1800\n      /watch 上证涨到3500\n      /watch list — 列出所有监控\n      /watch remove <id> — 删除监控', 'ai'); return true; }
+      var wLines = watchers.map(function(w) {
+        var opText = w.operator === 'lt' ? '<' : w.operator === 'gt' ? '>' : '=';
+        return '  ' + (w.enabled ? '🟢' : '⚪') + ' [' + w.id + '] ' + w.target + ' ' + opText + ' ' + w.threshold + (w.triggerCount > 0 ? ' (已触发' + w.triggerCount + '次)' : '');
+      });
+      Core.session.addMessage('📋 监控列表:\n' + wLines.join('\n'), 'ai');
+      return true;
+    }
+    if (watchArgs.startsWith('remove ')) {
+      var removeId = watchArgs.slice(7).trim();
+      var rmResult = Core.watcher.remove(removeId);
+      Core.session.addMessage(rmResult.success ? '✅ 监控已删除: ' + removeId : '❌ ' + rmResult.error, 'ai');
+      return true;
+    }
+    // 添加新监控
+    var addResult = Core.watcher.add({ text: watchArgs });
+    if (addResult.success) {
+      var w = addResult.watcher;
+      var opText = w.operator === 'lt' ? '跌破' : w.operator === 'gt' ? '突破' : '到达';
+      Core.session.addMessage('✅ 监控已设置！\n\n🎯 ' + w.target + ' ' + opText + ' ' + w.threshold + ' 时提醒你\n🆔 ID: ' + w.id + '\n⏱️ 每分钟检查一次\n\n输入 /watch list 查看所有监控', 'ai');
+    } else {
+      Core.session.addMessage('❌ 监控设置失败: ' + (addResult.error || '无法解析条件，试试: /watch 茅台跌破1800'), 'ai');
+    }
+    return true;
+  }
   return false;
 }
 
