@@ -5,21 +5,26 @@
 var Core = null;
 var fs = null;
 var path = null;
+var crypto = require('crypto');
 
 // ===== 配置 =====
-var GATEWAY_PORT = 18789;  // 与 OpenClaw 同端口（致敬 + 兼容）
-var GATEWAY_HOST = '0.0.0.0'; // 监听所有网卡（局域网设备可连）
+var GATEWAY_PORT = parseInt(process.env.AI_AGENT_GATEWAY_PORT) || 18789;  // 与 OpenClaw 同端口（致敬 + 兼容）
+// 🔒 默认仅监听本地 127.0.0.1，局域网访问需设置 AI_AGENT_BIND_HOST=0.0.0.0
+var GATEWAY_HOST = process.env.AI_AGENT_BIND_HOST || '127.0.0.1';
 var HEARTBEAT_INTERVAL = 30000; // 心跳间隔 30s
 var DEVICE_TIMEOUT = 90000; // 设备超时 90s 无心跳视为离线
+var AUTH_TIMEOUT = 10000;   // 认证超时 10s 未认证则断开
 
 // ===== 状态 =====
 var wss = null;           // WebSocket Server 实例
 var clients = new Map();  // ws -> { deviceId, type, capabilities, lastHeartbeat, authenticated }
 var deviceRegistry = {};  // deviceId -> { type, os, capabilities[], status, lastSeen, ws }
 var serverStarted = false;
+var heartbeatTimer = null; // 心跳检测定时器引用（stopServer 时清除）
 
 // ===== 消息协议定义 =====
 // 客户端 → Gateway:
+//   { type: "auth", token }  ← 连接后第一条消息，必须通过认证才能操作
 //   { type: "device_register", deviceId, deviceType, os, capabilities[] }
 //   { type: "chat_message", text, sessionId? }
 //   { type: "tool_result", callId, result, success }
@@ -27,7 +32,8 @@ var serverStarted = false;
 //   { type: "command", action, params, targetDevice? }
 //
 // Gateway → 客户端:
-//   { type: "welcome", gatewayVersion, deviceId }
+//   { type: "welcome", gatewayVersion, requireAuth: true }
+//   { type: "auth_ok", message }
 //   { type: "chat_response", role, content, streaming, sessionId }
 //   { type: "ui_event", event, data }  (Core.ui 事件转发)
 //   { type: "tool_call", callId, tool, params, sourceDevice }
@@ -48,30 +54,41 @@ function startServer() {
     return;
   }
 
-  try {
-    wss = new WebSocket.Server({
-      host: GATEWAY_HOST,
-      port: GATEWAY_PORT
-    });
-  } catch (e) {
-    console.error('[gateway] 启动 WebSocket 服务失败:', e.message);
-    if (e.code === 'EADDRINUSE') {
-      console.warn('[gateway] 端口 ' + GATEWAY_PORT + ' 被占用，尝试 ' + (GATEWAY_PORT + 1));
-      GATEWAY_PORT++;
-      try {
-        wss = new WebSocket.Server({ host: GATEWAY_HOST, port: GATEWAY_PORT });
-      } catch (e2) {
-        console.error('[gateway] 备用端口也失败，网关未启动');
-        return;
-      }
-    } else {
-      return;
-    }
+  // ws Server 的 EADDRINUSE 是异步 error 事件，非同步 throw
+  // 用 _tryCreateServer 递归处理端口冲突
+  _tryCreateServer(WebSocket, GATEWAY_PORT, 0);
+}
+
+function _tryCreateServer(WebSocket, port, attempt) {
+  if (attempt >= 3) {
+    console.error('[gateway] 连续 ' + attempt + ' 次端口冲突，网关未启动');
+    return;
   }
 
-  serverStarted = true;
-  console.log('🌐 [gateway] WebSocket 网关已启动: ws://' + GATEWAY_HOST + ':' + GATEWAY_PORT);
+  var server = new WebSocket.Server({ host: GATEWAY_HOST, port: port });
 
+  server.on('error', function(err) {
+    if (err.code === 'EADDRINUSE') {
+      console.warn('[gateway] 端口 ' + port + ' 被占用，尝试 ' + (port + 1));
+      GATEWAY_PORT = port + 1;
+      _tryCreateServer(WebSocket, port + 1, attempt + 1);
+    } else {
+      console.error('[gateway] WebSocket 服务错误:', err.message);
+    }
+  });
+
+  server.on('listening', function() {
+    wss = server;
+    GATEWAY_PORT = port;
+    serverStarted = true;
+    console.log('🌐 [gateway] WebSocket 网关已启动: ws://' + GATEWAY_HOST + ':' + port);
+    _setupConnectionHandler();
+    _startHeartbeat();
+    registerEventBridge();
+  });
+}
+
+function _setupConnectionHandler() {
   wss.on('connection', function(ws, req) {
     var clientIp = req.socket.remoteAddress || 'unknown';
     console.log('[gateway] 新连接: ' + clientIp);
@@ -83,16 +100,31 @@ function startServer() {
       capabilities: [],
       lastHeartbeat: Date.now(),
       authenticated: false,
-      ip: clientIp
+      userId: null,
+      ip: clientIp,
+      authTimer: null
     });
 
-    // 发送欢迎消息
+    // 发送欢迎消息（提示客户端需要认证）
     sendToClient(ws, {
       type: 'welcome',
-      gatewayVersion: '1.0.0',
-      message: 'AI Agent Gateway ready',
+      gatewayVersion: '1.1.0',
+      requireAuth: true,
+      message: '请发送 { type: "auth", token: "<API_TOKEN>" } 完成认证',
       time: Date.now()
     });
+
+    // 🔒 认证超时：10s 内未完成认证则断开连接
+    var authTimer = setTimeout(function() {
+      var c = clients.get(ws);
+      if (c && !c.authenticated) {
+        console.warn('[gateway] 认证超时，断开连接: ' + clientIp);
+        sendToClient(ws, { type: 'error', message: '认证超时', code: 'AUTH_TIMEOUT' });
+        clients.delete(ws);
+        try { ws.close(); } catch (e) {}
+      }
+    }, AUTH_TIMEOUT);
+    clients.get(ws).authTimer = authTimer;
 
     // 消息处理
     ws.on('message', function(raw) {
@@ -109,8 +141,9 @@ function startServer() {
     // 断开处理
     ws.on('close', function() {
       var client = clients.get(ws);
-      if (client && client.deviceId) {
-        setDeviceOffline(client.deviceId);
+      if (client) {
+        if (client.authTimer) clearTimeout(client.authTimer);
+        if (client.deviceId) setDeviceOffline(client.deviceId);
       }
       clients.delete(ws);
       console.log('[gateway] 连接断开: ' + clientIp);
@@ -126,9 +159,11 @@ function startServer() {
       if (c) c.lastHeartbeat = Date.now();
     });
   });
+}
 
+function _startHeartbeat() {
   // 心跳检测定时器：主动 ping 保活 + 超时清理
-  setInterval(function() {
+  heartbeatTimer = setInterval(function() {
     var now = Date.now();
     clients.forEach(function(client, ws) {
       if (now - client.lastHeartbeat > DEVICE_TIMEOUT) {
@@ -141,9 +176,6 @@ function startServer() {
       try { ws.ping(); } catch (e) {}
     });
   }, HEARTBEAT_INTERVAL);
-
-  // 监听 Core.ui 事件并广播给所有客户端
-  registerEventBridge();
 }
 
 // ===== 消息路由 =====
@@ -151,7 +183,17 @@ function handleMessage(ws, msg) {
   var client = clients.get(ws);
   if (!client) return;
 
+  // 🔒 认证门控：未认证连接只允许 auth 和 heartbeat 消息
+  if (!client.authenticated && msg.type !== 'auth' && msg.type !== 'heartbeat') {
+    sendToClient(ws, { type: 'error', message: '请先完成认证', code: 'NOT_AUTHENTICATED' });
+    return;
+  }
+
   switch (msg.type) {
+    case 'auth':
+      handleAuth(ws, client, msg);
+      break;
+
     case 'device_register':
       handleDeviceRegister(ws, client, msg);
       break;
@@ -182,6 +224,67 @@ function handleMessage(ws, msg) {
   }
 }
 
+// ===== Token 认证 =====
+function handleAuth(ws, client, msg) {
+  // 已认证的连接忽略重复认证
+  if (client.authenticated) {
+    sendToClient(ws, { type: 'auth_ok', message: '已认证', time: Date.now() });
+    return;
+  }
+
+  var token = msg.token || '';
+  var validToken = getServerToken();
+
+  if (!validToken) {
+    // 服务端 Token 不可用（极端情况），拒绝所有连接
+    sendToClient(ws, { type: 'error', message: '认证服务不可用', code: 'AUTH_UNAVAILABLE' });
+    return;
+  }
+
+  // 时序安全比较，防止计时攻击
+  var isValid = false;
+  if (typeof token === 'string' && token.length === validToken.length) {
+    try {
+      isValid = crypto.timingSafeEqual(Buffer.from(token, 'utf8'), Buffer.from(validToken, 'utf8'));
+    } catch (e) {
+      isValid = false;
+    }
+  }
+
+  if (!isValid) {
+    console.warn('[gateway] 认证失败 [' + client.ip + ']: token 无效');
+    sendToClient(ws, { type: 'error', message: '认证失败: Token 无效', code: 'AUTH_FAILED' });
+    // 不立即断开，允许重试（超时机制兜底）
+    return;
+  }
+
+  // 认证成功
+  client.authenticated = true;
+  client.userId = msg.userId || Core._currentUser || 'default';
+  if (client.authTimer) {
+    clearTimeout(client.authTimer);
+    client.authTimer = null;
+  }
+
+  console.log('[gateway] 认证成功 [' + client.ip + '] userId: ' + client.userId);
+  sendToClient(ws, { type: 'auth_ok', message: '认证成功', userId: client.userId, time: Date.now() });
+}
+
+// 获取服务端 API Token（与 Express 服务器使用同一 Token）
+function getServerToken() {
+  // 优先通过 Core.getAuthToken（core-v10.js 定义的 IPC 同步获取）
+  if (Core && typeof Core.getAuthToken === 'function') {
+    try { return Core.getAuthToken() || ''; } catch (e) {}
+  }
+  // 回退：直接 IPC
+  try {
+    var ipcRenderer = require('electron').ipcRenderer;
+    return ipcRenderer.sendSync('get-auth-token') || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 // ===== 设备注册 =====
 function handleDeviceRegister(ws, client, msg) {
   var deviceId = msg.deviceId || 'device_' + Date.now().toString(36);
@@ -189,11 +292,10 @@ function handleDeviceRegister(ws, client, msg) {
   var os = msg.os || 'unknown';
   var capabilities = msg.capabilities || [];
 
-  // 更新客户端状态
+  // 更新客户端状态（认证已在 handleAuth 中完成）
   client.deviceId = deviceId;
   client.type = deviceType;
   client.capabilities = capabilities;
-  client.authenticated = true;
 
   // 更新设备注册表
   deviceRegistry[deviceId] = {
@@ -403,7 +505,18 @@ function broadcast(msg) {
   var data = JSON.stringify(msg);
   clients.forEach(function(client, ws) {
     try {
-      if (ws.readyState === 1) ws.send(data);
+      // 🔒 仅向已认证客户端广播
+      if (client.authenticated && ws.readyState === 1) ws.send(data);
+    } catch (e) {}
+  });
+}
+
+// 按用户广播（房间隔离：仅发送给同一 userId 的已认证客户端）
+function broadcastToUser(userId, msg) {
+  var data = JSON.stringify(msg);
+  clients.forEach(function(client, ws) {
+    try {
+      if (client.authenticated && client.userId === userId && ws.readyState === 1) ws.send(data);
     } catch (e) {}
   });
 }
@@ -540,8 +653,13 @@ function showMsg(text) {
 
 // ===== 停止服务 =====
 function stopServer() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
   if (wss) {
     clients.forEach(function(client, ws) {
+      if (client.authTimer) clearTimeout(client.authTimer);
       try { ws.close(); } catch (e) {}
     });
     clients.clear();
@@ -565,21 +683,25 @@ function init(_Core) {
 
   registerCommands();
 
-  // 延迟启动（等待其他模块就绪）
-  setTimeout(function() {
-    startServer();
-  }, 3000);
+  // 延迟启动（等待其他模块就绪）；测试环境可设 AI_AGENT_NO_GATEWAY=1 跳过自动启动
+  if (!process.env.AI_AGENT_NO_GATEWAY) {
+    setTimeout(function() {
+      startServer();
+    }, 3000);
+  }
 
   // 暴露 API
   Core.gateway = {
     start: startServer,
     stop: stopServer,
+    close: stopServer,  // shutdown handler 调用 Core.gateway.close()
     getStatus: getGatewayStatus,
     getOnlineDevices: getOnlineDevices,
     getDeviceByCapability: getDeviceByCapability,
     routeToolCall: routeToolCall,
     executeLocalTool: executeLocalTool,
     broadcast: broadcast,
+    broadcastToUser: broadcastToUser,
     sendToDevice: function(deviceId, msg) {
       var device = deviceRegistry[deviceId];
       if (device && device.ws) {
