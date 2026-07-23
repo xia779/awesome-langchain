@@ -18,6 +18,26 @@ if (typeof require !== 'undefined' && typeof window !== 'undefined') {
   } catch (e) { console.warn('⚠️ [core] 暴露 fs/path 到 window 失败:', e.message); }
 }
 
+// ===== 🔧 #10: 全局异常兜底（防止渲染进程静默崩溃）=====
+if (typeof process !== 'undefined' && process.on) {
+  process.on('uncaughtException', function(err) {
+    console.error('🚨 [uncaughtException]', err && err.stack || err);
+    try {
+      if (window.Core && Core.showToast) {
+        Core.showToast('应用内部错误: ' + (err.message || '未知异常'), 'error', 8000);
+      }
+    } catch (_) {}
+  });
+  process.on('unhandledRejection', function(reason) {
+    console.error('🚨 [unhandledRejection]', reason && reason.stack || reason);
+    try {
+      if (window.Core && Core.showToast) {
+        Core.showToast('异步操作异常: ' + (reason && reason.message || '未知'), 'error', 6000);
+      }
+    } catch (_) {}
+  });
+}
+
 // 使用 var 避免重复声明
 var fs = (typeof require !== 'undefined') ? require('fs') : (window.fs || {});
 var path = (typeof require !== 'undefined') ? require('path') : (window.path || {});
@@ -28,6 +48,14 @@ const HAS_NODE_FS = typeof fs !== 'undefined' && fs.readFileSync;
 // ===== 🔒 加密工具（从 crypto-utils.js 加载）=====
 var _cryptoModule = null;
 try { _cryptoModule = require('./modules/crypto-utils'); } catch (e) { console.warn('⚠️ [core] crypto-utils 加载失败:', e.message); }
+
+// ===== 🔧 #11: DOMPurify 本地加载（不再依赖 CDN，断网也有 XSS 防护）=====
+if (typeof window !== 'undefined' && !window.DOMPurify) {
+  try {
+    var _dpFactory = require('dompurify');
+    window.DOMPurify = (typeof _dpFactory === 'function' && !_dpFactory.sanitize) ? _dpFactory(window) : _dpFactory;
+  } catch (e) { console.warn('⚠️ [core] DOMPurify 本地加载失败:', e.message); }
+}
 var encryptValue = _cryptoModule ? _cryptoModule.encryptValue : function(v) { return v; };
 var decryptValue = _cryptoModule ? _cryptoModule.decryptValue : function(v) { return v; };
 var encryptSensitiveFields = _cryptoModule ? _cryptoModule.encryptSensitiveFields : function(c) { return c; };
@@ -702,14 +730,9 @@ Core.sanitizeHtml = function(html) {
     ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'sandbox'],
     ALLOW_DATA_ATTR: true
   });
-  // Fallback: 移除最危险的标签
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
-    .replace(/\bon\w+\s*=\s*[^\s>]+/gi, '')
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    .replace(/<object[\s\S]*?<\/object>/gi, '')
-    .replace(/<embed[\s\S]*?>/gi, '');
+  // 🔧 #11: 极端回退 — DOMPurify 不可用时转义所有 HTML（宁可不渲染也不留 XSS 风险）
+  console.warn('⚠️ DOMPurify 不可用，HTML 将被转义为纯文本');
+  return html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 };
 // 安全渲染 Markdown：marked.parse() + DOMPurify（带 LRU 缓存）
 var _mdCache = new Map();

@@ -191,6 +191,83 @@ function loadAllPlugins() {
   }
 }
 
+// ===== 🔧 #9: 插件沙箱加载（vm 隔离 + 受限 require）=====
+const _BLOCKED_MODULES = [
+  'child_process', 'cluster', 'dgram', 'dns', 'net', 'tls',
+  'http', 'https', 'http2', 'worker_threads', 'wasi', 'fs',
+  'fs/promises', 'node:fs', 'node:child_process', 'node:net',
+  'node:http', 'node:https', 'node:worker_threads'
+];
+const _SAFE_MODULES = ['path', 'url', 'util', 'events', 'buffer', 'crypto', 'stream', 'querystring', 'assert', 'os', 'punycode', 'string_decoder', 'timers'];
+
+function _loadPluginSandboxed(entryPath, pluginDir) {
+  const vm = require('vm');
+  const code = fs.readFileSync(entryPath, 'utf-8');
+  const dirName = path.dirname(entryPath);
+
+  // 受限 require：只允许安全模块 + 插件目录内的相对引用
+  function sandboxRequire(mod) {
+    // 阻止危险模块
+    if (_BLOCKED_MODULES.indexOf(mod) !== -1) {
+      throw new Error('🚫 插件沙箱: 禁止访问模块 "' + mod + '"');
+    }
+    // 相对路径：限制在插件目录内
+    if (mod.startsWith('.') || mod.startsWith('/')) {
+      var resolved = path.resolve(dirName, mod);
+      if (!resolved.startsWith(pluginDir)) {
+        throw new Error('🚫 插件沙箱: 禁止访问插件目录外的文件');
+      }
+      // 补全扩展名
+      if (!fs.existsSync(resolved)) {
+        if (fs.existsSync(resolved + '.js')) resolved += '.js';
+        else if (fs.existsSync(resolved + '.json')) resolved += '.json';
+        else if (fs.existsSync(path.join(resolved, 'index.js'))) resolved = path.join(resolved, 'index.js');
+      }
+      if (resolved.endsWith('.json')) {
+        return JSON.parse(fs.readFileSync(resolved, 'utf-8'));
+      }
+      return _loadPluginSandboxed(resolved, pluginDir);
+    }
+    // 安全白名单模块
+    if (_SAFE_MODULES.indexOf(mod) !== -1) {
+      return require(mod);
+    }
+    // 其他 node_modules：允许（插件可能需要 lodash 等纯 JS 库）
+    // 但阻止任何包含危险子路径的
+    if (mod.indexOf('child_process') !== -1 || mod.indexOf('/fs') !== -1) {
+      throw new Error('🚫 插件沙箱: 禁止访问 "' + mod + '"');
+    }
+    try { return require(mod); } catch (e) {
+      throw new Error('插件沙箱: 无法加载模块 "' + mod + '": ' + e.message);
+    }
+  }
+
+  // CommonJS 包装器
+  var moduleObj = { exports: {} };
+  var wrapper = '(function(module, exports, require, __dirname, __filename, console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, Buffer, URL, URLSearchParams) {\n' + code + '\n})';
+
+  var context = vm.createContext({
+    console: { log: console.log, warn: console.warn, error: console.error, info: console.info },
+    setTimeout: setTimeout, clearTimeout: clearTimeout,
+    setInterval: setInterval, clearInterval: clearInterval,
+    Promise: Promise, Buffer: Buffer, URL: URL, URLSearchParams: URLSearchParams,
+    Math: Math, Date: Date, JSON: JSON, RegExp: RegExp,
+    Array: Array, Object: Object, String: String, Number: Number, Boolean: Boolean,
+    Map: Map, Set: Set, WeakMap: WeakMap, WeakSet: WeakSet, Symbol: Symbol,
+    parseInt: parseInt, parseFloat: parseFloat, isNaN: isNaN, isFinite: isFinite,
+    encodeURIComponent: encodeURIComponent, decodeURIComponent: decodeURIComponent,
+    Error: Error, TypeError: TypeError, RangeError: RangeError
+  });
+
+  var script = new vm.Script(wrapper, { filename: entryPath, timeout: 10000 });
+  var fn = script.runInContext(context);
+  fn(moduleObj, moduleObj.exports, sandboxRequire, dirName, entryPath,
+    context.console, setTimeout, clearTimeout, setInterval, clearInterval,
+    Promise, Buffer, URL, URLSearchParams);
+
+  return moduleObj.exports;
+}
+
 function loadPluginFromDir(pluginId, pluginPath) {
   try {
     const manifestPath = path.join(pluginPath, 'plugin.json');
@@ -215,9 +292,8 @@ function loadPluginFromDir(pluginId, pluginPath) {
       const entryPath = path.join(pluginPath, manifest.entry || 'index.js');
       if (fs.existsSync(entryPath)) {
         try {
-          // 清除模块缓存，确保重新加载
-          delete require.cache[require.resolve(entryPath)];
-          const PluginClass = require(entryPath);
+          // 🔧 #9: 沙箱加载 — 不再直接 require，改用 vm + 受限 require
+          const PluginClass = _loadPluginSandboxed(entryPath, pluginPath);
           if (typeof PluginClass === 'function') {
             instance = new PluginClass(createPluginAPI(manifest.id));
             if (instance.init && typeof instance.init === 'function') {

@@ -156,7 +156,8 @@ function createWindow() {
       contextIsolation: false,
       sandbox: false,
       allowRunningInsecureContent: false,
-      webSecurity: true
+      webSecurity: true,
+      preload: path.join(__dirname, 'preload.js')  // 🔧 #8: 安全桥接层
     },
   });
 
