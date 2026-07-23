@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { Document, Packer, Paragraph, TextRun, HeadingLevel } = require('docx');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const fontkit = require('@pdf-lib/fontkit');
 
 let Core = null;
 
@@ -84,8 +85,32 @@ async function generateWord(options) {
 async function generatePdf(options) {
   const { title, content, outputPath } = options || {};
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  // 🔧 B16: 注册 fontkit 以支持自定义字体嵌入
+  pdfDoc.registerFontkit(fontkit);
+
+  // 尝试加载 CJK 字体（SimHei），回退到 Helvetica
+  let font, boldFont;
+  const cjkFontPaths = [
+    'C:\\Windows\\Fonts\\simhei.ttf',
+    'C:\\Windows\\Fonts\\msyh.ttc',
+    '/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc'
+  ];
+  let cjkLoaded = false;
+  for (const fp of cjkFontPaths) {
+    try {
+      if (fs.existsSync(fp)) {
+        const fontBytes = fs.readFileSync(fp);
+        font = await pdfDoc.embedFont(fontBytes, { subset: true });
+        boldFont = font; // CJK 字体通常不区分 bold，复用即可
+        cjkLoaded = true;
+        break;
+      }
+    } catch (e) { /* 尝试下一个路径 */ }
+  }
+  if (!cjkLoaded) {
+    font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  }
   const blocks = parseMarkdown(content);
 
   let page = pdfDoc.addPage([595, 842]);

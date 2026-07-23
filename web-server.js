@@ -194,22 +194,31 @@ function setupMobileRoutes(expressApp, dataRoot) {
   console.log('📱 移动端静态文件目录:', publicDir, '存在:', fs.existsSync(publicDir));
 
   // 显式处理 /m 和 /m/ 路由（修复手机端 Cannot GET）
-  expressApp.get('/m', function(req, res) {
+  // 🔒 B02: 注入 API Token 供移动端 fetch 使用
+  function serveMobileIndex(req, res) {
     var indexFile = path.join(publicDir, 'index.html');
     if (fs.existsSync(indexFile)) {
-      res.sendFile(indexFile);
+      var html = fs.readFileSync(indexFile, 'utf-8');
+      // 从 dataRoot/.api-token 读取 token 注入到页面
+      var token = '';
+      try {
+        var tokenFile = path.join(dataRoot, '.api-token');
+        if (fs.existsSync(tokenFile)) token = fs.readFileSync(tokenFile, 'utf-8').trim();
+      } catch(e) {}
+      var injection = '<script>window.__API_TOKEN__="' + token + '";</script>';
+      // 插入到 </head> 前或 <head> 后
+      if (html.indexOf('</head>') !== -1) {
+        html = html.replace('</head>', injection + '</head>');
+      } else {
+        html = injection + html;
+      }
+      res.type('html').send(html);
     } else {
       res.status(404).send('Mobile UI not found: ' + indexFile);
     }
-  });
-  expressApp.get('/m/', function(req, res) {
-    var indexFile = path.join(publicDir, 'index.html');
-    if (fs.existsSync(indexFile)) {
-      res.sendFile(indexFile);
-    } else {
-      res.status(404).send('Mobile UI not found: ' + indexFile);
-    }
-  });
+  }
+  expressApp.get('/m', serveMobileIndex);
+  expressApp.get('/m/', serveMobileIndex);
 
   // 静态资源（CSS/JS/图片等）
   expressApp.use('/m', require('express').static(publicDir, { index: false }));

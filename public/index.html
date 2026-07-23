@@ -238,6 +238,13 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
   </div>
 </div>
 <script>
+// 🔒 B02: 自动为 API 请求注入认证 Token
+(function(){var _f=window.fetch;window.fetch=function(url,opts){
+  if(typeof url==='string'&&url.indexOf('/api/')===0){
+    opts=opts||{};opts.headers=opts.headers||{};
+    if(window.__API_TOKEN__)opts.headers['x-auth-token']=window.__API_TOKEN__;
+  }return _f.call(this,url,opts)};})();
+
 let sessions=[],currentSessionId=null,isGenerating=false,currentStreamId=null;
 marked.setOptions({breaks:true,gfm:true});
 

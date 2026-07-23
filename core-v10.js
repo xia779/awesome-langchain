@@ -588,6 +588,36 @@ window.Core = Core;
   Core.refreshBackendPort = function() { return _resolvePort(); };
 })();
 
+// ===== 🔒 B02: 桌面渲染进程 fetch 自动注入认证 Token =====
+(function() {
+  var _authToken = null;
+  function _getToken() {
+    if (_authToken === null) {
+      try {
+        var ipc = require('electron').ipcRenderer;
+        _authToken = ipc.sendSync('get-auth-token') || '';
+      } catch (e) { _authToken = ''; }
+    }
+    return _authToken;
+  }
+  Core.getAuthToken = _getToken;
+  var _origFetch = window.fetch;
+  window.fetch = function(url, opts) {
+    var base = Core.getBackendBase();
+    if (typeof url === 'string' && (url.indexOf(base) === 0 || url.indexOf('/api/') === 0)) {
+      opts = opts || {};
+      opts.headers = opts.headers || {};
+      // 兼容 Headers 对象和普通对象
+      if (opts.headers instanceof Headers) {
+        if (!opts.headers.has('x-auth-token')) opts.headers.set('x-auth-token', _getToken());
+      } else {
+        if (!opts.headers['x-auth-token']) opts.headers['x-auth-token'] = _getToken();
+      }
+    }
+    return _origFetch.call(this, url, opts);
+  };
+})();
+
 // ===== Toast 通知系统（替代 alert()）=====
 Core.showToast = function(message, type, duration) {
   type = type || 'info';

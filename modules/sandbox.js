@@ -2,7 +2,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { exec, execSync } = require('child_process');
+const { exec, execSync, execFile } = require('child_process');
 
 let Core = null;
 
@@ -141,7 +141,7 @@ function executePythonSandboxed(code, options) {
         })
       };
 
-      exec('python "' + tmpFile + '"', execOpts, function(error, stdout, stderr) {
+      execFile('python', [tmpFile], execOpts, function(error, stdout, stderr) {
         _cleanup(tmpFile);
         var output = (stdout || '') + (stderr ? '\n[STDERR]\n' + stderr : '');
         if (output.length > opts.maxOutput) {
@@ -203,13 +203,15 @@ function executeCommandSandboxed(command, options) {
 function _execInDocker(scriptPath, opts, callback) {
   var sandbox = getSandboxDir();
   var containerName = 'ai-sandbox-' + Date.now();
-  var cmd = 'docker run --rm --name ' + containerName +
-    ' --memory=256m --cpus=0.5 --network=none' +
-    ' -v "' + sandbox + '":/sandbox' +
-    ' -w /sandbox' +
-    ' python:3.11-slim python /sandbox/' + path.basename(scriptPath);
+  var dockerArgs = [
+    'run', '--rm', '--name', containerName,
+    '--memory=256m', '--cpus=0.5', '--network=none',
+    '-v', sandbox + ':/sandbox',
+    '-w', '/sandbox',
+    'python:3.11-slim', 'python', '/sandbox/' + path.basename(scriptPath)
+  ];
 
-  exec(cmd, { timeout: opts.timeout + 5000, maxBuffer: 2 * 1024 * 1024 }, function(error, stdout, stderr) {
+  execFile('docker', dockerArgs, { timeout: opts.timeout + 5000, maxBuffer: 2 * 1024 * 1024 }, function(error, stdout, stderr) {
     var output = (stdout || '') + (stderr ? '\n[STDERR]\n' + stderr : '');
     if (output.length > opts.maxOutput) {
       output = output.substring(0, opts.maxOutput) + '\n...(输出截断)';

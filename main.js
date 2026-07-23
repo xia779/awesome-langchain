@@ -20,6 +20,7 @@ const cors = require('cors');
 const { createServer } = require('http');
 const fs = require('fs');
 const { exec, spawn } = require('child_process');
+const crypto = require('crypto');
 const { setupMobileRoutes } = require('./web-server');
 const { registerApiRoutes } = require('./api-routes');
 
@@ -42,6 +43,24 @@ if (!fs.existsSync(DATA_ROOT)) {
   fs.mkdirSync(DATA_ROOT, { recursive: true });
 }
 
+// ===== API 认证 Token（B02 安全修复：防止局域网未授权访问）=====
+const API_TOKEN_FILE = path.join(DATA_ROOT, '.api-token');
+let API_TOKEN = '';
+try {
+  if (fs.existsSync(API_TOKEN_FILE)) {
+    API_TOKEN = fs.readFileSync(API_TOKEN_FILE, 'utf-8').trim();
+  }
+  if (!API_TOKEN || API_TOKEN.length < 32) {
+    API_TOKEN = crypto.randomBytes(32).toString('hex');
+    fs.writeFileSync(API_TOKEN_FILE, API_TOKEN, 'utf-8');
+    console.log('🔑 已生成新 API 认证 Token');
+  }
+} catch (e) {
+  // 回退：内存 token（每次重启变化）
+  API_TOKEN = crypto.randomBytes(32).toString('hex');
+  console.warn('⚠️ Token 持久化失败，使用内存 Token:', e.message);
+}
+
 // 托盘图标路径
 const TRAY_ICON_PATH = path.join(__dirname, 'icon.ico');
 
@@ -51,8 +70,27 @@ async function startWebServer() {
   app2.use(cors());
   app2.use(express.json({ limit: '50mb' }));
 
+  // 🔒 B02: Token 认证中间件 — 保护 /api/* 路由，静态资源保持公开
+  app2.use(function(req, res, next) {
+    // 放行：非 API 路由（静态文件、/m 页面、/health 等）
+    if (!req.path.startsWith('/api/') && !req.path.startsWith('/api/m/')) {
+      return next();
+    }
+    // 验证 Token（header 优先，兼容 query param 供 EventSource/WebSocket 使用）
+    var token = req.headers['x-auth-token'] || req.query.token;
+    if (token === API_TOKEN) {
+      return next();
+    }
+    res.status(401).json({ error: 'Unauthorized', message: '缺少或无效的认证 Token' });
+  });
+
   // 🔧 静态资源服务：让 public/ 下的自定义页面（如 nebula-3d.html）可通过 HTTP 访问
   app2.use(express.static(path.join(__dirname, 'public')));
+
+  // 🔧 B15: 交付物静态服务（Web App 预览）
+  var webappsDir = path.join(DATA_ROOT, 'deliverables', 'webapps');
+  if (!fs.existsSync(webappsDir)) fs.mkdirSync(webappsDir, { recursive: true });
+  app2.use('/deliverables/webapps', express.static(webappsDir));
 
   // 注册所有 API 路由（提取到 api-routes.js）
   registerApiRoutes(app2, { DATA_ROOT, getMainWindow: () => mainWindow, setActualPort: (p) => { actualPort = p; } });
@@ -296,6 +334,7 @@ function setupTray() {
 ipcMain.on('app:get-path-sync', (event, arg) => { event.returnValue = app.getPath(arg); });
 ipcMain.on('get-user-data-path', (event) => { event.returnValue = DATA_ROOT; });
 ipcMain.on('get-server-port', (event) => { event.returnValue = actualPort || 8080; });
+ipcMain.on('get-auth-token', (event) => { event.returnValue = API_TOKEN; });
 
 ipcMain.on('show-notification', (event, arg) => {
   try { 

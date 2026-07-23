@@ -143,10 +143,12 @@ async function fromTopic(topic) {
 
   let outlineText;
   try {
-    outlineText = await Core.api.callAPI(
+    var apiResult = await Core.api.callAPI(
       'Create a presentation outline about: ' + topic,
       systemPrompt, 0.7, null, null
     );
+    // 🔧 B14: callAPI 返回 {message:{content}} 对象，需提取文本
+    outlineText = (apiResult && apiResult.message && apiResult.message.content) || '';
   } catch (e) {
     return { success: false, error: 'API call failed: ' + e.message };
   }

@@ -151,7 +151,7 @@ function setupBriefingSchedule() {
     var result = Core.scheduler.add({
       name: '每日晨报',
       schedule: { type: 'daily', time: cfg.time, weekdaysOnly: cfg.weekdaysOnly },
-      action: { type: 'custom', handler: 'Core.proactive.briefing()' },
+      action: { type: 'custom', handler: 'proactive.briefing' },
       enabled: true
     });
 
@@ -209,6 +209,11 @@ module.exports = {
       suggestions: getContextSuggestions,
       getBriefingConfig: getBriefingConfig
     };
+
+    // 🔧 B07: 注册命名 handler 到 scheduler 注册表
+    if (Core.scheduler && Core.scheduler.registerHandler) {
+      Core.scheduler.registerHandler('proactive.briefing', generateMorningBriefing);
+    }
 
     // 延迟注册晨报定时
     setTimeout(setupBriefingSchedule, 5000);

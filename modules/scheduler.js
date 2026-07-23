@@ -8,6 +8,7 @@ var path = null;
 var SCHEDULE_FILE = '';
 var tasks = [];        // [{ id, name, enabled, type, schedule, action, lastRun, nextRun, runCount, createdAt }]
 var activeTimers = {}; // { taskId: intervalId | timeoutId }
+var _handlerRegistry = {}; // 🔧 B07: { 'proactive.briefing': fn, ... } 字符串标识符 → 函数映射
 
 // ===== 持久化 =====
 
@@ -476,21 +477,30 @@ async function executeTask(task) {
     }
 
     if (action.type === 'custom' && action.handler) {
-      // 自定义处理函数（vm 沙箱执行）
+      // 自定义处理函数
       try {
-        var vm = require('vm');
-        var sandbox = {
-          console: { log: function() {}, warn: function() {}, error: function() {} },
-          Math: Math, Date: Date, JSON: JSON,
-          parseInt: parseInt, parseFloat: parseFloat, isNaN: isNaN, isFinite: isFinite,
-          Array: Array, Object: Object, String: String, Number: Number, Boolean: Boolean,
-          RegExp: RegExp, Error: Error, Map: Map, Set: Set, Promise: Promise,
-          encodeURIComponent: encodeURIComponent, decodeURIComponent: decodeURIComponent,
-          setTimeout: setTimeout, clearTimeout: clearTimeout
-        };
-        var context = vm.createContext(sandbox);
-        var script = new vm.Script('(function() { ' + action.handler + ' })()', { timeout: 10000 });
-        script.runInContext(context);
+        if (typeof action.handler === 'function') {
+          // 函数引用直接调用
+          action.handler();
+        } else if (_handlerRegistry[action.handler]) {
+          // 🔧 B07: 注册表查找（handler 为标识符字符串，如 'proactive.briefing'）
+          _handlerRegistry[action.handler]();
+        } else {
+          // 向后兼容：字符串代码走 vm 沙箱
+          var vm = require('vm');
+          var sandbox = {
+            console: { log: function() {}, warn: function() {}, error: function() {} },
+            Math: Math, Date: Date, JSON: JSON,
+            parseInt: parseInt, parseFloat: parseFloat, isNaN: isNaN, isFinite: isFinite,
+            Array: Array, Object: Object, String: String, Number: Number, Boolean: Boolean,
+            RegExp: RegExp, Error: Error, Map: Map, Set: Set, Promise: Promise,
+            encodeURIComponent: encodeURIComponent, decodeURIComponent: decodeURIComponent,
+            setTimeout: setTimeout, clearTimeout: clearTimeout
+          };
+          var context = vm.createContext(sandbox);
+          var script = new vm.Script('(function() { ' + action.handler + ' })()', { timeout: 10000 });
+          script.runInContext(context);
+        }
       } catch (e) {
         console.error('scheduler: Custom handler error:', e.message);
       }
@@ -1013,7 +1023,9 @@ function init(_Core) {
     runNow: runNow,
     parseNaturalSchedule: parseNaturalSchedule,
     describeSchedule: describeSchedule,
-    tryNaturalRemind: tryNaturalRemind
+    tryNaturalRemind: tryNaturalRemind,
+    // 🔧 B07: 注册命名 handler（字符串标识符 → 函数）
+    registerHandler: function(name, fn) { _handlerRegistry[name] = fn; }
   };
 
   console.log('✅ scheduler.js 已加载 (' + tasks.length + ' 任务, ' + Object.keys(activeTimers).length + ' 活跃)');

@@ -76,7 +76,9 @@ async function fromDescription(description) {
 
   let response;
   try {
-    response = await Core.api.callAPI(description, systemPrompt, 0.7, null, null);
+    var apiResult = await Core.api.callAPI(description, systemPrompt, 0.7, null, null);
+    // 🔧 B14: callAPI 返回 {message:{content}} 对象，需提取文本
+    response = (apiResult && apiResult.message && apiResult.message.content) || '';
   } catch (e) {
     return { success: false, error: 'API call failed: ' + e.message };
   }
@@ -111,7 +113,9 @@ async function fromDescription(description) {
 function getPreviewUrl(filePath) {
   if (!filePath) return null;
   const fileName = path.basename(filePath);
-  return 'http://localhost:8082/deliverables/webapps/' + fileName;
+  // 🔧 B15: 使用动态端口（不再硬编码 8082）
+  var base = (Core && typeof Core.getBackendBase === 'function') ? Core.getBackendBase() : 'http://localhost:8080';
+  return base + '/deliverables/webapps/' + fileName;
 }
 
 // ═══════════════════════════════════════════
