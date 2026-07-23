@@ -124,16 +124,20 @@ async function generatePdf(options) {
 
   function drawWrapped(text, f, size, indent) {
     const x = margin + (indent || 0);
-    const words = text.split(' ');
+    const availWidth = maxWidth - (indent || 0);
     let line = '';
-    for (const word of words) {
-      const test = line ? line + ' ' + word : word;
-      if (f.widthOfTextAtSize(test, size) > maxWidth - (indent || 0)) {
+    // 逐字符测量宽度（兼容中文无空格 + 英文有空格）
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const test = line + ch;
+      if (f.widthOfTextAtSize(test, size) > availWidth && line.length > 0) {
         ensureSpace(size + 4);
         page.drawText(line, { x, y, size, font: f, color: rgb(0.1, 0.1, 0.1) });
         y -= size + 4;
-        line = word;
-      } else { line = test; }
+        line = ch;
+      } else {
+        line = test;
+      }
     }
     if (line) { ensureSpace(size + 4); page.drawText(line, { x, y, size, font: f, color: rgb(0.1, 0.1, 0.1) }); y -= size + 4; }
   }

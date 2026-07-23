@@ -22,6 +22,11 @@ function createTestCore() {
       }
       return 'result for ' + action + ': ' + JSON.stringify(params || {});
     },
+    detectToolError: function(resultStr) {
+      if (!resultStr) return false;
+      var t = String(resultStr).trim();
+      return t.indexOf('❌') === 0 || t.indexOf('⛔') === 0;
+    },
   };
   return Core;
 }

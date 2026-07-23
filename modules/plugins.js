@@ -191,7 +191,7 @@ function loadAllPlugins() {
   }
 }
 
-// ===== 🔧 #9: 插件沙箱加载（vm 隔离 + 受限 require）=====
+// ===== 🔧 #9: 插件沙箱加载（受限 require，无 vm 避免 Electron 渲染进程警告）=====
 const _BLOCKED_MODULES = [
   'child_process', 'cluster', 'dgram', 'dns', 'net', 'tls',
   'http', 'https', 'http2', 'worker_threads', 'wasi', 'fs',
@@ -201,7 +201,6 @@ const _BLOCKED_MODULES = [
 const _SAFE_MODULES = ['path', 'url', 'util', 'events', 'buffer', 'crypto', 'stream', 'querystring', 'assert', 'os', 'punycode', 'string_decoder', 'timers'];
 
 function _loadPluginSandboxed(entryPath, pluginDir) {
-  const vm = require('vm');
   const code = fs.readFileSync(entryPath, 'utf-8');
   const dirName = path.dirname(entryPath);
 
@@ -242,28 +241,19 @@ function _loadPluginSandboxed(entryPath, pluginDir) {
     }
   }
 
-  // CommonJS 包装器
+  // CommonJS 包装器（用 Function 替代 vm，避免 Electron 渲染进程 vm 警告）
   var moduleObj = { exports: {} };
-  var wrapper = '(function(module, exports, require, __dirname, __filename, console, setTimeout, clearTimeout, setInterval, clearInterval, Promise, Buffer, URL, URLSearchParams) {\n' + code + '\n})';
+  var pluginConsole = { log: console.log, warn: console.warn, error: console.error, info: console.info };
+  var wrapper = 'return (function(module, exports, require, __dirname, __filename, console, setTimeout, clearTimeout, setInterval, clearInterval) {\n' + code + '\n})';
 
-  var context = vm.createContext({
-    console: { log: console.log, warn: console.warn, error: console.error, info: console.info },
-    setTimeout: setTimeout, clearTimeout: clearTimeout,
-    setInterval: setInterval, clearInterval: clearInterval,
-    Promise: Promise, Buffer: Buffer, URL: URL, URLSearchParams: URLSearchParams,
-    Math: Math, Date: Date, JSON: JSON, RegExp: RegExp,
-    Array: Array, Object: Object, String: String, Number: Number, Boolean: Boolean,
-    Map: Map, Set: Set, WeakMap: WeakMap, WeakSet: WeakSet, Symbol: Symbol,
-    parseInt: parseInt, parseFloat: parseFloat, isNaN: isNaN, isFinite: isFinite,
-    encodeURIComponent: encodeURIComponent, decodeURIComponent: decodeURIComponent,
-    Error: Error, TypeError: TypeError, RangeError: RangeError
-  });
-
-  var script = new vm.Script(wrapper, { filename: entryPath, timeout: 10000 });
-  var fn = script.runInContext(context);
-  fn(moduleObj, moduleObj.exports, sandboxRequire, dirName, entryPath,
-    context.console, setTimeout, clearTimeout, setInterval, clearInterval,
-    Promise, Buffer, URL, URLSearchParams);
+  try {
+    var factory = new Function(wrapper);
+    var fn = factory();
+    fn(moduleObj, moduleObj.exports, sandboxRequire, dirName, entryPath,
+      pluginConsole, setTimeout, clearTimeout, setInterval, clearInterval);
+  } catch (e) {
+    throw new Error('插件沙箱执行失败 (' + path.basename(entryPath) + '): ' + e.message);
+  }
 
   return moduleObj.exports;
 }

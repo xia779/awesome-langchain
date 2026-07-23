@@ -486,20 +486,11 @@ async function executeTask(task) {
           // 🔧 B07: 注册表查找（handler 为标识符字符串，如 'proactive.briefing'）
           _handlerRegistry[action.handler]();
         } else {
-          // 向后兼容：字符串代码走 vm 沙箱
-          var vm = require('vm');
-          var sandbox = {
-            console: { log: function() {}, warn: function() {}, error: function() {} },
-            Math: Math, Date: Date, JSON: JSON,
-            parseInt: parseInt, parseFloat: parseFloat, isNaN: isNaN, isFinite: isFinite,
-            Array: Array, Object: Object, String: String, Number: Number, Boolean: Boolean,
-            RegExp: RegExp, Error: Error, Map: Map, Set: Set, Promise: Promise,
-            encodeURIComponent: encodeURIComponent, decodeURIComponent: decodeURIComponent,
-            setTimeout: setTimeout, clearTimeout: clearTimeout
-          };
-          var context = vm.createContext(sandbox);
-          var script = new vm.Script('(function() { ' + action.handler + ' })()', { timeout: 10000 });
-          script.runInContext(context);
+          // 向后兼容：字符串代码用 Function 执行（替代 vm，避免 Electron 渲染进程警告）
+          var _fn = new Function('console', 'Math', 'Date', 'JSON', 'setTimeout', 'clearTimeout',
+            '(function() { ' + action.handler + ' })()');
+          _fn({ log: function() {}, warn: function() {}, error: function() {} },
+            Math, Date, JSON, setTimeout, clearTimeout);
         }
       } catch (e) {
         console.error('scheduler: Custom handler error:', e.message);
