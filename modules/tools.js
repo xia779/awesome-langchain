@@ -330,7 +330,20 @@ const tools = {
       if (!code || !code.trim()) {
         return '❌ 错误：Python代码为空';
       }
-      // 安全检查：禁止危险操作
+
+      // 🔧 优先使用沙箱模块（增强安全检查 + 目录隔离）
+      if (Core && Core.sandbox && Core.sandbox.executePython) {
+        try {
+          var sbResult = await Core.sandbox.executePython(code);
+          if (sbResult.blocked) return sbResult.output;
+          if (sbResult.success) return '✅ Python执行结果：\n' + sbResult.output;
+          return '❌ Python执行错误：\n' + (sbResult.output || sbResult.error || '未知错误');
+        } catch (e) {
+          // 沙箱异常时降级到原有逻辑
+        }
+      }
+
+      // 安全检查：禁止危险操作（原有逻辑作为 fallback）
       const forbidden = ['os.system', 'subprocess.call', 'subprocess.run', 'subprocess.Popen', '__import__', 'eval(', 'exec(', 'compile(', 'open('];
       for (const f of forbidden) {
         if (code.includes(f)) {

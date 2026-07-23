@@ -335,10 +335,19 @@ async function executeAgentAction(action, params) {
     }
     if (toolCheck.warning) console.warn(toolCheck.warning);
   }
+  var _startTime = Date.now();
   try {
     var raw = await _executeAgentActionRaw(action, params);
-    return normalizeToolResult(raw);
+    var result = normalizeToolResult(raw);
+    // 可观测性：记录工具调用
+    if (Core.observability && Core.observability.trackTool) {
+      Core.observability.trackTool(action, params, result, Date.now() - _startTime);
+    }
+    return result;
   } catch (e) {
+    if (Core.observability && Core.observability.trackTool) {
+      Core.observability.trackTool(action, params, '❌ ' + e.message, Date.now() - _startTime);
+    }
     return '❌ 工具 "' + action + '" 执行异常: ' + e.message;
   }
 }

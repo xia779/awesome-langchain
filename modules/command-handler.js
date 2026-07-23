@@ -754,6 +754,54 @@ async function handleCommand(text) {
     }
     return true;
   }
+  // ===== /stats 命令 — 可观测性面板 =====
+  if (text === '/stats' || text.startsWith('/stats')) {
+    if (!Core.observability) { Core.session.addMessage('❌ 可观测性模块未加载', 'ai'); return true; }
+    var report = Core.observability.report();
+    var output = '📊 **系统运行统计**\n\n';
+    output += '⏱️ 运行时长: ' + report.uptimeHuman + '\n\n';
+
+    if (report.tools.total > 0) {
+      output += '🔧 **工具调用** (' + report.tools.total + ' 次)\n';
+      output += '  成功率: ' + report.tools.successRate + ' (' + report.tools.success + '✅ / ' + report.tools.fail + '❌)\n';
+      output += '  平均耗时: ' + report.tools.avgDurationMs + 'ms\n';
+      if (report.tools.failTop5.length > 0) {
+        output += '  失败 Top5:\n';
+        report.tools.failTop5.forEach(function(f) {
+          output += '    • ' + f.action + ': ' + f.fail + '次失败 (' + f.rate + ')\n';
+        });
+      }
+      output += '\n';
+    }
+
+    if (report.agent.total > 0) {
+      output += '🤖 **Agent 运行** (' + report.agent.total + ' 次)\n';
+      output += '  成功率: ' + report.agent.successRate + '\n';
+      output += '  平均步数: ' + report.agent.avgSteps + ' 步\n';
+      output += '  平均耗时: ' + report.agent.avgDurationHuman + '\n\n';
+    }
+
+    if (report.tokens.totalCalls > 0) {
+      output += '🪙 **Token 使用** (' + report.tokens.totalCalls + ' 次调用)\n';
+      output += '  总 Token: ' + report.tokens.totalTokens.toLocaleString() + '\n';
+      output += '  估算成本: $' + report.tokens.estimatedCostUsd + '\n';
+      var models = Object.keys(report.tokens.byModel);
+      if (models.length > 0) {
+        output += '  模型分布: ' + models.map(function(m) { return m + '(' + report.tokens.byModel[m].calls + ')'; }).join(', ') + '\n';
+      }
+      output += '\n';
+    }
+
+    if (report.errorsTop5.length > 0) {
+      output += '⚠️ **错误 Top5**\n';
+      report.errorsTop5.forEach(function(e) {
+        output += '  • ' + e.error + ' (' + e.count + '次)\n';
+      });
+    }
+
+    Core.session.addMessage(output, 'ai');
+    return true;
+  }
   return false;
 }
 
