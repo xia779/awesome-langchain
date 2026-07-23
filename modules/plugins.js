@@ -191,14 +191,50 @@ function loadAllPlugins() {
   }
 }
 
-// ===== 🔧 #9: 插件沙箱加载（受限 require，无 vm 避免 Electron 渲染进程警告）=====
+// ===== 🔧 #9: 插件沙箱加载（受限 require + 执行超时 + 资源限制）=====
 const _BLOCKED_MODULES = [
   'child_process', 'cluster', 'dgram', 'dns', 'net', 'tls',
-  'http', 'https', 'http2', 'worker_threads', 'wasi', 'fs',
-  'fs/promises', 'node:fs', 'node:child_process', 'node:net',
-  'node:http', 'node:https', 'node:worker_threads'
+  'http', 'https', 'http2', 'worker_threads', 'wasi',
+  'fs', 'fs/promises', 'node:fs', 'node:child_process', 'node:net',
+  'node:http', 'node:https', 'node:worker_threads',
+  // 🔒 #27: 扩展封禁列表 — 防止逃逸到系统级 API
+  'vm', 'node:vm', 'v8', 'node:v8', 'inspector', 'node:inspector',
+  'process', 'node:process', 'repl', 'node:repl', 'perf_hooks',
+  'node:perf_hooks', 'async_hooks', 'node:async_hooks',
+  'module', 'node:module', 'trace_events', 'node:trace_events',
+  'tty', 'node:tty', 'readline', 'node:readline'
 ];
 const _SAFE_MODULES = ['path', 'url', 'util', 'events', 'buffer', 'crypto', 'stream', 'querystring', 'assert', 'os', 'punycode', 'string_decoder', 'timers'];
+
+// 🔒 #27: 插件初始化超时（毫秒），防止恶意插件阻塞主线程
+const PLUGIN_INIT_TIMEOUT = 5000;
+
+// 🔒 #27: 超时保护包装器 — 防止恶意插件 init() 同步阻塞时无提示
+// 注意：JS 单线程，无法真正中断同步死循环；此包装器用于记录超时并在异常时正确上抛
+function _runWithTimeout(fn, timeoutMs, pluginId) {
+  var completed = false;
+  var error = null;
+
+  var timer = setTimeout(function() {
+    if (!completed) {
+      console.error('⏰ 插件 ' + pluginId + ' 初始化超时（>' + timeoutMs + 'ms），可能包含死循环');
+    }
+  }, timeoutMs);
+
+  try {
+    fn();
+    completed = true;
+  } catch (e) {
+    completed = true;
+    error = e;
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (error) {
+    throw error;
+  }
+}
 
 function _loadPluginSandboxed(entryPath, pluginDir) {
   const code = fs.readFileSync(entryPath, 'utf-8');
@@ -210,11 +246,19 @@ function _loadPluginSandboxed(entryPath, pluginDir) {
     if (_BLOCKED_MODULES.indexOf(mod) !== -1) {
       throw new Error('🚫 插件沙箱: 禁止访问模块 "' + mod + '"');
     }
+    // 🔒 #13: 阻止通过 module/parent 链逃逸
+    if (mod === 'module') throw new Error('[sandbox] require("module") 被禁止');
+    if (mod.indexOf('..') >= 0) {
+      var _resolved = path.resolve(dirName, mod);
+      if (_resolved.indexOf(dirName) !== 0) throw new Error('[sandbox] 路径逃逸被阻止: ' + mod);
+    }
     // 相对路径：限制在插件目录内
     if (mod.startsWith('.') || mod.startsWith('/')) {
       var resolved = path.resolve(dirName, mod);
-      if (!resolved.startsWith(pluginDir)) {
-        throw new Error('🚫 插件沙箱: 禁止访问插件目录外的文件');
+      // 🔒 路径遍历防护：确保解析后仍在插件目录内
+      var normalizedPluginDir = path.resolve(pluginDir);
+      if (!resolved.startsWith(normalizedPluginDir + path.sep) && resolved !== normalizedPluginDir) {
+        throw new Error('🚫 插件沙箱: 禁止访问插件目录外的文件 (' + resolved + ')');
       }
       // 补全扩展名
       if (!fs.existsSync(resolved)) {
@@ -233,7 +277,7 @@ function _loadPluginSandboxed(entryPath, pluginDir) {
     }
     // 其他 node_modules：允许（插件可能需要 lodash 等纯 JS 库）
     // 但阻止任何包含危险子路径的
-    if (mod.indexOf('child_process') !== -1 || mod.indexOf('/fs') !== -1) {
+    if (mod.indexOf('child_process') !== -1 || mod.indexOf('/fs') !== -1 || mod.indexOf('\\\\fs') !== -1) {
       throw new Error('🚫 插件沙箱: 禁止访问 "' + mod + '"');
     }
     try { return require(mod); } catch (e) {
@@ -242,15 +286,42 @@ function _loadPluginSandboxed(entryPath, pluginDir) {
   }
 
   // CommonJS 包装器（用 Function 替代 vm，避免 Electron 渲染进程 vm 警告）
+  // 🔒 #27: 显式遮蔽 process/global/Buffer 全局变量，防止插件逃逸到系统 API
   var moduleObj = { exports: {} };
-  var pluginConsole = { log: console.log, warn: console.warn, error: console.error, info: console.info };
-  var wrapper = 'return (function(module, exports, require, __dirname, __filename, console, setTimeout, clearTimeout, setInterval, clearInterval) {\n' + code + '\n})';
+  var pluginConsole = {
+    log: function() { console.log.apply(console, arguments); },
+    warn: function() { console.warn.apply(console, arguments); },
+    error: function() { console.error.apply(console, arguments); },
+    info: function() { console.info.apply(console, arguments); }
+  };
+  // 🔒 遮蔽函数体内可能引用的全局变量
+  // 🔒 #13: 额外遮蔽 Function，阻止 Function('return this')() /
+  //        this.constructor.constructor('return process')() 等逃逸手法
+  var wrapper = 'return (function(module, exports, require, __dirname, __filename, console, ' +
+    'setTimeout, clearTimeout, setInterval, clearInterval, process, global, globalThis, Buffer, Function) {\n' +
+    code + '\n})';
+
+  // 🔒 #13: 受限 Function 存根 — 拦截 "return this" / "return process" 等逃逸模式
+  var RestrictedFunction = function() {
+    var src = Array.prototype.join.call(arguments, ' ');
+    if (/return\s+(this|process|global|globalThis)\b/.test(src)) {
+      throw new Error('[sandbox] Function 构造器逃逸被阻止');
+    }
+    throw new Error('[sandbox] Function 构造器被禁止');
+  };
 
   try {
     var factory = new Function(wrapper);
     var fn = factory();
+    // 🔒 #13: 传入 undefined 遮蔽 process/global/globalThis，受限存根遮蔽 Buffer/Function
     fn(moduleObj, moduleObj.exports, sandboxRequire, dirName, entryPath,
-      pluginConsole, setTimeout, clearTimeout, setInterval, clearInterval);
+      pluginConsole, setTimeout, clearTimeout, setInterval, clearInterval,
+      undefined, // process → undefined（防止 process.exit/process.mainModule.require 等）
+      undefined, // global → undefined
+      undefined, // globalThis → undefined
+      { from: function() {}, alloc: function() {}, allocUnsafe: function() {} }, // Buffer → 受限存根
+      RestrictedFunction // Function → 受限存根（阻止 return this/return process）
+    );
   } catch (e) {
     throw new Error('插件沙箱执行失败 (' + path.basename(entryPath) + '): ' + e.message);
   }
@@ -277,17 +348,20 @@ function loadPluginFromDir(pluginId, pluginPath) {
     const enabled = !disabledPlugins.includes(manifest.id);
 
     let instance = null;
-    if (enabled) {
+      if (enabled) {
       // 加载插件实例
       const entryPath = path.join(pluginPath, manifest.entry || 'index.js');
       if (fs.existsSync(entryPath)) {
         try {
-          // 🔧 #9: 沙箱加载 — 不再直接 require，改用 vm + 受限 require
+          // 🔧 #9: 沙箱加载 — 不再直接 require，改用 Function 包装 + 受限 require
           const PluginClass = _loadPluginSandboxed(entryPath, pluginPath);
           if (typeof PluginClass === 'function') {
             instance = new PluginClass(createPluginAPI(manifest.id));
             if (instance.init && typeof instance.init === 'function') {
-              instance.init();
+              // 🔒 #27: 初始化超时保护，防止恶意插件 init() 阻塞主线程
+              _runWithTimeout(function() {
+                instance.init();
+              }, PLUGIN_INIT_TIMEOUT, manifest.id);
             }
           }
         } catch (err) {

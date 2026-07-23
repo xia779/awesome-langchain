@@ -16,6 +16,48 @@ const { setupMobileRoutes } = require('./web-server');
 function registerApiRoutes(app2, ctx) {
   const { DATA_ROOT, getMainWindow, setActualPort } = ctx;
 
+  // 🔒 #16 修复：简易内存速率限制器（按 IP + 路径前缀）
+  var _rateLimitMap = {};
+  var RATE_LIMIT_WINDOW = 60000; // 1 分钟窗口
+  var RATE_LIMIT_MAX = { '/api/image': 10, '/api/search': 20, '/api/tts': 15, '/api/asr': 10, '/api/comfyui': 5, 'default': 60 };
+
+  function rateLimiter(req, res, next) {
+    var ip = req.ip || req.connection.remoteAddress || 'unknown';
+    var pathPrefix = '/api/' + (req.path.split('/')[2] || 'other');
+    var limit = RATE_LIMIT_MAX[pathPrefix] || RATE_LIMIT_MAX['default'];
+    var key = ip + ':' + pathPrefix;
+    var now = Date.now();
+
+    if (!_rateLimitMap[key]) {
+      _rateLimitMap[key] = { count: 1, resetAt: now + RATE_LIMIT_WINDOW };
+      return next();
+    }
+    var entry = _rateLimitMap[key];
+    if (now > entry.resetAt) {
+      entry.count = 1;
+      entry.resetAt = now + RATE_LIMIT_WINDOW;
+      return next();
+    }
+    entry.count++;
+    if (entry.count > limit) {
+      res.status(429).json({ error: 'Too Many Requests', message: '请求过于频繁，请稍后再试（限制: ' + limit + '次/分钟）' });
+      return;
+    }
+    next();
+  }
+
+  // 定期清理过期的速率限制条目
+  setInterval(function() {
+    var now = Date.now();
+    var keys = Object.keys(_rateLimitMap);
+    for (var i = 0; i < keys.length; i++) {
+      if (now > _rateLimitMap[keys[i]].resetAt) delete _rateLimitMap[keys[i]];
+    }
+  }, 60000);
+
+  // 应用速率限制到所有 /api 路由
+  app2.use('/api', rateLimiter);
+
   // 健康检查
   app2.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

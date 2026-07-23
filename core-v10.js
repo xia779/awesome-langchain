@@ -271,7 +271,8 @@ const Core = {
     
     const defaultConfig = {
       temperature: 0.7, ollamaModel: 'qwen2.5:7b',
-      deepseekModel: 'deepseek-chat', doubaoModel: 'doubao-pro-32k',
+      deepseekModel: 'deepseek-v4-flash', doubaoModel: 'doubao-pro-32k',
+      siliconModel: 'deepseek-ai/DeepSeek-V4-Flash',
       customModel: 'gpt-3.5-turbo', defaultApi: 'ollama',
       autoRoute: false, webSearch: false, deepThink: false, notification: true, disabledPlugins: [],
       appName: 'AI智能体', chatBackground: '', chatBubbleUser: '#3b82f6',
@@ -580,10 +581,18 @@ const Core = {
     }
 
     // ===== Phase 3: 按拓扑顺序调用 init() =====
+    // 🔒 #19 修复：支持 lazy:true 延迟加载，减少启动时间
+    var _lazyModules = {};  // { moduleName: { module, file } }
     for (var j = 0; j < sortedFiles.length; j++) {
       var file2 = sortedFiles[j];
       var entry = loadedModules[file2];
       if (!entry || typeof entry.module.init !== 'function') {
+        continue;
+      }
+      // 检查模块是否声明了 lazy 加载
+      if (entry.module.lazy === true) {
+        _lazyModules[entry.name] = { module: entry.module, file: file2, initialized: false };
+        console.log('⏳ [lazy] 模块 ' + entry.name + ' 延迟加载（首次使用时初始化）');
         continue;
       }
       try {
@@ -598,6 +607,35 @@ const Core = {
         console.error('❌ 模块 ' + file2 + ' init 失败:', err.message);
       }
     }
+
+    // 🔒 #19: 为延迟模块注册 getter，首次访问时自动 init
+    var self = this;
+    Object.keys(_lazyModules).forEach(function(modName) {
+      var lazyEntry = _lazyModules[modName];
+      // 将模块名映射到 Core 上的属性名（如 'manga-workflow' → Core.mangaWorkflow）
+      var propName = modName.replace(/-([a-z])/g, function(_, c) { return c.toUpperCase(); });
+      if (self[propName]) return; // 已存在则跳过
+      Object.defineProperty(self, propName, {
+        configurable: true,
+        enumerable: true,
+        get: function() {
+          if (!lazyEntry.initialized) {
+            lazyEntry.initialized = true;
+            console.log('🔄 [lazy] 首次使用，初始化模块: ' + modName);
+            try {
+              lazyEntry.module.init(self);
+            } catch (err) {
+              console.error('❌ [lazy] 模块 ' + modName + ' init 失败:', err.message);
+            }
+          }
+          // init 后模块通常会挂载到 Core.xxx，返回该属性
+          return self[propName];
+        }
+      });
+    });
+    if (Object.keys(_lazyModules).length > 0) {
+      console.log('✅ ' + Object.keys(_lazyModules).length + ' 个模块已标记为延迟加载');
+    }
   },
 
   generateId() {
@@ -611,26 +649,50 @@ window.Core = Core;
 // 所有 renderer → web-server 的请求都应通过 Core.getBackendBase() 获取地址，避免硬编码 8080。
 (function() {
   var _cachedPort = null;
+  var _lastResolveTime = 0;
   function _resolvePort() {
     try {
       var ipc = require('electron').ipcRenderer;
       var p = ipc.sendSync('get-server-port');
-      _cachedPort = (p && typeof p === 'number') ? p : 8080;
+      // 🔧 main 进程返回 0 表示服务器尚未启动成功，不要缓存为默认值 8080
+      if (p && typeof p === 'number' && p > 0) {
+        _cachedPort = p;
+      } else if (_cachedPort === null) {
+        _cachedPort = 0; // 0 表示未就绪，getBackendBase 会重试
+      }
       ipc.removeAllListeners('server:port');
       ipc.on('server:port', function(_e, newPort) {
-        if (newPort && typeof newPort === 'number') _cachedPort = newPort;
+        if (newPort && typeof newPort === 'number' && newPort > 0) _cachedPort = newPort;
       });
     } catch (e) {
-      _cachedPort = 8080;
+      if (_cachedPort === null) _cachedPort = 0;
     }
+    _lastResolveTime = Date.now();
     return _cachedPort;
   }
   Core.getBackendBase = function() {
-    if (_cachedPort === null) _resolvePort();
+    // 首次或未就绪时立即解析
+    if (_cachedPort === null || _cachedPort === 0) _resolvePort();
+    // 如果缓存的是默认端口 8080，可能是服务器尚未就绪或端口被占用后未更新，
+    // 每 2 秒内最多重新解析一次，避免每次请求都 IPC
+    if (_cachedPort === 8080 && Date.now() - _lastResolveTime > 2000) {
+      _resolvePort();
+    }
     return 'http://127.0.0.1:' + (_cachedPort || 8080);
   };
   // 强制重新解析端口（服务器重启后可调用）
   Core.refreshBackendPort = function() { return _resolvePort(); };
+  // 异步确认端口是否真正在监听（用于调试和诊断）
+  Core.probeBackendPort = function(port) {
+    return new Promise(function(resolve) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'http://127.0.0.1:' + (port || _cachedPort || 8080) + '/health', true);
+      xhr.timeout = 2000;
+      xhr.onload = function() { resolve({ ok: true, port: port || _cachedPort || 8080 }); };
+      xhr.onerror = xhr.ontimeout = function() { resolve({ ok: false, port: port || _cachedPort || 8080 }); };
+      xhr.send();
+    });
+  };
 })();
 
 // ===== 🔒 B02: 桌面渲染进程 fetch 自动注入认证 Token =====
@@ -1067,6 +1129,72 @@ Core.renderMarkdown = function(text) {
     }
   }
   loadModulesWhenReady();
+
+  // 🔒 #44 修复：集中式事件注册表 — 记录所有事件名 + payload 类型，方便开发者查阅
+  Core.EVENT_REGISTRY = {
+    // 生命周期
+    'typingEnd': '无 payload — AI 回复完成',
+    'themeApplied': 'config 对象 — 主题已应用',
+    'configChanged': 'changedConfig 对象 — 配置变更',
+    'languageChanged': 'lang 字符串 — 语言切换',
+    'searchReady': 'webSearch 函数 — 搜索模块就绪',
+    'session:updated': 'sessionId — 会话更新',
+    // AI / Agent
+    'ai:error': '{ message, context, time } — AI 调用错误',
+    'agent:response': 'agent 响应数据',
+    'agent:step': 'agent 步骤数据',
+    'agent:error': 'agent 错误数据',
+    'agent:done': 'agent 完成数据',
+    'agent:typing': 'agent 打字状态',
+    // 服务器
+    'server:port': 'port 数字 — 服务器端口',
+    'app:shutdown': '无 payload — 应用即将关闭',
+    // 通知
+    'notification': '通知数据',
+    'tray:action': '托盘操作',
+  };
+
+  // 🔒 #42 修复：优雅关闭序列 — 监听主进程 app:shutdown 事件，清理渲染进程资源
+  try {
+    var _shutdownIpc = require('electron').ipcRenderer;
+    _shutdownIpc.on('app:shutdown', function() {
+      console.log('🔄 [renderer-shutdown] 收到关闭信号，开始清理...');
+      try {
+        // 1. 停止 scheduler 所有定时器
+        if (Core.scheduler && Core.scheduler.stopAll) {
+          Core.scheduler.stopAll();
+          console.log('[renderer-shutdown] scheduler 已停止');
+        }
+        // 2. 取消所有 pending API 请求
+        if (Core._apiGetSessionState) {
+          var sessions = Core.session && Core.session.sessions ? Core.session.sessions : {};
+          Object.keys(sessions).forEach(function(sid) {
+            var state = sessions[sid]._apiState;
+            if (state && state.abortController) {
+              try { state.abortController.abort(); } catch (e) {}
+            }
+          });
+          console.log('[renderer-shutdown] pending API 请求已取消');
+        }
+        // 3. 关闭 WebSocket 连接
+        if (Core.gateway && Core.gateway.close) {
+          Core.gateway.close();
+          console.log('[renderer-shutdown] WebSocket 已关闭');
+        }
+        // 4. 关闭 SQLite 数据库
+        if (Core.db && Core.db.close) {
+          Core.db.close();
+          console.log('[renderer-shutdown] SQLite 已关闭');
+        }
+        // 5. 触发模块 destroy 钩子（如果存在）
+        Core.emit('app:shutdown');
+      } catch (shutdownErr) {
+        console.error('[renderer-shutdown] 清理异常:', shutdownErr.message);
+      }
+    });
+  } catch (e) {
+    console.warn('[renderer-shutdown] IPC 监听注册失败:', e.message);
+  }
 
   if (Core.config.appName) {
     document.title = Core.config.appName;

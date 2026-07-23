@@ -6,6 +6,9 @@ const http = require('http');
 
 let Core = null;
 
+// 🔒 #7 修复：缓存认证 Token，便于 401 时刷新重试
+var _cachedToken = '';
+
 // ===== 同步状态 =====
 let _syncTimer = null;
 let _lastSyncTime = 0;
@@ -279,36 +282,71 @@ function _getSafeConfig() {
 }
 
 // ===== HTTP 工具 =====
+// 🔒 #7 修复：获取并缓存认证 Token
+function _resolveAuthToken() {
+  if (!_cachedToken && Core && typeof Core.getAuthToken === 'function') {
+    try { _cachedToken = Core.getAuthToken() || ''; } catch (e) {}
+  }
+  return _cachedToken;
+}
+
 function _httpPost(url, data) {
   return new Promise(function(resolve) {
     try {
       var parsed = new (require('url').URL)(url);
       var body = JSON.stringify(data);
-      var headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) };
-      // 🔧 B02 兼容: 注入认证 Token
-      if (Core && typeof Core.getAuthToken === 'function') {
-        headers['x-auth-token'] = Core.getAuthToken();
-      }
-      var options = {
-        hostname: parsed.hostname,
-        port: parsed.port,
-        path: parsed.pathname,
-        method: 'POST',
-        headers: headers,
-        timeout: 15000
-      };
-      var req = http.request(options, function(res) {
-        var chunks = [];
-        res.on('data', function(c) { chunks.push(c); });
-        res.on('end', function() {
-          try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
-          catch (e) { resolve({ success: false, error: 'JSON parse error' }); }
+
+      var doRequest = function(retried) {
+        var headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) };
+        // 🔧 B02 兼容: 注入认证 Token（使用缓存）
+        var token = _resolveAuthToken();
+        if (token) headers['x-auth-token'] = token;
+
+        var options = {
+          hostname: parsed.hostname,
+          port: parsed.port,
+          path: parsed.pathname,
+          method: 'POST',
+          headers: headers,
+          timeout: 15000
+        };
+        var req = http.request(options, function(res) {
+          // 🔒 #7 修复：检测 401 并尝试刷新 Token 后重试一次
+          if (res.statusCode === 401 && !retried) {
+            console.warn('⚠️ [sync] 收到 401，尝试刷新 Token...');
+            var oldToken = _cachedToken;
+            var newToken = '';
+            try {
+              // 直接从 Core 重新获取，绕过缓存以拿到最新 Token
+              if (Core && typeof Core.getAuthToken === 'function') newToken = Core.getAuthToken() || '';
+            } catch (refreshErr) {
+              console.warn('⚠️ [sync] Token 刷新失败:', refreshErr.message);
+            }
+            if (newToken && newToken !== oldToken) {
+              _cachedToken = newToken;
+              res.resume(); // 丢弃当前响应体
+              doRequest(true);
+              return;
+            }
+            console.error('❌ [sync] Token 刷新后仍然 401，同步失败');
+            res.resume();
+            resolve({ success: false, error: 'Token 无效或已过期' });
+            return;
+          }
+          var chunks = [];
+          res.on('data', function(c) { chunks.push(c); });
+          res.on('end', function() {
+            try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
+            catch (e) { resolve({ success: false, error: 'JSON parse error' }); }
+          });
         });
-      });
-      req.on('error', function(e) { resolve({ success: false, error: e.message }); });
-      req.on('timeout', function() { req.destroy(); resolve({ success: false, error: 'timeout' }); });
-      req.write(body);
-      req.end();
+        req.on('error', function(e) { resolve({ success: false, error: e.message }); });
+        req.on('timeout', function() { req.destroy(); resolve({ success: false, error: 'timeout' }); });
+        req.write(body);
+        req.end();
+      };
+
+      doRequest(false);
     } catch (e) { resolve({ success: false, error: e.message }); }
   });
 }
@@ -317,30 +355,57 @@ function _httpGet(url) {
   return new Promise(function(resolve) {
     try {
       var parsed = new (require('url').URL)(url);
-      var headers = {};
-      // 🔧 B02 兼容: 注入认证 Token
-      if (Core && typeof Core.getAuthToken === 'function') {
-        headers['x-auth-token'] = Core.getAuthToken();
-      }
-      var options = {
-        hostname: parsed.hostname,
-        port: parsed.port,
-        path: parsed.pathname + parsed.search,
-        method: 'GET',
-        headers: headers,
-        timeout: 15000
-      };
-      var req = http.request(options, function(res) {
-        var chunks = [];
-        res.on('data', function(c) { chunks.push(c); });
-        res.on('end', function() {
-          try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
-          catch (e) { resolve({ success: false, error: 'JSON parse error' }); }
+
+      var doRequest = function(retried) {
+        var headers = {};
+        // 🔧 B02 兼容: 注入认证 Token（使用缓存）
+        var token = _resolveAuthToken();
+        if (token) headers['x-auth-token'] = token;
+
+        var options = {
+          hostname: parsed.hostname,
+          port: parsed.port,
+          path: parsed.pathname + parsed.search,
+          method: 'GET',
+          headers: headers,
+          timeout: 15000
+        };
+        var req = http.request(options, function(res) {
+          // 🔒 #7 修复：检测 401 并尝试刷新 Token 后重试一次
+          if (res.statusCode === 401 && !retried) {
+            console.warn('⚠️ [sync] 收到 401，尝试刷新 Token...');
+            var oldToken = _cachedToken;
+            var newToken = '';
+            try {
+              // 直接从 Core 重新获取，绕过缓存以拿到最新 Token
+              if (Core && typeof Core.getAuthToken === 'function') newToken = Core.getAuthToken() || '';
+            } catch (refreshErr) {
+              console.warn('⚠️ [sync] Token 刷新失败:', refreshErr.message);
+            }
+            if (newToken && newToken !== oldToken) {
+              _cachedToken = newToken;
+              res.resume(); // 丢弃当前响应体
+              doRequest(true);
+              return;
+            }
+            console.error('❌ [sync] Token 刷新后仍然 401，同步失败');
+            res.resume();
+            resolve({ success: false, error: 'Token 无效或已过期' });
+            return;
+          }
+          var chunks = [];
+          res.on('data', function(c) { chunks.push(c); });
+          res.on('end', function() {
+            try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
+            catch (e) { resolve({ success: false, error: 'JSON parse error' }); }
+          });
         });
-      });
-      req.on('error', function(e) { resolve({ success: false, error: e.message }); });
-      req.on('timeout', function() { req.destroy(); resolve({ success: false, error: 'timeout' }); });
-      req.end();
+        req.on('error', function(e) { resolve({ success: false, error: e.message }); });
+        req.on('timeout', function() { req.destroy(); resolve({ success: false, error: 'timeout' }); });
+        req.end();
+      };
+
+      doRequest(false);
     } catch (e) { resolve({ success: false, error: e.message }); }
   });
 }

@@ -593,6 +593,9 @@ async function callAPIStream(prompt, systemMsg, temperature, model, provider, on
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
   let fullText = '';
+  // 🔒 #1 修复：追踪流式响应中的 tool_calls（Ollama 在最后一个 chunk 返回）
+  var _streamToolCalls = null;
+  var _streamToolDepth = (arguments[7] && arguments[7]._toolDepth) || 0;
 
   while (true) {
     let chunkData;
@@ -619,10 +622,117 @@ async function callAPIStream(prompt, systemMsg, temperature, model, provider, on
           fullText += data.response;
           onChunk(data.response, fullText);
         }
+        // 🔒 #1: 捕获 tool_calls（Ollama 流式模式在最终 chunk 的 message.tool_calls 中返回）
+        if (data.message && data.message.tool_calls && data.message.tool_calls.length > 0) {
+          _streamToolCalls = data.message.tool_calls;
+        }
       } catch (e) { console.warn('⚠️ [api] 解析流式响应数据行失败:', e.message); }
     }
   }
+
+  // 🔒 #1 修复：流式结束后处理 tool_calls（与非流式 callAPI 对齐）
+  if (_streamToolCalls && _streamToolCalls.length > 0 && _streamToolDepth < 3) {
+    var toolCall = _streamToolCalls[0];
+    var toolName = toolCall.function ? toolCall.function.name : (toolCall.name || '');
+    var toolParams = {};
+    try {
+      toolParams = typeof toolCall.function.arguments === 'string'
+        ? JSON.parse(toolCall.function.arguments)
+        : (toolCall.function.arguments || toolCall.arguments || {});
+    } catch (pe) {
+      console.warn('[callAPIStream] 工具参数解析失败:', pe.message);
+      return fullText || '工具参数格式错误';
+    }
+    if (Core.toolsRegistry && typeof Core.toolsRegistry.executeTool === 'function' && toolName) {
+      try {
+        console.log('[callAPIStream] 执行工具:', toolName, JSON.stringify(toolParams).substring(0, 200));
+        var toolResult = await Core.toolsRegistry.executeTool(toolName, toolParams);
+        // 将 assistant 回复（含 tool_calls）和工具结果追加到 messages
+        messages.push({ role: 'assistant', content: fullText || '' });
+        messages.push({ role: 'tool', content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult) });
+        // 递归发起新的流式请求（深度 +1）
+        var _recurseSignal = signal || null;
+        var _depthOpts = { _toolDepth: _streamToolDepth + 1 };
+        // 直接重新调用 callAPIStream（messages 已包含工具结果）
+        var toolFullText = await _callAPIStreamWithMessages(messages, fullModel, temperature, onChunk, _recurseSignal, _depthOpts);
+        return fullText + '\n\n' + toolFullText;
+      } catch (toolErr) {
+        console.error('[callAPIStream] 工具执行失败:', toolErr);
+        return fullText + '\n\n⚠️ 工具执行失败：' + toolErr.message;
+      }
+    }
+  } else if (_streamToolCalls && _streamToolDepth >= 3) {
+    console.warn('[callAPIStream] tool_calls 递归深度超限(3)，跳过工具执行');
+  }
+
   return fullText;
+}
+
+// 🔒 #1 辅助：基于已有 messages 数组发起流式请求（供 tool_calls 递归使用）
+async function _callAPIStreamWithMessages(messages, fullModel, temperature, onChunk, signal, depthOpts) {
+  var chatMsgs = messages.map(function(m) {
+    var extracted = extractImagesFromContent(typeof m.content === 'string' ? m.content : '');
+    var msg = { role: m.role, content: extracted.text };
+    if (extracted.images && extracted.images.length > 0) {
+      msg.images = extracted.images.filter(function(img) { return typeof img === 'string'; });
+    }
+    return msg;
+  });
+  var payload = {
+    model: fullModel,
+    messages: chatMsgs,
+    stream: true,
+    options: { temperature: _tempFloat(temperature), num_predict: -1 }
+  };
+  if (Core.promptCache && Core.promptCache.enhanceOllama) Core.promptCache.enhanceOllama(payload);
+  var fetchOpts = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  };
+  if (signal) fetchOpts.signal = signal;
+  var resp = await fetch('http://127.0.0.1:11434/api/chat', fetchOpts);
+  if (!resp.ok) throw new Error('API 请求失败 (' + resp.status + ')');
+  if (!resp.body) throw new Error('无响应体');
+  var reader = resp.body.getReader();
+  var decoder = new TextDecoder();
+  var text = '';
+  var _toolCalls = null;
+  var _depth = (depthOpts && depthOpts._toolDepth) || 0;
+  while (true) {
+    var cd;
+    try { cd = await reader.read(); } catch (e) {
+      if (signal && signal.aborted) return text;
+      throw e;
+    }
+    if (cd.done) break;
+    var lines = decoder.decode(cd.value).split('\n').filter(function(l) { return l.trim(); });
+    for (var li = 0; li < lines.length; li++) {
+      try {
+        var d = JSON.parse(lines[li]);
+        if (d.message && d.message.content) { text += d.message.content; onChunk(d.message.content, text); }
+        if (d.response) { text += d.response; onChunk(d.response, text); }
+        if (d.message && d.message.tool_calls && d.message.tool_calls.length > 0) _toolCalls = d.message.tool_calls;
+      } catch (e) { /* skip */ }
+    }
+  }
+  // 递归处理嵌套 tool_calls
+  if (_toolCalls && _toolCalls.length > 0 && _depth < 3 && Core.toolsRegistry && Core.toolsRegistry.executeTool) {
+    var tc = _toolCalls[0];
+    var tn = tc.function ? tc.function.name : (tc.name || '');
+    var tp = {};
+    try { tp = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : (tc.function.arguments || {}); } catch (e) { return text; }
+    if (tn) {
+      try {
+        var tr = await Core.toolsRegistry.executeTool(tn, tp);
+        messages.push({ role: 'assistant', content: text });
+        messages.push({ role: 'tool', content: typeof tr === 'string' ? tr : JSON.stringify(tr) });
+        var deeper = await _callAPIStreamWithMessages(messages, fullModel, temperature, onChunk, signal, { _toolDepth: _depth + 1 });
+        return text + '\n\n' + deeper;
+      } catch (e) { return text + '\n\n⚠️ 工具执行失败：' + e.message; }
+    }
+  }
+  return text;
 }
 
 // ===== 图像描述 =====
@@ -686,21 +796,22 @@ async function describeImage(base64Image, prompt = '请描述这张图片的内�
 
 
 // ===== 发送消息 =====
-var _sendSemaphore = false; // Phase 5-2: 并发守卫，防止重复发送
+// 🔒 #9 修复：Promise 链互斥锁，替代简单布尔信号量，防止同一微任务内的并发调用
+var _sendLock = Promise.resolve();
 async function sendMessage() {
-  // Phase 5-2: 并发守卫 — 防止快速双击导致重复提交
-  if (_sendSemaphore) {
-    console.warn('⚠️ sendMessage 被并发调用，已拦截');
-    return;
-  }
-  _sendSemaphore = true;
+  // 将实际逻辑包裹在锁链中，确保串行执行
+  _sendLock = _sendLock.then(_doSendMessage).catch(function(e) {
+    console.error('sendMessage 锁链异常:', e);
+  });
+  return _sendLock;
+}
+async function _doSendMessage() {
   // 快捷指令拦截（入口级，防止 Enter 键绕过 wrappedSendMessage）
   const inputText = Core.dom.input.value.trim();
   if (inputText && inputText.startsWith('/') && Core.custom && Core.custom.executeCommand) {
     const handled = Core.custom.executeCommand(inputText);
     if (handled) {
       Core.dom.input.value = '';
-      _sendSemaphore = false; // 命令已处理，释放信号量（此 return 在 try/finally 之外）
       return;
     }
   }
@@ -1116,8 +1227,7 @@ async function sendMessage() {
     Core.dom.sendBtn.disabled = false;
     Core.dom.input.focus();
   } finally {
-    // Phase 5-2: 释放并发守卫
-    _sendSemaphore = false;
+    // 🔒 #9: Promise 链自动释放，无需手动重置
   }
 }
 module.exports = {

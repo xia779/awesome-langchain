@@ -122,25 +122,51 @@ async function generatePdf(options) {
     if (y - needed < 50) { page = pdfDoc.addPage([595, 842]); y = 790; }
   }
 
-  function drawWrapped(text, f, size, indent) {
-    const x = margin + (indent || 0);
-    const availWidth = maxWidth - (indent || 0);
-    let line = '';
-    // 逐字符测量宽度（兼容中文无空格 + 英文有空格）
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i];
-      const test = line + ch;
-      if (f.widthOfTextAtSize(test, size) > availWidth && line.length > 0) {
-        ensureSpace(size + 4);
-        page.drawText(line, { x, y, size, font: f, color: rgb(0.1, 0.1, 0.1) });
-        y -= size + 4;
-        line = ch;
-      } else {
-        line = test;
+    // 🔒 #6 修复：中英混排智能断行 — CJK 逐字断行，Latin 单词保持完整
+    function drawWrapped(text, f, size, indent) {
+      const x = margin + (indent || 0);
+      const availWidth = maxWidth - (indent || 0);
+      // 将文本分词：CJK 字符单独成 token，连续 ASCII 字母/数字作为整体
+      var tokens = [];
+      var i = 0;
+      while (i < text.length) {
+        var code = text.charCodeAt(i);
+        // CJK 统一汉字 / 全角标点 / 日文假名等
+        var isCJK = (code >= 0x4E00 && code <= 0x9FFF) || (code >= 0x3400 && code <= 0x4DBF) ||
+                    (code >= 0x3000 && code <= 0x303F) || (code >= 0xFF00 && code <= 0xFFEF) ||
+                    (code >= 0x3040 && code <= 0x309F) || (code >= 0x30A0 && code <= 0x30FF);
+        if (isCJK) {
+          tokens.push(text[i]);
+          i++;
+        } else if (/[a-zA-Z0-9]/.test(text[i])) {
+          // 连续 ASCII 字母/数字作为一个整体（不拆开英文单词）
+          var word = '';
+          while (i < text.length && /[a-zA-Z0-9._\-]/.test(text[i])) {
+            word += text[i];
+            i++;
+          }
+          tokens.push(word);
+        } else {
+          // 空格、标点等
+          tokens.push(text[i]);
+          i++;
+        }
       }
+      var line = '';
+      for (var ti = 0; ti < tokens.length; ti++) {
+        var tok = tokens[ti];
+        var test = line + tok;
+        if (f.widthOfTextAtSize(test, size) > availWidth && line.length > 0) {
+          ensureSpace(size + 4);
+          page.drawText(line, { x, y, size, font: f, color: rgb(0.1, 0.1, 0.1) });
+          y -= size + 4;
+          line = tok;
+        } else {
+          line = test;
+        }
+      }
+      if (line) { ensureSpace(size + 4); page.drawText(line, { x, y, size, font: f, color: rgb(0.1, 0.1, 0.1) }); y -= size + 4; }
     }
-    if (line) { ensureSpace(size + 4); page.drawText(line, { x, y, size, font: f, color: rgb(0.1, 0.1, 0.1) }); y -= size + 4; }
-  }
 
   // Title
   ensureSpace(30);

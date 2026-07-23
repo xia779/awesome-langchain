@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 let ipcRenderer = null;
-try { ipcRenderer = require('electron').ipcRenderer; } catch (e) {}
+try { ipcRenderer = require('electron').ipcRenderer; } catch (e) { console.warn('⚠️ [backup] 加载ipcRenderer失败(非Electron环境):', e.message); }
 
 let Core;
 
@@ -51,7 +51,7 @@ if (ipcRenderer) {
       if (status) status.textContent = '✅ 数据恢复成功';
       showToast('数据恢复成功！应用将重新加载以应用恢复的数据。', 'success');
       // 恢复后重新加载页面以应用数据
-      try { window.location.reload(); } catch(e) {}
+      try { window.location.reload(); } catch(e) { console.warn('⚠️ [backup] 恢复后重新加载页面失败:', e.message); }
     } else {
       if (status) status.textContent = '❌ 恢复失败';
       showToast('恢复失败: ' + (data.error || '未知错误'), 'error');
@@ -270,7 +270,7 @@ function getBackupInfo() {
         created: stat.birthtime || stat.ctime,
         isDirectory: stat.isDirectory(),
       });
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [backup] 读取备份条目信息失败:', e.message); }
   }
   
   backups.sort((a, b) => b.created - a.created);

@@ -40,6 +40,13 @@ function init(_Core) {
       
       // 启用 WAL 模式（提高并发性能）
       db.pragma('journal_mode = WAL');
+      // 🔒 #21: WAL 模式 + 同步优化
+      try {
+        db.pragma('synchronous = NORMAL');
+        db.pragma('wal_autocheckpoint = 1000');
+      } catch (e) {
+        console.warn('⚠️ [database] WAL 优化设置失败:', e.message);
+      }
       // 🔧 关闭外键约束：应用使用文件系统管理用户，FK 约束仅为声明性
       db.pragma('foreign_keys = OFF');
       
@@ -498,59 +505,68 @@ function migrateFromJSON(userId) {
   
   let migrated = 0;
   
-  // 1. 迁移配置
-  if (fs.existsSync(configPath)) {
-    try {
-      const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      Object.keys(configData).forEach(key => {
-        setUserConfig(userId, key, configData[key]);
-      });
-      console.log('✅ 配置已迁移到 SQLite');
-      migrated++;
-    } catch (e) {
-      console.warn('⚠️ 配置迁移失败:', e.message);
-    }
-  }
-  
-  // 2. 迁移会话
-  if (fs.existsSync(sessionsDir)) {
-    try {
-      const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
-      files.forEach(file => {
-        try {
-          const sessionPath = path.join(sessionsDir, file);
-          const sessionData = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
-          const sessionId = file.replace('.json', '');
-          
-          // 插入会话
-          saveSession(sessionId, {
-            ...sessionData,
-            userId: userId,
-          });
-        } catch (e) {
-          console.warn('⚠️ 会话迁移失败:', file, e.message);
-        }
-      });
-      console.log('✅ 会话已迁移到 SQLite:', files.length, '个');
-      migrated++;
-    } catch (e) {
-      console.warn('⚠️ 会话迁移失败:', e.message);
-    }
-  }
-  
-  // 3. 迁移收藏
-  const favoritesPath = path.join(userDir, 'favorites.json');
-  if (fs.existsSync(favoritesPath)) {
-    try {
-      const favorites = JSON.parse(fs.readFileSync(favoritesPath, 'utf8'));
-      if (Array.isArray(favorites)) {
-        favorites.forEach(fav => addFavorite(userId, fav));
-        console.log('✅ 收藏已迁移到 SQLite:', favorites.length, '条');
+  // 🔒 #21 修复：批量操作使用事务包裹，减少 WAL 写入次数
+  const doMigrate = db.transaction(function() {
+    // 1. 迁移配置
+    if (fs.existsSync(configPath)) {
+      try {
+        const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        Object.keys(configData).forEach(key => {
+          setUserConfig(userId, key, configData[key]);
+        });
+        console.log('✅ 配置已迁移到 SQLite');
         migrated++;
+      } catch (e) {
+        console.warn('⚠️ 配置迁移失败:', e.message);
       }
-    } catch (e) {
-      console.warn('⚠️ 收藏迁移失败:', e.message);
     }
+    
+    // 2. 迁移会话
+    if (fs.existsSync(sessionsDir)) {
+      try {
+        const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+        files.forEach(file => {
+          try {
+            const sessionPath = path.join(sessionsDir, file);
+            const sessionData = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
+            const sessionId = file.replace('.json', '');
+            
+            // 插入会话
+            saveSession(sessionId, {
+              ...sessionData,
+              userId: userId,
+            });
+          } catch (e) {
+            console.warn('⚠️ 会话迁移失败:', file, e.message);
+          }
+        });
+        console.log('✅ 会话已迁移到 SQLite:', files.length, '个');
+        migrated++;
+      } catch (e) {
+        console.warn('⚠️ 会话迁移失败:', e.message);
+      }
+    }
+    
+    // 3. 迁移收藏
+    const favoritesPath = path.join(userDir, 'favorites.json');
+    if (fs.existsSync(favoritesPath)) {
+      try {
+        const favorites = JSON.parse(fs.readFileSync(favoritesPath, 'utf8'));
+        if (Array.isArray(favorites)) {
+          favorites.forEach(fav => addFavorite(userId, fav));
+          console.log('✅ 收藏已迁移到 SQLite:', favorites.length, '条');
+          migrated++;
+        }
+      } catch (e) {
+        console.warn('⚠️ 收藏迁移失败:', e.message);
+      }
+    }
+  });
+
+  try {
+    doMigrate();
+  } catch (e) {
+    console.warn('⚠️ [database] 迁移事务执行失败:', e.message);
   }
   
   return migrated > 0;

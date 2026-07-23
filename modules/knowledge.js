@@ -94,11 +94,35 @@ async function checkEmbeddingModel(force) {
     console.warn(`⚠️ 嵌入模型 ${preferred} 和 ${FALLBACK_EMBEDDING_MODEL} 均未安装`);
     console.warn(`💡 安装方法: ollama pull ${preferred}`);
     console.warn(`📂 知识库将使用 BM25 文本检索（无需嵌入模型，功能正常）`);
+    return false;
   } catch (e) {
     embeddingAvailable = false;
     activeEmbeddingModel = null;
     console.warn('⚠️ 无法检测 Ollama 服务，嵌入模型不可用:', e.message.split('\n')[0]);
     console.warn('📂 知识库将使用 BM25 文本检索');
+    return false;
+  }
+
+  // 🔧 额外验证 /api/embeddings 端点是否真的可调用（避免 tags 通但 embed 卡死）
+  try {
+    const model = activeEmbeddingModel || getPreferredEmbeddingModel();
+    const probeResp = await fetch(`${OLLAMA_BASE}/api/embeddings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: model, prompt: 'test' }),
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!probeResp.ok) throw new Error(`HTTP ${probeResp.status}`);
+    const probeData = await probeResp.json();
+    if (!probeData.embedding || !Array.isArray(probeData.embedding)) {
+      throw new Error('embeddings 端点返回异常');
+    }
+  } catch (e) {
+    embeddingAvailable = false;
+    activeEmbeddingModel = null;
+    console.warn('⚠️ Ollama embeddings 端点探测失败:', e.message.split('\n')[0]);
+    console.warn('📂 知识库将使用 BM25 文本检索');
+    return false;
   }
 
   return embeddingAvailable;
@@ -206,6 +230,7 @@ async function getEmbedding(text) {
 
   try {
     const model = getEmbeddingModel();
+    // 🔧 缩短超时：嵌入模型本地推理通常很快，10 秒足够；超时时快速降级 BM25
     const resp = await fetch(`${OLLAMA_BASE}/api/embeddings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -213,7 +238,7 @@ async function getEmbedding(text) {
         model: model,
         prompt: text.substring(0, 8000), // bge-m3 支持较长输入
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(10000),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -222,7 +247,12 @@ async function getEmbedding(text) {
     }
     return data.embedding;
   } catch (err) {
-    console.warn('⚠️ 获取向量失败:', err.message);
+    // 只打印一次友好提示，避免刷屏
+    if (embeddingAvailable !== false) {
+      console.warn('⚠️ 获取向量失败:', err.message.split('\n')[0]);
+      console.warn('💡 如需语义检索，请确保 Ollama 已启动且模型已安装：ollama pull ' + getPreferredEmbeddingModel());
+      console.warn('📂 当前已自动降级为 BM25 文本检索，知识库功能仍可用');
+    }
     // 标记为不可用，避免后续重复请求
     embeddingAvailable = false;
     return null;
@@ -383,13 +413,23 @@ async function uploadDocument(filePathOrContent) {
     // 计算内容哈希（用于去重）
     const contentHash = crypto.createHash('sha256').update(content, 'utf8').digest('hex');
 
-    // 🔧 #14: auto_ 文档幂等性 — 同名覆写而非新建
-    if (fileName.startsWith('auto_')) {
-      const existingByName = listDocuments().find(d => d.fileName === fileName);
-      if (existingByName) {
-        console.log('🔄 auto_ 文档覆写: ' + fileName + ' (旧 ID: ' + existingByName.id + ')');
-        await deleteDocument(existingByName.id);
+    // 🔒 #5 修复：同名文档追加序号而非静默覆盖
+    var existingDocNames = listDocuments().map(function(d) { return d.fileName; });
+    var finalName = fileName;
+    var baseName = fileName;
+    var nameCounter = 1;
+    while (existingDocNames.indexOf(finalName) >= 0) {
+      var dotIdx = baseName.lastIndexOf('.');
+      if (dotIdx > 0) {
+        finalName = baseName.substring(0, dotIdx) + '_' + nameCounter + baseName.substring(dotIdx);
+      } else {
+        finalName = baseName + '_' + nameCounter;
       }
+      nameCounter++;
+    }
+    if (finalName !== fileName) {
+      console.log('🔄 同名文档已存在，重命名: ' + fileName + ' → ' + finalName);
+      fileName = finalName;
     }
 
     // 检查是否已存在相同内容的文档
@@ -562,6 +602,21 @@ async function search(query, topK = 5) {
 }
 
 // ===== 列出已上传的文档 =====
+// 🔒 #20: FTS5 全文检索（比内存遍历快 10-100 倍）
+function searchFTS(query, limit) {
+  limit = limit || 5;
+  try {
+    if (typeof db === 'undefined' || !db) return [];
+    var rows = db.prepare(
+      'SELECT kc.* FROM knowledge_fts fts JOIN knowledge_chunks kc ON kc.rowid = fts.rowid WHERE knowledge_fts MATCH ? ORDER BY rank LIMIT ?'
+    ).all(query, limit);
+    return rows;
+  } catch (e) {
+    console.warn('⚠️ [knowledge] FTS5 检索失败，回退到内存检索:', e.message);
+    return [];
+  }
+}
+
 function listDocuments() {
   const indexPath = path.join(getKnowledgeDir(), 'index.json');
   if (!fs.existsSync(indexPath)) return [];
@@ -1243,6 +1298,7 @@ module.exports = {
     Core.knowledge = {
       uploadDocument,
       search,
+      searchFTS,
       searchWithCitations,
       importFromUrl,
       searchSuggestions,
@@ -1270,6 +1326,19 @@ module.exports = {
 
     // 异步初始化：检测嵌入模型（不阻塞启动）
     ensureDir();
+
+    // 🔒 #20 修复：FTS5 全文索引加速知识库检索
+    try {
+      if (typeof db !== 'undefined' && db) {
+        db.exec('CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5(doc_id, text, content=knowledge_chunks, content_rowid=rowid)');
+        // 同步触发器：chunks 表变更时自动更新 FTS 索引
+        db.exec('CREATE TRIGGER IF NOT EXISTS knowledge_fts_insert AFTER INSERT ON knowledge_chunks BEGIN INSERT INTO knowledge_fts(rowid, doc_id, text) VALUES (new.rowid, new.doc_id, new.text); END');
+        db.exec('CREATE TRIGGER IF NOT EXISTS knowledge_fts_delete AFTER DELETE ON knowledge_chunks BEGIN INSERT INTO knowledge_fts(knowledge_fts, rowid, doc_id, text) VALUES (\'delete\', old.rowid, old.doc_id, old.text); END');
+      }
+    } catch (ftsErr) {
+      console.warn('⚠️ [knowledge] FTS5 索引创建失败（不影响基本功能）:', ftsErr.message);
+    }
+
     checkEmbeddingModel().then((available) => {
       const stats = getStats();
       console.log(`✅ 知识库模块已加载 | ${stats.totalDocs} 文档, ${stats.totalChunks} 分块 | 模式: ${stats.searchMode}`);

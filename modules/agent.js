@@ -234,7 +234,7 @@ function parsePlan(text) {
     // 尝试直接解析
     var parsed2 = JSON.parse(text.trim());
     if (Array.isArray(parsed2)) return parsed2;
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [agent] 解析任务计划JSON失败:', e.message); }
   return null;
 }
 

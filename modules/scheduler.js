@@ -487,10 +487,15 @@ async function executeTask(task) {
           _handlerRegistry[action.handler]();
         } else {
           // 向后兼容：字符串代码用 Function 执行（替代 vm，避免 Electron 渲染进程警告）
-          var _fn = new Function('console', 'Math', 'Date', 'JSON', 'setTimeout', 'clearTimeout',
+          // 🔒 #8 修复：注入 Core 到 handler 上下文，使 handler 字符串可访问 Core.xxx
+          var _fn = new Function('Core', 'console', 'Math', 'Date', 'JSON', 'setTimeout', 'clearTimeout',
             '(function() { ' + action.handler + ' })()');
-          _fn({ log: function() {}, warn: function() {}, error: function() {} },
-            Math, Date, JSON, setTimeout, clearTimeout);
+          try {
+            _fn(Core, { log: function() {}, warn: function() {}, error: function() {} },
+              Math, Date, JSON, setTimeout, clearTimeout);
+          } catch (handlerErr) {
+            console.error('❌ [scheduler] handler 执行失败:', action.handler.substring(0, 100), handlerErr.message);
+          }
         }
       } catch (e) {
         console.error('scheduler: Custom handler error:', e.message);

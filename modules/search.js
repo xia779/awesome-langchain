@@ -3,8 +3,33 @@
 let Core = null;
 
 // ===== 动态解析后端服务端口（统一走 Core.getBackendBase()，core-v10.js 中定义）=====
+var _backendSearchHealthy = true;
+
+// 异步探测后端搜索服务是否可用
+async function _probeSearchBackend() {
+  try {
+    var base = _searchBackendBase();
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, 2000);
+    var resp = await fetch(base + '/health', { method: 'GET', signal: controller.signal });
+    clearTimeout(timer);
+    _backendSearchHealthy = resp.ok;
+  } catch (e) {
+    _backendSearchHealthy = false;
+  }
+  return _backendSearchHealthy;
+}
+
 function _searchBackendBase() {
-  if (Core && typeof Core.getBackendBase === 'function') return Core.getBackendBase();
+  if (Core && typeof Core.refreshBackendPort === 'function') Core.refreshBackendPort();
+  if (Core && typeof Core.getBackendBase === 'function') {
+    var base = Core.getBackendBase();
+    // 如果返回的端口是默认 8080 且健康标记为 false，大概率服务未启动
+    if (base === 'http://127.0.0.1:8080' && !_backendSearchHealthy) {
+      console.warn('⚠️ 本地搜索服务尚未就绪，跳过请求 8080');
+    }
+    return base;
+  }
   return 'http://127.0.0.1:8080';
 }
 
@@ -20,6 +45,12 @@ function getEffectiveEngine() {
 // ===== 主搜索函数：优先走后端代理，降级直接请求 =====
 async function webSearch(query) {
   const engine = getEffectiveEngine();
+
+  // 如果之前已探测到后端不可用，直接降级，不再反复请求失败端口
+  if (!_backendSearchHealthy) {
+    console.log('🔄 本地搜索服务不可用，直接使用前端搜索引擎');
+    return await webSearchDirect(query, engine);
+  }
 
   try {
     const resp = await fetch(_searchBackendBase() + '/api/search', {
@@ -55,6 +86,10 @@ async function webSearch(query) {
     
   } catch (err) {
     console.error('❌ 后端代理失败:', err.message);
+    // 连接拒绝时标记后端不可用，避免 webSearchDirect 再次请求同一失败端口
+    if (err && err.message && (err.message.includes('ECONNREFUSED') || err.message.includes('Failed to fetch'))) {
+      _backendSearchHealthy = false;
+    }
     let result = await webSearchDirect(query, engine);
     if ((result.includes('未找到有效') || result.includes('搜索失败') || result.includes('请填写')) && engine === 'bocha' && Core.config.tavilyApiKey) {
       console.log('🔄 博查失败，降级到 Tavily');
@@ -190,18 +225,40 @@ async function searchSearXNGStructured(query) {
   return [];
 }
 
-// ----- 博查结构化 -----
-async function searchBochaStructured(query) {
-  var apiKey = Core.config.bochaApiKey;
-  if (!apiKey) throw new Error('\u8bf7\u586b\u5199\u535a\u67e5 API Key');
-  var resp = await fetch('https://api.bochaai.com/v1/web-search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-    body: JSON.stringify({ query: query, count: 5 }),
-    signal: AbortSignal.timeout(15000)
-  });
-  if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  var data = await resp.json();
+// 🔒 #27 修复：提取搜索引擎公共逻辑，消除 structured/direct 重复代码
+async function _searchEngineRequest(engine, query, options) {
+  options = options || {};
+  switch (engine) {
+    case 'bocha': {
+      var apiKey = Core.config.bochaApiKey;
+      if (!apiKey) throw new Error('请填写博查 API Key');
+      var resp = await fetch('https://api.bochaai.com/v1/web-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify({ query: query, count: options.count || 5 }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      return await resp.json();
+    }
+    case 'tavily': {
+      var tApiKey = Core.config.tavilyApiKey;
+      if (!tApiKey) throw new Error('请填写 Tavily API Key');
+      var tResp = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: tApiKey, query: query, max_results: options.count || 5, include_answer: true }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!tResp.ok) throw new Error('HTTP ' + tResp.status);
+      return await tResp.json();
+    }
+    default:
+      throw new Error('不支持的搜索引擎: ' + engine);
+  }
+}
+
+function _formatBochaResults(data) {
   var rawPages = null;
   if (data.data && data.data.webPages) {
     if (data.data.webPages.value && data.data.webPages.value.length > 0) rawPages = data.data.webPages.value;
@@ -215,7 +272,6 @@ async function searchBochaStructured(query) {
       return { title: p.name || p.title || '', snippet: p.snippet || p.summary || '', url: p.url || p.link || '' };
     });
   }
-  // 新闻兜底
   if (data.data && data.data.news && data.data.news.length > 0) {
     return data.data.news.map(function(n) { return { title: n.name || '', snippet: n.snippet || '', url: '' }; });
   }
@@ -225,22 +281,9 @@ async function searchBochaStructured(query) {
   return [];
 }
 
-// ----- Tavily 结构化 -----
-async function searchTavilyStructured(query) {
-  var apiKey = Core.config.tavilyApiKey;
-  if (!apiKey) throw new Error('\u8bf7\u586b\u5199 Tavily API Key');
-  var resp = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: apiKey, query: query, max_results: 5, include_answer: true }),
-    signal: AbortSignal.timeout(15000)
-  });
-  if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  var data = await resp.json();
+function _formatTavilyResults(data) {
   var items = [];
-  if (data.answer) {
-    items.push({ title: '\u641c\u7d22\u6458\u8981', snippet: data.answer, url: '' });
-  }
+  if (data.answer) items.push({ title: '搜索摘要', snippet: data.answer, url: '' });
   if (data.results && data.results.length > 0) {
     data.results.forEach(function(r) {
       items.push({ title: r.title || '', snippet: r.content || '', url: r.url || '' });
@@ -249,9 +292,46 @@ async function searchTavilyStructured(query) {
   return items;
 }
 
+// ----- 博查结构化 -----
+async function searchBochaStructured(query) {
+  // 🔒 #27: 使用公共请求函数
+  var data = await _searchEngineRequest('bocha', query);
+  return _formatBochaResults(data);
+}
+
+// ----- Tavily 结构化 -----
+async function searchTavilyStructured(query) {
+  // 🔒 #27: 使用公共请求函数
+  var data = await _searchEngineRequest('tavily', query);
+  return _formatTavilyResults(data);
+}
+
+// ===== 快速探测后端搜索代理是否可用 =====
+async function _probeSearchBackend() {
+  try {
+    var base = _searchBackendBase();
+    var resp = await fetch(base + '/health', { signal: AbortSignal.timeout(2000) });
+    _backendSearchHealthy = resp.ok;
+    return _backendSearchHealthy;
+  } catch (e) {
+    _backendSearchHealthy = false;
+    return false;
+  }
+}
+
 // ===== 降级：直接请求（当后端不可用时）=====
 async function webSearchDirect(query, engine) {
   console.log(`🔄 降级直接请求: ${engine}`);
+
+  // 🔒 #4 修复：明确标注 Bing/DuckDuckGo/SearXNG 依赖后端代理，非真正直连
+  if (engine === 'duckduckgo' || engine === 'bing' || engine === 'searxng') {
+    await _probeSearchBackend();
+    if (!_backendSearchHealthy) {
+      console.warn('⚠️ [' + engine + '] 依赖后端搜索代理（非直连），代理未启动');
+      return `联网搜索暂时不可用：${engine} 引擎依赖本地搜索代理（端口 ${_searchBackendBase().split(':').pop()} 无响应）。\n该引擎不支持真正的客户端直连，请检查应用是否已完成启动。\n如需无代理搜索，请在设置 → 搜索引擎中切换到博查或 Tavily（需 API Key）。`;
+    }
+  }
+
   try {
     let results = '';
     switch (engine) {
@@ -346,52 +426,28 @@ async function searchSearXNGDirect(query) {
 
 // ----- 博查直接请求 -----
 async function searchBochaDirect(query) {
-  const apiKey = Core.config.bochaApiKey;
-  if (!apiKey) throw new Error('请填写博查 API Key');
-  const resp = await fetch('https://api.bochaai.com/v1/web-search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({ query, count: 5 }),
-    signal: AbortSignal.timeout(15000)
-  });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const data = await resp.json();
-  if (data.data && data.data.webPages && data.data.webPages.value && data.data.webPages.value.length > 0) {
-    return data.data.webPages.value.map(p => `${p.name}\n${p.snippet}\n${p.url || ''}`).join('\n\n');
-  } else if (data.data && data.data.webPages && Array.isArray(data.data.webPages) && data.data.webPages.length > 0) {
-    return data.data.webPages.map(p => `${p.name}\n${p.snippet}\n${p.url || ''}`).join('\n\n');
-  } else if (data.data && data.data.news && data.data.news.length > 0) {
-    return data.data.news.map(n => `${n.name}\n${n.snippet}`).join('\n\n');
-  } else if (data.webPages && data.webPages.value && data.webPages.value.length > 0) {
-    return data.webPages.value.map(p => `${p.name || p.title}\n${p.snippet || p.summary}\n${p.url || p.link || ''}`).join('\n\n');
-  } else if (data.webPages && Array.isArray(data.webPages) && data.webPages.length > 0) {
-    return data.webPages.map(p => `${p.name || p.title}\n${p.snippet || p.summary}\n${p.url || p.link || ''}`).join('\n\n');
-  } else if (data.news && data.news.length > 0) {
-    return data.news.map(n => `${n.name || n.title}\n${n.snippet || n.summary}`).join('\n\n');
-  } else if (data.results && data.results.length > 0) {
-    return data.results.map(r => `${r.title || r.name}\n${r.snippet || r.summary || r.content}\n${r.url || r.link || ''}`).join('\n\n');
+  // 🔒 #27: 使用公共请求函数 + 格式化
+  var data = await _searchEngineRequest('bocha', query);
+  var results = _formatBochaResults(data);
+  if (results.length > 0) {
+    return results.map(function(r) { return r.title + '\n' + r.snippet + '\n' + (r.url || ''); }).join('\n\n');
+  }
+  // 兜底：检查其他格式
+  if (data.results && data.results.length > 0) {
+    return data.results.map(function(r) { return (r.title || r.name) + '\n' + (r.snippet || r.summary || r.content) + '\n' + (r.url || r.link || ''); }).join('\n\n');
   }
   return '';
 }
 
 // ----- Tavily 直接请求 -----
 async function searchTavilyDirect(query) {
-  const apiKey = Core.config.tavilyApiKey;
-  if (!apiKey) throw new Error('请填写 Tavily API Key');
-  const resp = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: apiKey, query: query, max_results: 5, include_answer: true }),
-    signal: AbortSignal.timeout(15000)
-  });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const data = await resp.json();
-  let results = '';
-  if (data.answer) results = `摘要：${data.answer}\n\n`;
-  if (data.results && data.results.length > 0) {
-    results += data.results.map(r => `${r.title}\n${r.content}\n${r.url || ''}`).join('\n\n');
+  // 🔒 #27: 使用公共请求函数 + 格式化
+  var data = await _searchEngineRequest('tavily', query);
+  var results = _formatTavilyResults(data);
+  if (results.length > 0) {
+    return results.map(function(r) { return r.title + '\n' + r.snippet + '\n' + (r.url || ''); }).join('\n\n');
   }
-  return results;
+  return '';
 }
 
 // ===== 更新联网按钮状态 =====

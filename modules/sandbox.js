@@ -96,6 +96,23 @@ function executePythonSandboxed(code, options) {
   var opts = Object.assign({ timeout: 30000, maxOutput: 5000 }, options || {});
   var sandbox = getSandboxDir();
 
+  // 🔒 #18 修复：Python 代码基础安全检查 — 禁止危险 import
+  var _pyBlacklist = ['import os', 'import subprocess', 'import socket', 'import shutil',
+    'import sys', 'import ctypes', 'import importlib', '__import__', 'eval(', 'exec(',
+    'open(', 'os.system', 'os.popen', 'subprocess.call', 'subprocess.run', 'subprocess.Popen'];
+  var _pyCodeLower = (typeof code === 'string' ? code : '').toLowerCase();
+  var _pyBlocked = null;
+  for (var _pbi = 0; _pbi < _pyBlacklist.length; _pbi++) {
+    if (_pyCodeLower.indexOf(_pyBlacklist[_pbi]) >= 0) {
+      _pyBlocked = _pyBlacklist[_pbi];
+      break;
+    }
+  }
+  if (_pyBlocked) {
+    console.warn('⚠️ [sandbox] Python 代码包含受限操作:', _pyBlocked);
+    return Promise.resolve({ success: false, error: 'Python 代码包含受限操作: ' + _pyBlocked + '（安全策略禁止）' });
+  }
+
   // 安全检查
   var safety = checkPythonSafety(code);
   if (safety.risk === 'high') {

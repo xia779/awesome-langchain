@@ -194,18 +194,13 @@ function setupMobileRoutes(expressApp, dataRoot) {
   console.log('📱 移动端静态文件目录:', publicDir, '存在:', fs.existsSync(publicDir));
 
   // 显式处理 /m 和 /m/ 路由（修复手机端 Cannot GET）
-  // 🔒 B02: 注入 API Token 供移动端 fetch 使用
+  // 🔒 #14 修复：不再将 Token 嵌入 HTML，改为通过独立端点 /m/auth 获取
   function serveMobileIndex(req, res) {
     var indexFile = path.join(publicDir, 'index.html');
     if (fs.existsSync(indexFile)) {
       var html = fs.readFileSync(indexFile, 'utf-8');
-      // 从 dataRoot/.api-token 读取 token 注入到页面
-      var token = '';
-      try {
-        var tokenFile = path.join(dataRoot, '.api-token');
-        if (fs.existsSync(tokenFile)) token = fs.readFileSync(tokenFile, 'utf-8').trim();
-      } catch(e) {}
-      var injection = '<script>window.__API_TOKEN__="' + token + '";</script>';
+      // 🔒 #14: Token 不再嵌入 HTML，改为页面加载后通过 /m/auth 获取
+      var injection = '<script>window.__API_TOKEN__="";fetch("/m/auth").then(r=>r.json()).then(d=>{if(d.token)window.__API_TOKEN__=d.token}).catch(()=>{});</script>';
       // 插入到 </head> 前或 <head> 后
       if (html.indexOf('</head>') !== -1) {
         html = html.replace('</head>', injection + '</head>');
@@ -217,6 +212,21 @@ function setupMobileRoutes(expressApp, dataRoot) {
       res.status(404).send('Mobile UI not found: ' + indexFile);
     }
   }
+  // 🔒 #14: 移动端 Token 获取端点（通过 Referer 检查限制来源）
+  expressApp.get('/m/auth', function(req, res) {
+    var referer = req.headers.referer || '';
+    if (referer.indexOf('/m') >= 0 || referer.indexOf('127.0.0.1') >= 0 || referer.indexOf('localhost') >= 0) {
+      var token = '';
+      try {
+        var tokenFile = path.join(dataRoot, '.api-token');
+        if (fs.existsSync(tokenFile)) token = fs.readFileSync(tokenFile, 'utf-8').trim();
+      } catch(e) {}
+      res.json({ token: token });
+    } else {
+      res.status(403).json({ error: 'Forbidden' });
+    }
+  });
+
   expressApp.get('/m', serveMobileIndex);
   expressApp.get('/m/', serveMobileIndex);
 

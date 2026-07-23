@@ -12,8 +12,14 @@ const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, Notification, dial
 
 // 🔧 禁用 HTTP 缓存，确保 renderer 进程代码始终最新（无需手动清除缓存）
 app.commandLine.appendSwitch('disable-http-cache');
-// 🔧 本地桌面应用，nodeIntegration+unsafe-eval 为功能所需，抑制安全警告
+// 🔒 安全说明（#27 修复）
+// 此应用 104 个核心模块和 core-v10.js/app.js 直接依赖 renderer 进程的 require/process/module/__dirname。
+// 强行启用 contextIsolation:true 会导致渲染进程全局 API 全部不可用，应用白屏/登录界面无法加载。
+// 因此暂时保持 contextIsolation:false + nodeIntegration:true，待后续将模块系统迁移到 preload 桥接后再开启隔离。
+// 其他安全警告（如 CSP、insecure content）保持开启，及时发现安全问题。
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
+console.log('🔒 [安全] nodeIntegration=true（本地桌面应用功能所需）');
+console.log('🔒 [安全] 渲染进程 contextIsolation=false（兼容现有 104 个 Node 依赖模块，后续需迁移到 preload 桥接）');
 
 const express = require('express');
 const cors = require('cors');
@@ -44,22 +50,53 @@ if (!fs.existsSync(DATA_ROOT)) {
 }
 
 // ===== API 认证 Token（B02 安全修复：防止局域网未授权访问）=====
+// 🔒 #15 修复：优先使用 Electron safeStorage 加密存储，回退到明文
 const API_TOKEN_FILE = path.join(DATA_ROOT, '.api-token');
 let API_TOKEN = '';
 try {
+  const { safeStorage } = require('electron');
+  let storedRaw = '';
   if (fs.existsSync(API_TOKEN_FILE)) {
-    API_TOKEN = fs.readFileSync(API_TOKEN_FILE, 'utf-8').trim();
+    storedRaw = fs.readFileSync(API_TOKEN_FILE, 'utf-8').trim();
+  }
+  // 尝试解密（safeStorage 加密的数据以 'enc:' 前缀标识）
+  if (storedRaw.startsWith('enc:') && safeStorage.isEncryptionAvailable()) {
+    try {
+      API_TOKEN = safeStorage.decryptString(Buffer.from(storedRaw.slice(4), 'base64'));
+    } catch (e) {
+      console.warn('⚠️ Token 解密失败，将重新生成:', e.message);
+      API_TOKEN = '';
+    }
+  } else if (storedRaw && !storedRaw.startsWith('enc:')) {
+    API_TOKEN = storedRaw; // 兼容旧版明文 token
   }
   if (!API_TOKEN || API_TOKEN.length < 32) {
     API_TOKEN = crypto.randomBytes(32).toString('hex');
-    fs.writeFileSync(API_TOKEN_FILE, API_TOKEN, 'utf-8');
-    console.log('🔑 已生成新 API 认证 Token');
+    // 加密存储
+    if (safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(API_TOKEN);
+      fs.writeFileSync(API_TOKEN_FILE, 'enc:' + encrypted.toString('base64'), 'utf-8');
+      console.log('🔑 已生成新 API Token（safeStorage 加密存储）');
+    } else {
+      fs.writeFileSync(API_TOKEN_FILE, API_TOKEN, 'utf-8');
+      console.log('🔑 已生成新 API Token（明文存储，safeStorage 不可用）');
+    }
+  } else if (storedRaw && !storedRaw.startsWith('enc:') && safeStorage.isEncryptionAvailable()) {
+    // 迁移：旧版明文 → 加密
+    const encrypted = safeStorage.encryptString(API_TOKEN);
+    fs.writeFileSync(API_TOKEN_FILE, 'enc:' + encrypted.toString('base64'), 'utf-8');
+    console.log('🔑 API Token 已迁移为 safeStorage 加密存储');
   }
 } catch (e) {
   // 回退：内存 token（每次重启变化）
   API_TOKEN = crypto.randomBytes(32).toString('hex');
   console.warn('⚠️ Token 持久化失败，使用内存 Token:', e.message);
 }
+
+// 🔒 网络绑定地址：默认仅监听本地 127.0.0.1，防止局域网未授权访问
+// 如需局域网访问（移动端/PWA），设置环境变量 AI_AGENT_BIND_HOST=0.0.0.0
+const BIND_HOST = process.env.AI_AGENT_BIND_HOST || '127.0.0.1';
+const _ALLOW_NONLOCAL_BIND = BIND_HOST !== '127.0.0.1' && BIND_HOST !== 'localhost';
 
 // 托盘图标路径
 const TRAY_ICON_PATH = path.join(__dirname, 'icon.ico');
@@ -77,9 +114,14 @@ async function startWebServer() {
       return next();
     }
     // 验证 Token（header 优先，兼容 query param 供 EventSource/WebSocket 使用）
+    // 🔒 #2 修复：使用 timingSafeEqual 防止时序攻击
     var token = req.headers['x-auth-token'] || req.query.token;
-    if (token === API_TOKEN) {
-      return next();
+    if (token && typeof token === 'string' && token.length === API_TOKEN.length) {
+      try {
+        if (crypto.timingSafeEqual(Buffer.from(token, 'utf8'), Buffer.from(API_TOKEN, 'utf8'))) {
+          return next();
+        }
+      } catch (e) { /* length mismatch or encoding error — fall through to 401 */ }
     }
     res.status(401).json({ error: 'Unauthorized', message: '缺少或无效的认证 Token' });
   });
@@ -116,10 +158,13 @@ async function startWebServer() {
         });
         testServer.once('listening', () => {
           server = testServer;
-          console.log(`📱 移动端访问: http://<本机IP>:${port}/m`);
+          if (_ALLOW_NONLOCAL_BIND) {
+            console.log(`⚠️ [安全] 服务器绑定到 ${BIND_HOST}，局域网设备可访问`);
+            console.log(`📱 移动端访问: http://<本机IP>:${port}/m`);
+          }
           resolve(port);
         });
-        testServer.listen(port, '0.0.0.0');
+        testServer.listen(port, BIND_HOST);
       }
       tryPort(startPort);
     });
@@ -128,12 +173,14 @@ async function startWebServer() {
   try {
     const resolvedPort = await tryListen(8080);
     actualPort = resolvedPort;
+    console.log(`✅ 本地 Web 服务器已启动: http://${BIND_HOST}:${resolvedPort}`);
     // 通知渲染进程实际端口（PWA/移动端连接依赖）
     if (mainWindow && mainWindow.webContents) {
       mainWindow.webContents.send('server:port', resolvedPort);
     }
   } catch (err) {
     console.error('❌ 启动服务器失败:', err.message);
+    actualPort = 0;
     // 不阻止应用启动，继续创建窗口
   }
 }
@@ -152,12 +199,12 @@ function createWindow() {
       height: 44
     },
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
-      sandbox: false,
+      nodeIntegration: true,         // 104 个模块依赖 Node 全局 require（后续需迁移到 preload 桥接）
+      contextIsolation: false,       // #27: 兼容现有代码，否则 core-v10.js / app.js 中 require/process/Core 全不可用
+      sandbox: false,                // sandbox 与 nodeIntegration 不兼容
       allowRunningInsecureContent: false,
       webSecurity: true,
-      preload: path.join(__dirname, 'preload.js')  // 🔧 #8: 安全桥接层
+      preload: path.join(__dirname, 'preload.js')  // 预加载安全桥接层（渐进迁移基础设施）
     },
   });
 
@@ -230,7 +277,7 @@ function createWindow() {
     try {
       const userDataPath = app.getPath('userData');
       fs.writeFileSync(path.join(userDataPath, '.crash-marker'), Date.now().toString(), 'utf8');
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [main] 写入崩溃标记失败:', e.message); }
 
     if (_crashReloadCount < MAX_CRASH_RELOADS) {
       _crashReloadCount++;
@@ -255,7 +302,7 @@ function createWindow() {
       const userDataPath = app.getPath('userData');
       const crashMarkerPath = path.join(userDataPath, '.crash-marker');
       if (fs.existsSync(crashMarkerPath)) fs.unlinkSync(crashMarkerPath);
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [main] 清除崩溃标记失败:', e.message); }
     // 🔍 诊断：检查 Core.session.renderChatList 是否是树形版本
     setTimeout(() => {
       mainWindow.webContents.executeJavaScript(`
@@ -274,7 +321,7 @@ function createWindow() {
                 }
               }
             }
-          } catch(e) {}
+          } catch(e) { console.warn('⚠️ [main] 诊断检查异常:', e.message); }
           return result;
         })()
       `).then(r => {
@@ -332,17 +379,31 @@ function setupTray() {
 }
 
 // ===== IPC 处理器 =====
-ipcMain.on('app:get-path-sync', (event, arg) => { event.returnValue = app.getPath(arg); });
+// 🔒 #17 修复：所有 IPC handler 增加参数类型/范围校验，防止渲染进程传入畸形参数
+
+// 白名单：app.getPath 允许的合法路径名
+const _VALID_PATH_NAMES = ['home', 'appData', 'userData', 'temp', 'downloads', 'documents', 'desktop', 'pictures', 'music', 'videos', 'logs', 'crashDumps'];
+ipcMain.on('app:get-path-sync', (event, arg) => {
+  if (typeof arg !== 'string' || _VALID_PATH_NAMES.indexOf(arg) < 0) {
+    console.warn('[IPC] app:get-path-sync 拒绝非法路径名:', arg);
+    event.returnValue = '';
+    return;
+  }
+  event.returnValue = app.getPath(arg);
+});
 ipcMain.on('get-user-data-path', (event) => { event.returnValue = DATA_ROOT; });
-ipcMain.on('get-server-port', (event) => { event.returnValue = actualPort || 8080; });
+ipcMain.on('get-server-port', (event) => {
+  // 🔧 返回 0 表示服务器尚未启动成功，避免渲染进程把未启动状态误判为 8080
+  event.returnValue = actualPort || 0;
+});
 ipcMain.on('get-auth-token', (event) => { event.returnValue = API_TOKEN; });
 
 ipcMain.on('show-notification', (event, arg) => {
-  try { 
-    const title = arg.title || arg || 'AI智能体';
-    const body = arg.body || '';
-    new Notification({ title: title, body: body }).show(); 
-  } catch(e) {}
+  try {
+    const title = (arg && typeof arg.title === 'string') ? arg.title.substring(0, 200) : (typeof arg === 'string' ? arg.substring(0, 200) : 'AI智能体');
+    const body = (arg && typeof arg.body === 'string') ? arg.body.substring(0, 1000) : '';
+    new Notification({ title: title, body: body }).show();
+  } catch(e) { console.warn('[IPC] show-notification 失败:', e.message); }
 });
 
 ipcMain.on('list-plugin-dirs', (event) => {
@@ -362,7 +423,15 @@ ipcMain.on('list-plugin-dirs', (event) => {
 
 ipcMain.on('copy-plugin-dir', (event, { src, dest }) => {
   try {
-    if (!fs.existsSync(src)) {
+    // 🔒 #17: 路径必须在 DATA_ROOT/plugins 下，防止路径遍历
+    const pluginsRoot = path.join(DATA_ROOT, 'plugins');
+    const resolvedSrc = path.resolve(src || '');
+    const resolvedDest = path.resolve(dest || '');
+    if (!resolvedSrc.startsWith(pluginsRoot) || !resolvedDest.startsWith(pluginsRoot)) {
+      event.returnValue = { success: false, error: '路径必须在插件目录内' };
+      return;
+    }
+    if (!fs.existsSync(resolvedSrc)) {
       event.returnValue = { success: false, error: '源目录不存在' };
       return;
     }
@@ -399,7 +468,18 @@ ipcMain.handle('show-open-dialog', async (event, options) => {
   return dialog.showOpenDialog(mainWindow, options);
 });
 
-ipcMain.on('open-external', (event, url) => { shell.openExternal(url); });
+// 🔒 #17: 仅允许 http/https 协议，阻止 file://、javascript: 等危险协议
+ipcMain.on('open-external', (event, url) => {
+  if (typeof url !== 'string') return;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      shell.openExternal(url);
+    } else {
+      console.warn('[IPC] open-external 拒绝非 HTTP 协议:', parsed.protocol);
+    }
+  } catch (e) { console.warn('[IPC] open-external URL 解析失败:', url); }
+});
 
 // 🔧 截图 IPC 处理器
 ipcMain.handle('take-screenshot', async (event, options) => {
@@ -541,7 +621,7 @@ ipcMain.on('backup-data', (event) => {
               sanitizeConfigFile(fullPath);
             }
           }
-        } catch (e) {}
+        } catch (e) { console.warn('⚠️ [main] 备份数据清理遍历失败:', e.message); }
       }
       walkAndSanitize(tempBackup);
       // 3. 压缩清理后的数据（🔒 安全修复：使用 spawn 替代 exec）
@@ -556,16 +636,16 @@ ipcMain.on('backup-data', (event) => {
       zipChild.stderr.on('data', (d) => { zipErr += d.toString(); });
       zipChild.on('close', (code) => {
         // 4. 清理临时目录
-        try { fs.rmSync(tempBackup, { recursive: true, force: true }); } catch (e) {}
+        try { fs.rmSync(tempBackup, { recursive: true, force: true }); } catch (e) { console.warn('⚠️ [main] 清理备份临时目录失败:', e.message); }
         if (code !== 0) { event.reply('backup-response', { success: false, error: zipErr || '压缩失败' }); }
         else { event.reply('backup-response', { success: true, filePath }); }
       });
       zipChild.on('error', (err) => {
-        try { fs.rmSync(tempBackup, { recursive: true, force: true }); } catch (e) {}
+        try { fs.rmSync(tempBackup, { recursive: true, force: true }); } catch (e) { console.warn('⚠️ [main] 清理备份临时目录失败:', e.message); }
         event.reply('backup-response', { success: false, error: err.message });
       });
     } catch (err) {
-      try { fs.rmSync(tempBackup, { recursive: true, force: true }); } catch (e) {}
+      try { fs.rmSync(tempBackup, { recursive: true, force: true }); } catch (e) { console.warn('⚠️ [main] 清理备份临时目录失败:', e.message); }
       event.reply('backup-response', { success: false, error: '备份准备失败: ' + err.message });
     }
   }
@@ -592,7 +672,7 @@ ipcMain.on('restore-data', (event) => {
       unzipChild.stderr.on('data', (d) => { unzipStderr += d.toString(); });
       unzipChild.on('close', (code) => {
         if (code !== 0) {
-          try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch(e) {}
+          try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch(e) { console.warn('⚠️ [main] 清理解压临时目录失败:', e.message); }
           event.reply('restore-response', { success: false, error: unzipStderr || '解压失败 (exit ' + code + ')' });
           return;
         }
@@ -625,12 +705,12 @@ ipcMain.on('restore-data', (event) => {
               }
             }
             fs.rmSync(tempDir, { recursive: true, force: true });
-            if (hasSafetyBackup) { try { fs.rmSync(safetyBackup, { recursive: true, force: true }); } catch(e) {} }
+            if (hasSafetyBackup) { try { fs.rmSync(safetyBackup, { recursive: true, force: true }); } catch(e) { console.warn('⚠️ [main] 清理安全备份目录失败:', e.message); } }
             event.reply('restore-response', { success: false, error: '恢复失败: ' + restoreErr.message });
             return;
           }
           // 恢复成功后清理安全备份
-          if (hasSafetyBackup) { try { fs.rmSync(safetyBackup, { recursive: true, force: true }); } catch(e) {} }
+          if (hasSafetyBackup) { try { fs.rmSync(safetyBackup, { recursive: true, force: true }); } catch(e) { console.warn('⚠️ [main] 清理安全备份目录失败:', e.message); } }
         } else {
           console.warn('⚠️ 备份文件中未找到 ai-data 目录');
         }
@@ -690,8 +770,8 @@ app.whenReady().then(async () => {
       }
       if (cleaned > 0) console.log('🧹 已清理 ' + cleaned + ' 个 GPU/代码缓存目录 (版本变更或崩溃恢复)');
       // 写入版本标记 + 清除崩溃标记
-      try { fs.writeFileSync(markerPath, APP_VERSION, 'utf8'); } catch (e) {}
-      try { if (hasCrashMarker) fs.unlinkSync(crashMarkerPath); } catch (e) {}
+      try { fs.writeFileSync(markerPath, APP_VERSION, 'utf8'); } catch (e) { console.warn('⚠️ [main] 写入版本标记失败:', e.message); }
+      try { if (hasCrashMarker) fs.unlinkSync(crashMarkerPath); } catch (e) { console.warn('⚠️ [main] 删除崩溃标记失败:', e.message); }
     } else {
       console.log('⏭️ GPU 缓存跳过清理 (版本未变且无崩溃记录)');
     }
@@ -715,7 +795,7 @@ app.whenReady().then(async () => {
       try {
         const userDataPath = app.getPath('userData');
         fs.writeFileSync(path.join(userDataPath, '.crash-marker'), `${details.type}:${Date.now()}`, 'utf8');
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [main] 写入子进程崩溃标记失败:', e.message); }
     }
   });
 
@@ -735,7 +815,11 @@ app.whenReady().then(async () => {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss: http: https:"
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss: http: https:; " +
+          "font-src 'self' https://fonts.gstatic.com data: file:; " +
+          "img-src 'self' data: blob: http: https:; " +
+          "connect-src 'self' ws: wss: http: https:; " +
+          "media-src 'self' blob: http: https:;"
         ]
       }
     });
@@ -744,10 +828,40 @@ app.whenReady().then(async () => {
   app.setAppUserModelId('com.yourcompany.ai-agent');
   createWindow();
   await startWebServer();
-  setTimeout(() => { try { new Notification({ title: 'AI智能体', body: '你的AI助手已就绪！' }).show(); } catch(e) {} }, 3000);
+  setTimeout(() => { try { new Notification({ title: 'AI智能体', body: '你的AI助手已就绪！' }).show(); } catch(e) { console.warn('⚠️ [main] 显示就绪通知失败:', e.message); } }, 3000);
 });
 
-app.on('before-quit', () => { app.isQuitting = true; if (tray) tray.destroy(); if (server) server.close(); });
+// 🔒 #3 修复：优雅关闭序列 — 按顺序清理所有资源，防止数据丢失
+app.on('before-quit', () => {
+  app.isQuitting = true;
+  console.log('🔄 [shutdown] 开始优雅关闭...');
+
+  // 1. 停止接受新的 HTTP 请求
+  if (server) {
+    try { server.close(); } catch (e) { console.warn('[shutdown] server.close 失败:', e.message); }
+  }
+
+  // 2. 通知渲染进程执行清理（停止 scheduler 定时器、取消 pending API 请求、关闭 WebSocket）
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    try {
+      mainWindow.webContents.send('app:shutdown');
+      // 给渲染进程 2 秒执行清理
+    } catch (e) { console.warn('[shutdown] 通知渲染进程失败:', e.message); }
+  }
+
+  // 3. 销毁托盘
+  if (tray) {
+    try { tray.destroy(); } catch (e) { console.warn('[shutdown] tray.destroy 失败:', e.message); }
+  }
+
+  // 4. 关闭 SQLite 数据库（通过渲染进程的 Core.db.close()）
+  //    渲染进程收到 app:shutdown 后应调用 Core.db.close()
+  //    此处设置 2 秒超时后强制退出
+  setTimeout(() => {
+    console.log('✅ [shutdown] 清理完成，退出');
+    app.exit(0);
+  }, 2000);
+});
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) { createWindow(); }

@@ -1,0 +1,49 @@
+{
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2021": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "script"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "no-empty": ["error", { "allowEmptyCatch": false }],
+    "no-var": "off",
+    "prefer-const": "off",
+    "no-console": "off",
+    "semi": "off",
+    "quotes": "off",
+    "indent": "off",
+    "no-undef": "error",
+    "no-redeclare": "warn",
+    "no-dupe-keys": "error",
+    "no-unreachable": "warn",
+    "eqeqeq": ["warn", "smart"],
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "off"
+  },
+  "globals": {
+    "Core": "writable",
+    "window": "writable",
+    "document": "writable",
+    "fetch": "readonly",
+    "AbortSignal": "readonly",
+    "Notification": "readonly",
+    "marked": "readonly",
+    "hljs": "readonly",
+    "mermaid": "readonly",
+    "DOMPurify": "readonly",
+    "PDFDocument": "readonly",
+    "rgb": "readonly",
+    "fontkit": "readonly"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    "public/",
+    "*.min.js"
+  ]
+}

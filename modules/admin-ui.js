@@ -21,7 +21,7 @@ function apiOverview() {
     if (Core.dom && Core.dom.modelSelect) {
       model = Core.dom.modelSelect.value || '';
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [admin-ui] 读取当前模型选择失败:', e.message); }
   return {
     gateway: gw,
     skillCount: skills.length,
@@ -143,7 +143,7 @@ function apiSystem() {
     var modDir = path.join(__dirname);
     var files = fs.readdirSync(modDir);
     modules = files.filter(function(f) { return f.endsWith('.js'); }).map(function(f) { return f.replace('.js', ''); });
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [admin-ui] 读取模块目录失败:', e.message); }
   return {
     platform: process.platform,
     arch: process.arch,
@@ -733,7 +733,7 @@ function getAdminHtml() {
 '      if (msg.type === "device_update" || msg.type === "device_list") {\n' +
 '        if (currentPanel === "devices" || currentPanel === "overview") refresh();\n' +
 '      }\n' +
-'    } catch(e) {}\n' +
+'    } catch(e) { console.warn("⚠️ [admin-ui] WebSocket消息解析失败:", e.message); }\n' +
 '  };\n' +
 '  wsLive.onclose = function() {\n' +
 '    document.querySelector(".logo .dot").style.background = "var(--red)";\n' +
@@ -754,13 +754,16 @@ function startAdminServer() {
   try { http = require('http'); } catch (e) { return; }
 
   adminServer = http.createServer(handleRequest);
-  adminServer.listen(ADMIN_PORT, '0.0.0.0', function() {
-    console.log('\u{1f5a5}\ufe0f [admin-ui] Gateway \u7ba1\u7406\u540e\u53f0: http://0.0.0.0:' + ADMIN_PORT + '/admin');
+// 🔒 默认仅监听本地，通过 AI_AGENT_BIND_HOST 环境变量可覆盖
+  var bindHost = process.env.AI_AGENT_BIND_HOST || '127.0.0.1';
+
+  adminServer.listen(ADMIN_PORT, bindHost, function() {
+    console.log('\u{1f5a5}\ufe0f [admin-ui] Gateway \u7ba1\u7406\u540e\u53f0: http://' + bindHost + ':' + ADMIN_PORT + '/admin');
   });
   adminServer.on('error', function(e) {
     if (e.code === 'EADDRINUSE') {
       ADMIN_PORT++;
-      adminServer.listen(ADMIN_PORT, '0.0.0.0');
+      adminServer.listen(ADMIN_PORT, bindHost);
     }
   });
 }
@@ -774,7 +777,7 @@ function registerCommands() {
   }, function(args) {
     var sub = (args || '').trim() || 'status';
     if (sub === 'open') {
-      try { require('electron').shell.openExternal('http://localhost:' + ADMIN_PORT + '/admin'); } catch (e) {}
+      try { require('electron').shell.openExternal('http://localhost:' + ADMIN_PORT + '/admin'); } catch (e) { console.warn('⚠️ [admin-ui] 打开浏览器管理后台失败:', e.message); }
       showMsg('\u5df2\u5728\u6d4f\u89c8\u5668\u4e2d\u6253\u5f00\u7ba1\u7406\u540e\u53f0');
     } else {
       showMsg('\u{1f5a5}\ufe0f Gateway \u7ba1\u7406\u540e\u53f0\n\u5730\u5740: http://localhost:' + ADMIN_PORT + '/admin\n\u72b6\u6001: ' + (adminServer ? '\u8fd0\u884c\u4e2d' : '\u672a\u542f\u52a8') + '\n\n\u5c40\u57df\u7f51\u8bbf\u95ee: http://<PC_IP>:' + ADMIN_PORT + '/admin');

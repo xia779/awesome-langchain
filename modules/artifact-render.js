@@ -107,7 +107,7 @@ function renderHtml(code, iframe) {
       if (h > 0 && h < 800) {
         iframe.style.height = Math.max(h + 20, 150) + 'px';
       }
-    } catch (e) {} // cross-origin 可能报错
+    } catch (e) { console.warn('⚠️ [artifact-render] 获取iframe高度失败(cross-origin):', e.message); }
   };
 }
 
@@ -141,7 +141,7 @@ function renderJsx(code, iframe) {
     try {
       var h = iframe.contentDocument.body.scrollHeight;
       if (h > 0 && h < 800) iframe.style.height = Math.max(h + 20, 150) + 'px';
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [artifact-render] 获取JSX iframe高度失败:', e.message); }
   };
 }
 

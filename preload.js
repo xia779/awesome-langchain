@@ -38,7 +38,7 @@ const electronAPI = {
       const allowedOn = [
         'server:port', 'agent:response', 'agent:step', 'agent:error',
         'agent:done', 'agent:typing', 'config:changed', 'session:updated',
-        'notification', 'tray:action'
+        'notification', 'tray:action', 'app:shutdown'
       ];
       if (allowedOn.includes(channel)) {
         const sub = (_event, ...args) => callback(...args);
