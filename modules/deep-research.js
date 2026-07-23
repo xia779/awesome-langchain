@@ -134,7 +134,7 @@ async function _planResearch(topic, opts) {
     0.3,
     null, null,
     [{ role: 'system', content: systemMsg }, { role: 'user', content: '研究主题：' + topic + '\n\n请拆解子问题。' }],
-    { disableTools: true }
+    { disableTools: true, _background: true }
   );
 
   var content = (result && result.message && result.message.content) || '';
@@ -366,7 +366,7 @@ async function _synthesizeReport(topic, plan, searchResults, readResults, opts) 
     0.5,
     null, null,
     [{ role: 'system', content: systemMsg }, { role: 'user', content: userMsg }],
-    { disableTools: true }
+    { disableTools: true, _background: true }
   );
 
   var markdown = (result && result.message && result.message.content) || '';

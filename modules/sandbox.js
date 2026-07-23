@@ -19,30 +19,34 @@ function getSandboxDir() {
 }
 
 // ===== 增强的 Python 安全检查 =====
-// 比 tools.js 的简单黑名单更全面
-const PYTHON_DANGEROUS_PATTERNS = [
-  // 系统调用
-  /os\.system\s*\(/, /os\.popen\s*\(/, /os\.exec[lv]?p?e?\s*\(/,
-  /subprocess\.\w+\s*\(/, /commands\.getoutput/,
-  // 动态执行
+// 两级分类：CRITICAL（沙箱逃逸原语，命中任意一条立即拦截）+ WARN（风险行为，仅标记）
+// 🔧 修复：旧版按 issue 数量判定风险，导致单条 eval/__import__ 仅算 medium 而放行，可执行任意 shell。
+const PYTHON_CRITICAL_PATTERNS = [
+  // 动态执行（沙箱逃逸核心原语）
   /\beval\s*\(/, /\bexec\s*\(/, /\bcompile\s*\(/,
   /__import__\s*\(/, /importlib\.import_module/,
   /getattr\s*\(\s*\w+\s*,\s*['"](?:system|popen|exec)/,
+  // 系统调用
+  /os\.system\s*\(/, /os\.popen\s*\(/, /os\.exec[lv]?p?e?\s*\(/,
+  /subprocess\.\w+\s*\(/, /commands\.getoutput/,
+  // 注册表 / 动态链接库
+  /ctypes\.windll/, /ctypes\.cdll/, /\bwinreg\b/,
+  // 危险模块导入（导入即具备逃逸能力）
+  /import\s+(?:sys|os|subprocess|shutil|ctypes|winreg)\b/,
+  /from\s+(?:sys|os|subprocess|shutil|ctypes|winreg)\s+import/
+];
+
+const PYTHON_WARN_PATTERNS = [
   // 文件操作（沙箱外）
   /open\s*\(\s*['"](?!.*(?:sandbox|tmp))/,  // 允许沙箱内文件
   /shutil\.rmtree/, /os\.remove/, /os\.unlink/, /os\.rmdir/,
-  // 网络（可选限制）
+  // 网络
   /socket\.socket/, /http\.client/, /urllib\.request\.urlopen/,
   /requests\.(?:get|post|put|delete)\s*\(/,
   // 进程/线程
   /multiprocessing\.Process/, /threading\.Thread/,
-  // 注册表/系统
-  /winreg/, /ctypes\.windll/, /ctypes\.cdll/,
   // 环境变量泄露
-  /os\.environ/,
-  // 危险模块导入
-  /import\s+(?:sys|os|subprocess|shutil|ctypes|winreg)\b/,
-  /from\s+(?:sys|os|subprocess|shutil|ctypes|winreg)\s+import/
+  /os\.environ/
 ];
 
 // 白名单：允许的安全导入
@@ -55,24 +59,35 @@ const PYTHON_SAFE_IMPORTS = [
 ];
 
 function checkPythonSafety(code) {
-  var issues = [];
+  var critical = [];
+  var warnings = [];
 
-  for (var i = 0; i < PYTHON_DANGEROUS_PATTERNS.length; i++) {
-    if (PYTHON_DANGEROUS_PATTERNS[i].test(code)) {
-      issues.push('匹配危险模式: ' + PYTHON_DANGEROUS_PATTERNS[i].source.substring(0, 40));
+  for (var i = 0; i < PYTHON_CRITICAL_PATTERNS.length; i++) {
+    if (PYTHON_CRITICAL_PATTERNS[i].test(code)) {
+      critical.push('拦截危险模式: ' + PYTHON_CRITICAL_PATTERNS[i].source.substring(0, 40));
+    }
+  }
+  for (var j = 0; j < PYTHON_WARN_PATTERNS.length; j++) {
+    if (PYTHON_WARN_PATTERNS[j].test(code)) {
+      warnings.push('风险行为: ' + PYTHON_WARN_PATTERNS[j].source.substring(0, 40));
     }
   }
 
-  // 检查文件路径是否逃逸沙箱
+  // 检查文件路径是否逃逸沙箱（视为 critical）
   var pathEscapes = code.match(/['"](?:[A-Z]:\\|\/(?:etc|usr|home|root|var|tmp))[^'"]*['"]/gi);
   if (pathEscapes) {
-    issues.push('尝试访问沙箱外路径: ' + pathEscapes[0]);
+    critical.push('拦截: 尝试访问沙箱外路径 ' + pathEscapes[0]);
   }
 
+  var issues = critical.concat(warnings);
+  // 命中任意 critical 即为 high（必须拦截）；仅有 warn 为 medium；无命中为 low
+  var risk = critical.length > 0 ? 'high' : (warnings.length > 0 ? 'medium' : 'low');
   return {
-    safe: issues.length === 0,
+    safe: critical.length === 0,
     issues: issues,
-    risk: issues.length === 0 ? 'low' : issues.length <= 2 ? 'medium' : 'high'
+    critical: critical,
+    warnings: warnings,
+    risk: risk
   };
 }
 

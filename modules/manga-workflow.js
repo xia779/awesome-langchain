@@ -1148,6 +1148,11 @@ module.exports = {
     fs = require('fs');
     path = require('path');
 
+    // 🔧 动态解析后端代理端口（8080 被占用时 main.js 会自动递增）
+    if (Core && typeof Core.getBackendBase === 'function') {
+      COMFYUI_PROXY = Core.getBackendBase() + '/api/comfyui';
+    }
+
     // 数据目录：跟随 Core 数据根，支持 AI_AGENT_DATA_ROOT 环境变量覆盖
     var dataRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
     MANGA_DIR = path.join(dataRoot, 'manga_pipeline');

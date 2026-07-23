@@ -113,6 +113,8 @@ function loginUser(username) {
   Core.KNOWLEDGE_DIR = path.join(correctDir, 'knowledge');
   Core.PLUGINS_DIR = path.join(correctDir, 'plugins');
   Core.loadConfig();
+  // 🔧 切换用户后重新应用配置到 UI（主题/颜色/模型/温度等）
+  if (Core.reapplyConfig) Core.reapplyConfig();
   console.log(`✅ 用户 ${username} 登录成功, DATA_ROOT=${Core.DATA_ROOT}`);
   return { success: true, username };
 }

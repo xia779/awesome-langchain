@@ -221,6 +221,15 @@ function listWatchers() {
 
 function removeWatcher(id) {
   var idx = _watchers.findIndex(function(w) { return w.id === id; });
+  // 模糊匹配：按 target 或 message 包含关系查找
+  if (idx === -1) {
+    var lowerId = id.toLowerCase().replace(/^watch\s*/, '');
+    idx = _watchers.findIndex(function(w) {
+      return (w.target && lowerId.indexOf(w.target.toLowerCase()) >= 0) ||
+             (w.message && lowerId.indexOf(w.message.toLowerCase()) >= 0) ||
+             (w.target && w.target.toLowerCase().indexOf(lowerId) >= 0);
+    });
+  }
   if (idx === -1) return { success: false, error: '未找到监控: ' + id };
   _watchers.splice(idx, 1);
   _saveWatchers();
@@ -230,6 +239,15 @@ function removeWatcher(id) {
 
 function toggleWatcher(id, enabled) {
   var w = _watchers.find(function(w) { return w.id === id; });
+  // 模糊匹配：按 target 或 message 包含关系查找
+  if (!w) {
+    var lowerId = id.toLowerCase().replace(/^watch\s*/, '');
+    w = _watchers.find(function(w) {
+      return (w.target && lowerId.indexOf(w.target.toLowerCase()) >= 0) ||
+             (w.message && lowerId.indexOf(w.message.toLowerCase()) >= 0) ||
+             (w.target && w.target.toLowerCase().indexOf(lowerId) >= 0);
+    });
+  }
   if (!w) return { success: false, error: '未找到监控: ' + id };
   w.enabled = enabled !== undefined ? enabled : !w.enabled;
   _saveWatchers();

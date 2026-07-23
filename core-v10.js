@@ -283,30 +283,31 @@ const Core = {
       favorites: [], // 🔧 收藏夹
     };
     
-    // 🔧 P0: 优先从 SQLite 读取配置
+    // 🔧 P0: 优先从 SQLite 读取配置（按当前用户前缀）
     try {
-      if (Core.db && Core.db.getAll) {
-        const dbConfig = Core.db.getAll();
+      if (Core.db && Core.db.getUserConfig) {
         const userId = this._currentUser || 'admin';
-        const userConfig = Core.db.getUserConfig ? Core.db.getUserConfig(userId) : {};
+        const userConfig = Core.db.getUserConfig(userId);
         
         if (Object.keys(userConfig).length > 0) {
           this.config = { ...defaultConfig, ...userConfig };
-          console.log('✅ 配置已从 SQLite 加载');
-        } else if (Object.keys(dbConfig).length > 0) {
-          this.config = { ...defaultConfig, ...dbConfig };
-          console.log('✅ 配置已从 SQLite 全局表加载');
+          console.log('✅ 配置已从 SQLite 加载 (' + userId + ')');
         } else {
-          // SQLite 中没有数据，从 JSON 读取并自动迁移
+          // 🔧 该用户在 SQLite 中无配置 → 读取该用户自己的 config.json
+          // （CONFIG_FILE 已在登录时指向用户目录，不能再用 getAll() 全局表，
+          //   否则会混入其他用户带前缀的 key 导致全部回退默认值）
+          const jsonExists = fs.existsSync(this.CONFIG_FILE) && fs.statSync(this.CONFIG_FILE).isFile();
           this.loadConfigFromJSON(defaultConfig);
-          
-          // 自动迁移到 SQLite
-          if (Core.db && Core.db.migrateFromJSON) {
+          // 若 JSON 文件真实存在，自动迁移到 SQLite（本用户前缀 + 敏感字段加密）
+          if (jsonExists && Core.db.set && Core.db._backend === 'sqlite') {
             try {
-              Core.db.migrateFromJSON(this._currentUser || 'admin');
-              console.log('✅ JSON 配置已自动迁移到 SQLite');
-            } catch (e) {
-              console.warn('⚠️ 自动迁移失败:', e.message);
+              const configForStorage = encryptSensitiveFields(this.config);
+              Object.keys(configForStorage).forEach(key => {
+                Core.db.set(userId + ':' + key, JSON.stringify(configForStorage[key]));
+              });
+              console.log('✅ JSON 配置已自动迁移到 SQLite (' + userId + ')');
+            } catch (migErr) {
+              console.warn('⚠️ 配置自动迁移失败:', migErr.message);
             }
           }
         }
@@ -374,6 +375,37 @@ const Core = {
     } catch (e) {
       console.warn('配置读取失败，使用默认配置:', e.message);
       this.config = { ...defaultConfig };
+    }
+  },
+
+  // 🔧 将当前配置重新应用到 UI（主题/颜色/温度/标题），并通知监听者
+  // 供启动加载配置后、以及登录切换用户后复用
+  reapplyConfig() {
+    try {
+      // 重新应用主题
+      if (Core.customizer && Core.customizer.themes && Core.config.activeTheme) {
+        Core.customizer.themes.apply(Core.config.activeTheme);
+      }
+      // 重新应用颜色/设置面板
+      if (Core.settings && Core.settings.reapplyUI) {
+        Core.settings.reapplyUI();
+      }
+      // 更新温度滑块
+      var tempSlider = document.getElementById('temperatureSlider');
+      var tempDisplay = document.getElementById('tempDisplay');
+      if (tempSlider && Core.config.temperature !== undefined) {
+        tempSlider.value = Core.config.temperature;
+        if (tempDisplay) tempDisplay.textContent = Core.config.temperature;
+      }
+      // 更新应用标题
+      if (Core.config.appName) {
+        document.title = Core.config.appName;
+        if (Core.dom.appTitle) Core.dom.appTitle.textContent = Core.config.appName;
+      }
+      // 通知所有监听者配置已更新
+      Core.emit('configChanged');
+    } catch (e) {
+      console.warn('⚠️ 配置重应用失败:', e.message);
     }
   },
 
@@ -530,6 +562,32 @@ const Core = {
 
 window.Core = Core;
 
+// ===== 后端服务地址动态解析（8080 被占用时 main.js 会自动递增端口）=====
+// 所有 renderer → web-server 的请求都应通过 Core.getBackendBase() 获取地址，避免硬编码 8080。
+(function() {
+  var _cachedPort = null;
+  function _resolvePort() {
+    try {
+      var ipc = require('electron').ipcRenderer;
+      var p = ipc.sendSync('get-server-port');
+      _cachedPort = (p && typeof p === 'number') ? p : 8080;
+      ipc.removeAllListeners('server:port');
+      ipc.on('server:port', function(_e, newPort) {
+        if (newPort && typeof newPort === 'number') _cachedPort = newPort;
+      });
+    } catch (e) {
+      _cachedPort = 8080;
+    }
+    return _cachedPort;
+  }
+  Core.getBackendBase = function() {
+    if (_cachedPort === null) _resolvePort();
+    return 'http://127.0.0.1:' + (_cachedPort || 8080);
+  };
+  // 强制重新解析端口（服务器重启后可调用）
+  Core.refreshBackendPort = function() { return _resolvePort(); };
+})();
+
 // ===== Toast 通知系统（替代 alert()）=====
 Core.showToast = function(message, type, duration) {
   type = type || 'info';
@@ -640,7 +698,7 @@ Core.renderMarkdown = function(text) {
       + '(?:' + _amp + 'type=([^"\'\\s&]*))?', 'g'
     );
     html = html.replace(_comfyRe, function(match, filename, subfolder, type) {
-      return 'http://127.0.0.1:8080/api/comfyui/view?filename=' + filename
+      return Core.getBackendBase() + '/api/comfyui/view?filename=' + filename
         + '&subfolder=' + (subfolder || '')
         + '&type=' + (type || 'output');
     });
@@ -911,9 +969,23 @@ Core.renderMarkdown = function(text) {
   
   // 🔧 延迟加载模块，确保 marked 库已加载后再渲染消息
   var markedCheckCount = 0;
+
+  // 🔧 模块加载完成后，重新从 SQLite 加载真实配置并应用到 UI
+  // （修复：首次 loadConfig 时 Core.db 尚未初始化，只能读到默认配置）
+  function _reapplyConfigAfterModules() {
+    try {
+      Core.loadConfig();
+      Core.reapplyConfig();
+      console.log('✅ 配置已从 SQLite 重新加载并应用到 UI');
+    } catch (e) {
+      console.warn('⚠️ 配置重应用失败:', e.message);
+    }
+  }
+
   function loadModulesWhenReady() {
     if (window.marked) {
       Core.loadModules();
+      _reapplyConfigAfterModules();
     } else if (markedCheckCount < 60) {
       markedCheckCount++;
       console.log('⏳ 等待 marked 库加载... (' + markedCheckCount + '/60)');
@@ -921,6 +993,7 @@ Core.renderMarkdown = function(text) {
     } else {
       console.warn('⚠️ marked 库加载超时，继续初始化');
       Core.loadModules();
+      _reapplyConfigAfterModules();
     }
   }
   loadModulesWhenReady();

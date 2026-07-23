@@ -4,6 +4,21 @@ const fs = require('fs');
 
 let Core = null;
 
+// ===== DSML 标记清理（DeepSeek V4 内部 Function Calling 标记）=====
+// 兼容所有变体: <|DSML||...>、< | DSML | ...>、| DSML | ...> 等
+function _stripDSML(text) {
+  if (!text) return text;
+  // 完整的 tool_calls 块（从 tool_calls 到 /tool_calls）
+  text = text.replace(/<\s*\|{1,3}\s*DSML\s*\|{1,3}\s*tool_calls[\s\S]*?<\s*\|{1,3}\s*DSML\s*\|{1,3}\s*\/tool_calls\s*>?/gi, '');
+  // 未闭合的 tool_calls 块（截断到末尾）
+  text = text.replace(/<\s*\|{1,3}\s*DSML\s*\|{1,3}\s*tool_calls[\s\S]*$/gi, '');
+  // 带 < 的单个 DSML 标记（允许 < 和 | 之间有空格）
+  text = text.replace(/<\s*\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '');
+  // 不带 < 的管道符格式
+  text = text.replace(/\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '');
+  return text;
+}
+
 // ===== Agent 系统提示词（强制中文 + 纯JSON）=====
 const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主思考并使用工具来完成用户任务。
 
@@ -176,7 +191,7 @@ function cleanFinalAnswer(text) {
   if (!text) return text;
 
   // 0. 过滤 DSML 标记（DeepSeek V4 内部标记，可能以多种管道符格式出现）
-  text = text.replace(/<?\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '');
+  text = _stripDSML(text);
   text = text.trim();
   if (!text) return text;
 
@@ -553,7 +568,7 @@ async function sendToAgent(task, isDeepThink) {
       const data = await Core.api.callAPI(prompt, agentPrompt, 0.7, agentModel, agentProvider, null, { disableTools: true });
       reply = (data.message && data.message.content) || data.response || '';
       // 🔧 立即过滤 DSML 标记（DeepSeek V4 可能在 JSON 前输出 | DSML | tool_calls> 等标记）
-      reply = reply.replace(/<?\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '').trim();
+      reply = _stripDSML(reply).trim();
     } catch (err) {
       finalAnswer = '❌ Agent 执行出错：' + err.message + '\n\n可能原因：\n1. 模型服务未启动或 API Key 未配置\n2. 当前选择的模型不可用\n\n建议：检查设置中的模型配置，或切换到其他可用模型。';
       // 📡 Gateway 桥接：Agent 模型调用失败的真实现场。agent-loop 内部吞掉异常（返回 success:true），api.js 的 catch 够不到，须在此处补发 'ai:error'，回传结构化错误帧给 WS 客户端

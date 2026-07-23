@@ -2,6 +2,12 @@
 // 🔧 DuckDuckGo 为默认免费引擎（无需 API Key），博查/Tavily 为付费增强选项
 let Core = null;
 
+// ===== 动态解析后端服务端口（统一走 Core.getBackendBase()，core-v10.js 中定义）=====
+function _searchBackendBase() {
+  if (Core && typeof Core.getBackendBase === 'function') return Core.getBackendBase();
+  return 'http://127.0.0.1:8080';
+}
+
 // ===== 获取当前搜索引擎（自动降级：付费引擎无 Key 时回退 DuckDuckGo/Bing）=====
 function getEffectiveEngine() {
   var engine = Core.config.searchEngine || 'bing';
@@ -16,7 +22,7 @@ async function webSearch(query) {
   const engine = getEffectiveEngine();
 
   try {
-    const resp = await fetch('http://127.0.0.1:8080/api/search', {
+    const resp = await fetch(_searchBackendBase() + '/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -108,7 +114,7 @@ async function webSearchWithMeta(query) {
 // ----- Bing China 结构化（通过后端代理）-----
 async function searchBingStructured(query) {
   try {
-    var resp = await fetch('http://127.0.0.1:8080/api/search', {
+    var resp = await fetch(_searchBackendBase() + '/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: query, engine: 'bing', apiKeys: {} }),
@@ -134,7 +140,7 @@ async function searchBingStructured(query) {
 async function searchDuckDuckGoStructured(query) {
   // 优先通过后端代理
   try {
-    var resp = await fetch('http://127.0.0.1:8080/api/search', {
+    var resp = await fetch(_searchBackendBase() + '/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: query, engine: 'duckduckgo', apiKeys: {} }),
@@ -162,7 +168,7 @@ async function searchDuckDuckGoStructured(query) {
 async function searchSearXNGStructured(query) {
   try {
     var searxngBaseUrl = Core.config.searxngBaseUrl || 'https://searx.be';
-    var resp = await fetch('http://127.0.0.1:8080/api/search', {
+    var resp = await fetch(_searchBackendBase() + '/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: query, engine: 'searxng', apiKeys: { searxngBaseUrl: searxngBaseUrl } }),
@@ -277,7 +283,7 @@ async function webSearchDirect(query, engine) {
 // ----- DuckDuckGo 直接请求（通过后端 /api/search）-----
 async function searchDuckDuckGoDirect(query) {
   try {
-    var resp = await fetch('http://127.0.0.1:8080/api/search', {
+    var resp = await fetch(_searchBackendBase() + '/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: query, engine: 'duckduckgo', apiKeys: {} }),
@@ -298,7 +304,7 @@ async function searchDuckDuckGoDirect(query) {
 // ----- Bing China 直接请求（通过后端 /api/search）-----
 async function searchBingDirect(query) {
   try {
-    var resp = await fetch('http://127.0.0.1:8080/api/search', {
+    var resp = await fetch(_searchBackendBase() + '/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: query, engine: 'bing', apiKeys: {} }),
@@ -320,7 +326,7 @@ async function searchBingDirect(query) {
 async function searchSearXNGDirect(query) {
   try {
     var searxngBaseUrl = Core.config.searxngBaseUrl || 'https://searx.be';
-    var resp = await fetch('http://127.0.0.1:8080/api/search', {
+    var resp = await fetch(_searchBackendBase() + '/api/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: query, engine: 'searxng', apiKeys: { searxngBaseUrl: searxngBaseUrl } }),

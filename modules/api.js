@@ -320,6 +320,10 @@ function _buildHistoryMessages(currentSession, currentSessionId) {
 
 // ===== 核心 API 调用（非流式）=====
 async function callAPI(prompt, systemMsg, temperature, model, provider, messagesOverride = null, options = null) {
+  // 🔧 provider 为空时回退到当前服务（防止后台模块传 null 导致"不支持的提供商: null"）
+  if (!provider) {
+    provider = (Core.getCurrentService && Core.getCurrentService()) || Core.currentService || 'ollama';
+  }
   
   if (provider !== 'ollama' && Core.cloudApi) {
     // 🔧 修复：当 messagesOverride 存在时（后台任务/子会话），直接构建消息并禁用 function calling
@@ -462,8 +466,17 @@ function extractReply(data) {
     else if (data.choices[0].delta && data.choices[0].delta.content) text = data.choices[0].delta.content;
   }
   // 过滤 DSML 标记（所有模型统一处理，防止内部标记泄露）
-  // 覆盖: <| DSML || tool_calls>、| DSML | tool_calls>、|| DSML || invoke ...> 等所有变体
-  if (text) text = text.replace(/<?\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '');
+  // 覆盖: <| DSML || tool_calls>、< | DSML | tool_calls>、| DSML | xxx> 等所有变体
+  if (text) {
+    // 完整的 tool_calls 块
+    text = text.replace(/<\s*\|{1,3}\s*DSML\s*\|{1,3}\s*tool_calls[\s\S]*?<\s*\|{1,3}\s*DSML\s*\|{1,3}\s*\/tool_calls\s*>?/gi, '');
+    // 未闭合的 tool_calls 块（截断到末尾）
+    text = text.replace(/<\s*\|{1,3}\s*DSML\s*\|{1,3}\s*tool_calls[\s\S]*$/gi, '');
+    // 带 < 的单个标记（允许 < 和 | 之间有空格）
+    text = text.replace(/<\s*\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '');
+    // 不带 < 的管道符格式
+    text = text.replace(/\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi, '');
+  }
   return text;
 }
 
@@ -611,7 +624,7 @@ async function describeImage(base64Image, prompt = '请描述这张图片的内�
   try {
     // 🔧 优先使用后端 /api/image API（支持 OCR + sharp + tesseract）
     try {
-      const response = await fetch('http://127.0.0.1:8080/api/image', {
+      const response = await fetch(Core.getBackendBase() + '/api/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

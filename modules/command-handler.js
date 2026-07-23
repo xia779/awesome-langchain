@@ -555,7 +555,7 @@ async function handleCommand(text) {
   }
   // ===== /aimanga — 打开 AI 漫画工作室网页版 =====
   if (text === '/aimanga-web') {
-    var url = 'http://127.0.0.1:8080/aimanga';
+    var url = Core.getBackendBase() + '/aimanga';
     try {
       if (typeof window !== 'undefined' && window.open) {
         window.open(url, '_blank');
@@ -800,6 +800,23 @@ async function handleCommand(text) {
     }
 
     Core.session.addMessage(output, 'ai');
+    return true;
+  }
+  // ===== /nebula 命令 — 打开 3D 星云界面 =====
+  if (text === '/nebula' || text.startsWith('/nebula')) {
+    try {
+      var nebulaBase = (Core && typeof Core.getBackendBase === 'function') ? Core.getBackendBase() : 'http://127.0.0.1:8080';
+      var nebulaUrl = nebulaBase + '/nebula-3d.html';
+      var electron = require('electron');
+      if (electron && electron.shell && electron.shell.openExternal) {
+        electron.shell.openExternal(nebulaUrl);
+        Core.session.addMessage('🌌 已在浏览器中打开 3D 星云界面：\n' + nebulaUrl + '\n\n鼠标拖拽旋转 · 滚轮缩放 · 右上角切换配色主题', 'ai');
+      } else {
+        Core.session.addMessage('🌌 3D 星云界面地址：' + nebulaUrl, 'ai');
+      }
+    } catch (e) {
+      Core.session.addMessage('❌ 打开星云界面失败: ' + e.message, 'ai');
+    }
     return true;
   }
   return false;

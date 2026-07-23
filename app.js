@@ -38,6 +38,8 @@ try {
 
   var sendBtn = Core.dom.sendBtn;
   var isGenerating = false;
+  // 🔧 仅在用户主动点击"停止"时置 true，避免误拦截后台/命令触发的 callAPI（如深度研究、技能生成）
+  var stopRequested = false;
   var abortCtrl = null;
   var currentAiDiv = null;
 
@@ -47,6 +49,7 @@ try {
   function setGenState(generating) {
     isGenerating = generating;
     if (generating) {
+      stopRequested = false; // 新生成开始，清除旧的停止标记
       sendBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">stop</span>';
       sendBtn.style.background = '#ef4444';
       sendBtn.style.color = '#fff';
@@ -63,13 +66,17 @@ try {
     if (isGenerating) {
       if (abortCtrl) { try { abortCtrl.abort(); } catch(e) {} }
       isGenerating = false;
+      stopRequested = true; // 用户主动停止：拦截此后属于本次生成的 callAPI 调用
       sendBtn.innerHTML = '<span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">arrow_upward</span>';
       sendBtn.style.background = '';
       Core.dom.status.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;">stop_circle</span> 已停止';
       setTimeout(function() { Core.dom.status.innerHTML = '<span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#22c55e;">check_circle</span> 已就绪'; }, 1500);
       return;
     }
-    
+
+    // 🔧 新的用户操作开始（含 /research、/learn 等命令），清除停止标记，避免误拦截
+    stopRequested = false;
+
     // 🔧 快捷指令解析（custom.js）
     var input = Core.dom.input.value.trim();
     if (input && input.startsWith('/') && Core.custom && Core.custom.executeCommand) {
@@ -115,7 +122,11 @@ try {
   if (Core.api && Core.api.callAPI) {
     var origCallAPI = Core.api.callAPI;
     Core.api.callAPI = function(prompt, systemMsg, temp, model, provider, messagesOverride) {
-      if (!isGenerating) {
+      var opts = arguments[6];
+      // 后台/命令任务（深度研究、技能生成、晨报等）显式声明 _background，永不拦截
+      var isBackground = opts && opts._background === true;
+      // 仅在用户主动停止后拦截属于本次生成的后续调用；应用空闲时 stopRequested=false，不影响后台任务
+      if (stopRequested && !isBackground) {
         console.log('⏹ callAPI 被拦截（生成已停止，跳过后续调用）');
         return Promise.resolve({ message: { content: '' }, response: '' });
       }

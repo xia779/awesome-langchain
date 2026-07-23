@@ -39,7 +39,7 @@ function init(_Core) {
         return svc.available;
       }
       try {
-        var resp = await fetch('http://127.0.0.1:8080/api/tts/voices', { signal: AbortSignal.timeout(3000) });
+        var resp = await fetch(Core.getBackendBase() + '/api/tts/voices', { signal: AbortSignal.timeout(3000) });
         svc.available = resp.ok || resp.status === 200;
       } catch (e) {
         svc.available = false;
@@ -216,7 +216,7 @@ function init(_Core) {
       if (options.referenceAudio) bodyData.reference_audio = options.referenceAudio;
       if (options.referenceText) bodyData.reference_text = options.referenceText;
 
-      var response = await fetch('http://127.0.0.1:8080/api/tts-voxcpm/stream', {
+      var response = await fetch(Core.getBackendBase() + '/api/tts-voxcpm/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyData),
@@ -496,7 +496,7 @@ function init(_Core) {
 
         var response;
         try {
-          response = await fetch('http://127.0.0.1:8080/api/tts-voxcpm/stream', {
+          response = await fetch(Core.getBackendBase() + '/api/tts-voxcpm/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(bodyData),
@@ -660,7 +660,7 @@ function init(_Core) {
       if (options.referenceAudio) bodyData.reference_audio = options.referenceAudio;
       if (options.referenceText) bodyData.reference_text = options.referenceText;
 
-      var response = await fetch('http://127.0.0.1:8080/api/tts-voxcpm', {
+      var response = await fetch(Core.getBackendBase() + '/api/tts-voxcpm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyData),
@@ -709,7 +709,7 @@ function init(_Core) {
       // 创建 AbortController 以支持取消
       this._fishAbortController = new AbortController();
 
-      var response = await fetch('http://127.0.0.1:8080/api/tts-fish', {
+      var response = await fetch(Core.getBackendBase() + '/api/tts-fish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: text, voice: voice, speed: speed }),
@@ -771,7 +771,7 @@ function init(_Core) {
       var voice = options.voice || this.localVoice || 'zh-CN-XiaoxiaoNeural';
       var speed = options.speed || options.rate || 1.0;
 
-      var response = await fetch('http://127.0.0.1:8080/api/tts', {
+      var response = await fetch(Core.getBackendBase() + '/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: text, voice: voice, speed: speed }),
@@ -931,7 +931,7 @@ function init(_Core) {
     async getLocalVoices() {
       if (this.localTtsVoices) return this.localTtsVoices;
       try {
-        var resp = await fetch('http://127.0.0.1:8080/api/tts/voices', { signal: AbortSignal.timeout(10000) });
+        var resp = await fetch(Core.getBackendBase() + '/api/tts/voices', { signal: AbortSignal.timeout(10000) });
         if (resp.ok) {
           var data = await resp.json();
           if (data.success && data.voices) {
@@ -1023,7 +1023,7 @@ function init(_Core) {
           reader.onloadend = async function() {
             try {
               var base64Audio = reader.result; // data:audio/webm;base64,...
-              var response = await fetch('http://127.0.0.1:8080/api/asr', {
+              var response = await fetch(Core.getBackendBase() + '/api/asr', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

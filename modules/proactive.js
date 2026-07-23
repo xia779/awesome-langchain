@@ -92,7 +92,7 @@ async function generateMorningBriefing(options) {
           null, null,
           [{ role: 'system', content: '你是一个AI助理，负责生成每日晨报。简洁、有条理、突出重点。' },
            { role: 'user', content: '请基于以下信息生成一份简洁的晨报摘要（200字以内）：\n\n' + rawContent }],
-          { disableTools: true }
+          { disableTools: true, _background: true }
         );
         briefing = (result && result.message && result.message.content) || '';
       } catch (e) {}

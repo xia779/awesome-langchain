@@ -23,7 +23,7 @@ const SERVICES = {
   deepseek: {
     name: 'DeepSeek',
     priority: 1,
-    models: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash'],
+    models: ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner'],
     baseURL: 'https://api.deepseek.com/v1',
     apiKeyField: 'deepseekKey',
   },
@@ -266,12 +266,23 @@ function buildToolsPayload() {
 const FUNCTION_CALLING_PROVIDERS = ['deepseek', 'qwen', 'custom', 'silicon'];
 
 //  过滤 DeepSeek 流式响应中的 DSML 标记
-// 匹配所有格式: <| DSML || tool_calls>、| DSML | tool_calls>、|| DSML || invoke name="web_search">、<|DSML||/invoke> 等
-// 策略: 匹配可选<开头 + 1~3个管道符 + 含DSML的标记段 + 可选>结尾，覆盖所有变体
-var DSML_MARKER_RE = /<?\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi;
+// 匹配所有格式: <| DSML || tool_calls>、| DSML | tool_calls>、|| DSML || invoke name="web_search">、<|DSML||/invoke>、< | DSML | xxx> 等
+// 策略: 多轮清理 — 先剥离完整/未闭合 tool_calls 块，再清除残余单行标记
+var DSML_MARKER_RE = /<\s*\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi;
+var DSML_MARKER_NOANGLE_RE = /\|{1,3}\s*DSML\s*\|{0,3}\s*[^>\n]*>?/gi;
+var DSML_TOOLCALLS_BLOCK_RE = /<\s*\|{1,3}\s*DSML\s*\|{1,3}\s*tool_calls[\s\S]*?<\s*\|{1,3}\s*DSML\s*\|{1,3}\s*\/tool_calls\s*>?/gi;
+var DSML_TOOLCALLS_UNCLOSED_RE = /<\s*\|{1,3}\s*DSML\s*\|{1,3}\s*tool_calls[\s\S]*$/gi;
 function stripDSMLMarkers(text) {
   if (!text) return text;
-  return text.replace(DSML_MARKER_RE, '');
+  // Pass 1: 完整的 tool_calls 块（从 tool_calls 到 /tool_calls）
+  text = text.replace(DSML_TOOLCALLS_BLOCK_RE, '');
+  // Pass 2: 未闭合的 tool_calls 块（截断到末尾）
+  text = text.replace(DSML_TOOLCALLS_UNCLOSED_RE, '');
+  // Pass 3: 带 < 的单个 DSML 标记（允许 < 和 | 之间有空格）
+  text = text.replace(DSML_MARKER_RE, '');
+  // Pass 4: 不带 < 的管道符格式 | DSML | xxx>
+  text = text.replace(DSML_MARKER_NOANGLE_RE, '');
+  return text;
 }
 
 // ===== 处理工具调用并生成后续消息 =====
@@ -418,7 +429,8 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
     console.warn('☁️ ' + provider + ' 全部重试失败:', err.message);
     if (Core.recovery && Core.recovery.getFallbackProvider) {
       var fallback = Core.recovery.getFallbackProvider(provider);
-      if (fallback && fallback !== provider) {
+      // 🔧 ollama 是本地模型，走独立的 Ollama 路径，不能经 callCloudAPI 云端路径调用
+      if (fallback && fallback !== provider && fallback !== 'ollama') {
         console.log('🔄 故障转移到: ' + fallback);
         if (Core.dom && Core.dom.status) Core.dom.status.textContent = '🔄 已切换到 ' + fallback + '...';
         return await callCloudAPI(prompt, systemMsg, temperature, model, fallback);

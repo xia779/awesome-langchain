@@ -51,6 +51,9 @@ async function startWebServer() {
   app2.use(cors());
   app2.use(express.json({ limit: '50mb' }));
 
+  // 🔧 静态资源服务：让 public/ 下的自定义页面（如 nebula-3d.html）可通过 HTTP 访问
+  app2.use(express.static(path.join(__dirname, 'public')));
+
   // 注册所有 API 路由（提取到 api-routes.js）
   registerApiRoutes(app2, { DATA_ROOT, getMainWindow: () => mainWindow, setActualPort: (p) => { actualPort = p; } });
 

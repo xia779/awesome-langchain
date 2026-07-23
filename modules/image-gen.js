@@ -166,7 +166,7 @@ async function checkComfyUI(force) {
   }
   try {
     // 通过服务端代理检查 ComfyUI 状态，避免浏览器控制台显示 ERR_CONNECTION_REFUSED
-    var resp = await fetch('http://127.0.0.1:8080/api/comfyui/status', { signal: AbortSignal.timeout(8000) });
+    var resp = await fetch(Core.getBackendBase() + '/api/comfyui/status', { signal: AbortSignal.timeout(8000) });
     if (resp.ok) {
       var data = await resp.json();
       _comfyuiStatus = {
@@ -192,7 +192,7 @@ async function getComfyUIModels() {
   if (_comfyuiModels) return _comfyuiModels;
   try {
     // 通过服务端代理获取模型列表，避免浏览器直接连接 ComfyUI
-    var resp = await fetch('http://127.0.0.1:8080/api/comfyui/models', { signal: AbortSignal.timeout(8000) });
+    var resp = await fetch(Core.getBackendBase() + '/api/comfyui/models', { signal: AbortSignal.timeout(8000) });
     if (!resp.ok) return { checkpoints: [], loras: [] };
     var data = await resp.json();
     _comfyuiModels = { checkpoints: data.checkpoints || [], loras: data.loras || [] };

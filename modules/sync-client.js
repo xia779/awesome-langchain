@@ -18,7 +18,8 @@ const MAX_LOG = 20;
 function getSyncConfig() {
   var defaults = {
     enabled: false,
-    serverUrl: 'http://127.0.0.1:8080',  // 默认同步到本机 web-server
+    // 默认同步到本机 web-server；端口动态解析（8080 被占用时 main.js 会自动递增）
+    serverUrl: (Core && typeof Core.getBackendBase === 'function') ? Core.getBackendBase() : 'http://127.0.0.1:8080',
     intervalMs: 300000,                    // 5 分钟自动同步
     syncSessions: true,
     syncMemories: true,

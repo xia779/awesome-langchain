@@ -1695,6 +1695,19 @@ module.exports = {
         }
       } catch(e) { console.warn('⚠️ configChanged handler error:', e.message); }
     });
+
+    // 🔧 暴露配置重应用接口（供 core-v10.js 在模块加载后重新应用配置到 UI）
+    Core.settings = {
+      reapplyUI: function() {
+        try {
+          _loadColorInputs();
+          _applyThemeMode(Core.config.themeMode || 'dark', true);
+          _applyCustomColors(true);
+          loadSettingsToUI();
+        } catch(e) { console.warn('⚠️ settings.reapplyUI error:', e.message); }
+      }
+    };
+
     console.log('✅ 设置管理模块已加载 v3 (all render guards + try-catch)');
   },
   loadSettings: openSettings,

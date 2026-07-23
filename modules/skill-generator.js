@@ -47,7 +47,7 @@ async function generateSkillFromFile(filePath, options) {
     0.3,
     null, null,
     [{ role: 'system', content: systemMsg }, { role: 'user', content: '文档内容：\n' + content }],
-    { disableTools: true }
+    { disableTools: true, _background: true }
   );
 
   var responseText = (result && result.message && result.message.content) || '';
@@ -117,7 +117,7 @@ async function generateSkillFromConversation(messages, title) {
     0.3,
     null, null,
     [{ role: 'system', content: systemMsg }, { role: 'user', content: '请从对话中提取技能：\n\n' + conversation }],
-    { disableTools: true }
+    { disableTools: true, _background: true }
   );
 
   var responseText = (result && result.message && result.message.content) || '';
