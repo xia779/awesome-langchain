@@ -797,6 +797,36 @@ async function handleCommand(text) {
       report.errorsTop5.forEach(function(e) {
         output += '  • ' + e.error + ' (' + e.count + '次)\n';
       });
+      output += '\n';
+    }
+
+    // 🔧 #17: 断路器状态
+    if (Core.recovery && Core.recovery.getCircuitState) {
+      var circuits = Core.recovery.getCircuitState();
+      var providers = Object.keys(circuits);
+      if (providers.length > 0) {
+        output += '⚡ **断路器状态**\n';
+        providers.forEach(function(p) {
+          var c = circuits[p];
+          var icon = c.state === 'closed' ? '🟢' : (c.state === 'half-open' ? '🟡' : '🔴');
+          output += '  ' + icon + ' ' + p + ': ' + c.state.toUpperCase() + ' (失败 ' + (c.failures || 0) + ' 次)\n';
+        });
+        output += '\n';
+      }
+    }
+
+    // 🔧 #20: Prompt 缓存统计
+    if (Core.promptCache && Core.promptCache.stats) {
+      var cacheStats = Core.promptCache.stats();
+      output += '💾 **Prompt 缓存**: ' + cacheStats.size + '/' + cacheStats.maxSize + ' 条, 命中 ' + cacheStats.totalHits + ' 次\n\n';
+    }
+
+    // 🔧 #20: 知识库统计
+    if (Core.knowledge && Core.knowledge.listDocuments) {
+      try {
+        var docs = Core.knowledge.listDocuments();
+        output += '📚 **知识库**: ' + docs.length + ' 篇文档\n';
+      } catch (e) {}
     }
 
     Core.session.addMessage(output, 'ai');

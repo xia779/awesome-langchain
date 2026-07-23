@@ -463,6 +463,23 @@ const Core = {
     }
     
     this.emit('configChanged', newConfig, this.config);
+
+    // 🔧 #18: 配置热重载 — 立即应用 UI 相关变更（无需刷新）
+    try {
+      if (newConfig.activeTheme && Core.customizer && Core.customizer.themes) {
+        Core.customizer.themes.apply(newConfig.activeTheme);
+      }
+      if (newConfig.temperature !== undefined) {
+        var _ts = document.getElementById('temperatureSlider');
+        var _td = document.getElementById('tempDisplay');
+        if (_ts) _ts.value = newConfig.temperature;
+        if (_td) _td.textContent = newConfig.temperature;
+      }
+      if (newConfig.appName) {
+        document.title = newConfig.appName;
+        if (Core.dom && Core.dom.appTitle) Core.dom.appTitle.textContent = newConfig.appName;
+      }
+    } catch (_) {}
   },
 
   loadModules() {

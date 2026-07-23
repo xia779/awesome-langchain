@@ -648,7 +648,11 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
       const cursorEl = aiDiv ? aiDiv.querySelector('.typing-cursor') : null;
       if (cursorEl) cursorEl.remove();
     } else {
-      const errMsg = '❌ 错误：' + err.message;
+      // 🔧 #19: 错误信息人性化
+      var friendlyMsg = (Core.errorHandler && Core.errorHandler.humanizeError)
+        ? Core.errorHandler.humanizeError(err, provider)
+        : err.message;
+      const errMsg = '❌ ' + friendlyMsg;
       // Phase 4-3：错误恢复增强 — 智能分类 + 重试建议 + 降级提示
       var recoveryInfo = '';
       if (Core.recovery) {

@@ -19,6 +19,7 @@ function init(_Core) {
     showErrorToast,
     showSuccessToast,
     showWarningToast,
+    humanizeError,  // 🔧 #19: 错误信息人性化
   };
   
   // 全局错误捕获
@@ -203,6 +204,49 @@ function showWarningToast(message) {
   try {
     if (Core && Core.showToast) Core.showToast(message, 'warning', 4000);
   } catch (e) { /* 静默 */ } finally { _isToasting = false; }
+}
+
+// ===== 🔧 #19: 错误信息人性化翻译 =====
+function humanizeError(rawError, provider) {
+  if (!rawError) return '未知错误，请重试';
+  var msg = typeof rawError === 'string' ? rawError : (rawError.message || String(rawError));
+
+  // 网络/连接类
+  if (msg.indexOf('ECONNREFUSED') !== -1 || msg.indexOf('fetch failed') !== -1) {
+    return '无法连接到 ' + (provider || 'API') + ' 服务。请检查：\n1. 网络是否正常\n2. 如果是本地模型，Ollama 是否已启动';
+  }
+  if (msg.indexOf('ETIMEDOUT') !== -1 || msg.indexOf('timeout') !== -1 || msg.indexOf('AbortError') !== -1) {
+    return '请求超时（服务响应太慢）。建议：\n• 缩短提问内容\n• 稍后重试\n• 切换到其他模型';
+  }
+  // 认证类
+  if (msg.indexOf('401') !== -1 || msg.indexOf('Unauthorized') !== -1 || msg.indexOf('Invalid API Key') !== -1 || msg.indexOf('Authentication') !== -1) {
+    return (provider || 'API') + ' 的 API Key 无效或已过期。请在设置中检查并更新密钥。';
+  }
+  // 余额/限额类
+  if (msg.indexOf('402') !== -1 || msg.indexOf('insufficient') !== -1 || msg.indexOf('balance') !== -1 || msg.indexOf('quota') !== -1) {
+    return (provider || 'API') + ' 账户余额不足或已达配额上限。请充值或更换密钥。';
+  }
+  // 限流类
+  if (msg.indexOf('429') !== -1 || msg.indexOf('rate limit') !== -1 || msg.indexOf('Too Many Requests') !== -1) {
+    return '请求过于频繁，已被限流。请等待 30 秒后重试。';
+  }
+  // 模型不存在
+  if (msg.indexOf('model_not_found') !== -1 || msg.indexOf('does not exist') !== -1 || msg.indexOf('not found') !== -1) {
+    return '模型不可用。可能原因：\n• 模型名称拼写有误\n• 该模型已下线\n• 账户无权访问此模型\n请在设置中切换模型。';
+  }
+  // 断路器
+  if (msg.indexOf('断路器') !== -1 || msg.indexOf('circuit') !== -1) {
+    return (provider || 'API') + ' 连续失败多次，已暂时熔断。等待自动恢复，或输入 /stats 查看状态并手动重置。';
+  }
+  // 服务器错误
+  if (msg.indexOf('500') !== -1 || msg.indexOf('502') !== -1 || msg.indexOf('503') !== -1) {
+    return (provider || 'API') + ' 服务器内部错误（非本机问题）。通常几分钟后自动恢复，请稍后重试。';
+  }
+  // 兜底：截断过长的技术信息
+  if (msg.length > 150) {
+    return '发生错误: ' + msg.substring(0, 120) + '...\n如持续出现，请尝试切换模型或重启应用。';
+  }
+  return msg;
 }
 
 module.exports = { name: 'error-handler', dependencies: [], init };
