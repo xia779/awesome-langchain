@@ -1044,7 +1044,25 @@ Core.renderMarkdown = function(text) {
   if (!text) return '';
   if (window.marked) {
     if (_mdCache.has(text)) return _mdCache.get(text);
-    var html = Core.sanitizeHtml(marked.parse(text));
+    // 🔧 S7: KaTeX 数学公式 — 提取 LaTeX 避免 marked 破坏语法
+    var _mathBlocks = [];
+    var _mathText = text;
+    if (window.katex) {
+      // 块级公式 $$...$$
+      _mathText = _mathText.replace(/\$\$([\s\S]+?)\$\$/g, function(m, expr) {
+        var idx = _mathBlocks.length;
+        _mathBlocks.push({ expr: expr.trim(), display: true });
+        return 'QMATHQ_' + idx + '_QENDQ';
+      });
+      // 行内公式 $...$（排除 $$ 和纯数字如 $100）
+      _mathText = _mathText.replace(/(?<!\$)\$(?!\$)([^\n$]+?)\$(?!\$)/g, function(m, expr) {
+        if (/^\d+\.?\d*$/.test(expr.trim())) return m; // 跳过金额
+        var idx = _mathBlocks.length;
+        _mathBlocks.push({ expr: expr.trim(), display: false });
+        return 'QMATHQ_' + idx + '_QENDQ';
+      });
+    }
+    var html = Core.sanitizeHtml(marked.parse(_mathText));
     // 将 ComfyUI 直连 URL 重写为代理 URL，避免 ComfyUI 离线时 500 错误
     // 兼容 127.0.0.1 和 localhost，同时处理 &amp; 和 & 两种编码
     var _amp = '(?:&amp;|&)';
@@ -1065,6 +1083,23 @@ Core.renderMarkdown = function(text) {
         + 'background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:6px;'
         + 'color:#f87171;font-size:12px;">\u{1f5bc}\ufe0f 图片链接已过期</span>'
     );
+    // 🔧 S7: KaTeX 占位符 → 渲染后的公式 HTML
+    if (_mathBlocks.length > 0 && window.katex) {
+      html = html.replace(/QMATHQ_(\d+)_QENDQ/g, function(m, idxStr) {
+        var block = _mathBlocks[parseInt(idxStr)];
+        if (!block) return m;
+        try {
+          var rendered = katex.renderToString(block.expr, {
+            displayMode: block.display,
+            throwOnError: false,
+            errorColor: '#f87171'
+          });
+          return block.display ? '<div class="katex-block">' + rendered + '</div>' : rendered;
+        } catch (e) {
+          return '<code style="color:#f87171;">' + block.expr + '</code>';
+        }
+      });
+    }
     _mdCache.set(text, html);
     if (_mdCache.size > _MD_CACHE_MAX) {
       // 删除最早的 1/3 条目
