@@ -44,9 +44,16 @@ function httpJson(path_, timeoutMs) {
 function resolvePython() {
   var cfg = Core.config || {};
   if (cfg.pytdxPython && fs.existsSync(cfg.pytdxPython)) return cfg.pytdxPython;
-  var venvPy = path.join(Core.DATA_ROOT, 'pytdx-env',
-    process.platform === 'win32' ? path.join('Scripts', 'python.exe') : path.join('bin', 'python'));
-  return fs.existsSync(venvPy) ? venvPy : null;
+  var pyExe = process.platform === 'win32' ? path.join('Scripts', 'python.exe') : path.join('bin', 'python');
+  // 候选路径：① 当前用户目录下 pytdx-env ② 全局数据根目录下 pytdx-env（多用户共享，推荐）
+  var candidates = [
+    path.join(Core.DATA_ROOT, 'pytdx-env', pyExe),
+    path.join(Core._globalDataRoot || Core.DATA_ROOT, 'pytdx-env', pyExe)
+  ];
+  for (var i = 0; i < candidates.length; i++) {
+    if (fs.existsSync(candidates[i])) return candidates[i];
+  }
+  return null;
 }
 
 function canRestart() {

@@ -130,7 +130,9 @@ try {
   const domWindow = new JSDOM('').window;
   DOMPurify = createDOMPurify(domWindow);
 } catch (e) {
-  console.warn('[preload] DOMPurify/jsdom not available:', e.message);
+  // 渲染进程已通过 index.html 直接加载 DOMPurify 浏览器版（有真实 window/DOM，无需 jsdom），
+  // preload 侧仅为兜底；缺失属预期情况，降级为 debug 日志，不再刷黄色警告。
+  console.debug('[preload] DOMPurify/jsdom 兜底不可用（渲染进程已原生加载 DOMPurify）:', e.message);
 }
 
 // ============================================================
@@ -1369,7 +1371,9 @@ const ALLOWED_MODULES = [
 
 function nativeRequire(moduleName) {
   if (!ALLOWED_MODULES.includes(moduleName)) {
-    console.warn('[preload] nativeRequire blocked:', moduleName);
+    // 非内置模块由 core-v10.js 的 _bridgeRequire 走专用桥（electron / ws / 相对路径 / requireNpm），
+    // 这里静默返回 error 即可，避免每次 require 都刷一条黄色警告；
+    // 真正无法解析的模块会在 _bridgeRequire 末尾统一告警（[core] require 被阻止）。
     return { error: 'Module not allowed: ' + moduleName };
   }
   try {
