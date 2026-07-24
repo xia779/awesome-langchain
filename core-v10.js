@@ -622,16 +622,26 @@ const Core = {
     
     // 🔒 解密敏感字段（自动兼容旧的明文配置）
     let hadPlaintextKeys = false;
+    // 🔒 记录解密失败的字段：防止后续 saveConfig 用空值覆盖数据库中的真实加密密钥
+    var decryptFailedFields = {};
     for (const field of SENSITIVE_KEY_FIELDS) {
       if (this.config[field] && typeof this.config[field] === 'string') {
         if (this.config[field].startsWith(ENC_PREFIX)) {
-          this.config[field] = decryptValue(this.config[field]);
+          var _decrypted = decryptValue(this.config[field]);
+          if (_decrypted === '' || _decrypted === null || _decrypted === undefined) {
+            // 解密失败：内存置空（UI 显示未配置），但标记该字段，保存时不回写空值
+            decryptFailedFields[field] = true;
+            this.config[field] = '';
+          } else {
+            this.config[field] = _decrypted;
+          }
         } else if (this.config[field].length > 0) {
           // 明文密钥（旧配置），标记需要重新加密保存
           hadPlaintextKeys = true;
         }
       }
     }
+    this._decryptFailedFields = decryptFailedFields;
     // 如果检测到旧的明文密钥，自动重新保存为加密格式
     if (hadPlaintextKeys) {
       setTimeout(() => {
@@ -706,7 +716,18 @@ const Core = {
       if (Core.db && Core.db.set && Core.db._backend === 'sqlite') {
         const userId = this._currentUser || 'admin';
         Object.keys(newConfigEncrypted).forEach(key => {
-          Core.db.set(userId + ':' + key, JSON.stringify(newConfigEncrypted[key]));
+          var _valToSave = newConfigEncrypted[key];
+          // 🔒 数据保护：解密失败的敏感字段若内存中为空，不用空值覆盖数据库里的真实加密密钥
+          var _isEmpty = (_valToSave === '' || _valToSave === null || _valToSave === undefined);
+          if (_isEmpty && this._decryptFailedFields && this._decryptFailedFields[key] &&
+              SENSITIVE_KEY_FIELDS.indexOf(key) >= 0) {
+            return; // 保留数据库中已有的加密值
+          }
+          // 用户填入了新值 → 清除该字段的"解密失败"标记
+          if (!_isEmpty && this._decryptFailedFields && this._decryptFailedFields[key]) {
+            delete this._decryptFailedFields[key];
+          }
+          Core.db.set(userId + ':' + key, JSON.stringify(_valToSave));
         });
       }
     } catch (e) {

@@ -1,10 +1,12 @@
 // ===== app.js - Extracted from index.html =====
 // Ensure Node.js module resolution works for external JS file
 try {
-  var _path = require("path");
-  var _projectNodeModules = _path.join(__dirname, "node_modules");
-  if (typeof module !== "undefined" && module.paths && !module.paths.includes(_projectNodeModules)) {
-    module.paths.unshift(_projectNodeModules);
+  if (typeof require !== 'undefined') {
+    var _path = require("path");
+    var _projectNodeModules = _path.join(__dirname, "node_modules");
+    if (typeof module !== "undefined" && module.paths && !module.paths.includes(_projectNodeModules)) {
+      module.paths.unshift(_projectNodeModules);
+    }
   }
 } catch (e) { console.warn("[app.js] module.paths fix failed:", e.message); }
 
@@ -567,10 +569,14 @@ try {
       exportBtnEl.addEventListener('click', showExportSelector);
     }
 
-    // IPC 导出快捷键
+    // IPC 导出快捷键（contextIsolation 下通过 nodeBridge，旧模式回退 require('electron')）
     try {
-      const { ipcRenderer } = require('electron');
-      ipcRenderer.on('trigger-export', showExportSelector);
+      var _ipcRenderer = (window.nodeBridge && window.nodeBridge.ipcRenderer)
+        ? window.nodeBridge.ipcRenderer
+        : (typeof require !== 'undefined' ? require('electron').ipcRenderer : null);
+      if (_ipcRenderer && _ipcRenderer.on) {
+        _ipcRenderer.on('trigger-export', showExportSelector);
+      }
     } catch (err) {
       console.warn('IPC 不可用', err);
     }

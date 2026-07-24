@@ -940,7 +940,8 @@
 <!-- S7：KaTeX 数学公式渲染 -->
 <script src="./node_modules/katex/dist/katex.min.js"></script>
 
-<!-- DOMPurify 由 preload 桥接层提供（window.DOMPurify 在 core-v10.js 中初始化） -->
+<!-- DOMPurify：直接加载浏览器版（渲染进程有真实 window/DOM，无需 jsdom）；core-v10.js 仍保留 preload 桥接兜底 -->
+<script src="./node_modules/dompurify/dist/purify.min.js"></script>
 
 <!-- ===== 核心引擎（v10，最终修复版） ===== -->
 

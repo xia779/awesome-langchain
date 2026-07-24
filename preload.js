@@ -918,7 +918,7 @@ const electronAPIBridge = {
       const allowedOn = [
         'server:port', 'agent:response', 'agent:step', 'agent:error',
         'agent:done', 'agent:typing', 'config:changed', 'session:updated',
-        'notification', 'tray:action', 'app:shutdown'
+        'notification', 'tray:action', 'app:shutdown', 'trigger-export'
       ];
       if (allowedOn.includes(channel)) {
         const sub = (_event, ...args) => callback(...args);
@@ -1283,6 +1283,82 @@ const dompurifyBridge = {
 };
 
 // ============================================================
+// 13.5 HTTP Server bridge (http.Server 类实例过桥包装)
+// contextBridge 序列化会丢失 http.Server 的原型方法(.listen/.on/.close)，
+// 因此用闭包代理包装：真实 server 留在 preload，渲染进程拿到可调用的方法桩。
+// ============================================================
+function createHttpServerBridge(mod, handler) {
+  const realServer = mod.createServer();
+
+  // 将真实 req/res 包装成可跨桥的对象，交给渲染进程的 handler
+  function dispatch(req, res, rendererHandler) {
+    const reqProxy = {
+      url: req.url,
+      method: req.method,
+      headers: req.headers,
+      httpVersion: req.httpVersion,
+      on: (event, cb) => {
+        if (event === 'data') {
+          req.on('data', (chunk) => cb(Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk));
+        } else if (event === 'end') {
+          req.on('end', () => cb());
+        } else {
+          req.on(event, (...a) => cb(...a));
+        }
+        return reqProxy;
+      }
+    };
+    const resProxy = {
+      writeHead: (code, headers) => { try { res.writeHead(code, headers); } catch (e) {} return resProxy; },
+      setHeader: (name, value) => { try { res.setHeader(name, value); } catch (e) {} return resProxy; },
+      getHeader: (name) => { try { return res.getHeader(name); } catch (e) { return undefined; } },
+      removeHeader: (name) => { try { res.removeHeader(name); } catch (e) {} return resProxy; },
+      write: (data, encoding) => { try { return res.write(data, encoding); } catch (e) { return false; } },
+      end: (data, encoding) => { try { res.end(data, encoding); } catch (e) {} return resProxy; }
+    };
+    try {
+      rendererHandler(reqProxy, resProxy);
+    } catch (e) {
+      try { res.writeHead(500); res.end('Internal Server Error: ' + e.message); } catch (_) {}
+    }
+  }
+
+  if (typeof handler === 'function') {
+    realServer.on('request', (req, res) => dispatch(req, res, handler));
+  }
+
+  const serverProxy = {
+    listen: (...args) => { realServer.listen(...args); return serverProxy; },
+    close: (cb) => { realServer.close(typeof cb === 'function' ? cb : undefined); return serverProxy; },
+    on: (event, cb) => {
+      if (event === 'request') {
+        realServer.on('request', (req, res) => dispatch(req, res, cb));
+      } else if (event === 'error') {
+        realServer.on('error', (e) => cb({ code: e.code, message: e.message, errno: e.errno }));
+      } else if (event === 'close') {
+        realServer.on('close', () => cb());
+      } else if (event === 'listening') {
+        realServer.on('listening', () => cb());
+      } else {
+        realServer.on(event, (...a) => cb(...a));
+      }
+      return serverProxy;
+    },
+    once: (event, cb) => {
+      if (event === 'error') {
+        realServer.once('error', (e) => cb({ code: e.code, message: e.message, errno: e.errno }));
+      } else {
+        realServer.once(event, (...a) => cb(...a));
+      }
+      return serverProxy;
+    },
+    address: () => { try { return realServer.address(); } catch (e) { return null; } },
+    setTimeout: (ms, cb) => { realServer.setTimeout(ms, cb); return serverProxy; }
+  };
+  return serverProxy;
+}
+
+// ============================================================
 // 14. nativeRequire bridge (whitelisted built-in modules)
 // ============================================================
 const ALLOWED_MODULES = [
@@ -1306,8 +1382,8 @@ function nativeRequire(moduleName) {
       case 'child_process': return childProcessBridge;
       case 'buffer': return bufferBridge;
       case 'process': return processInfoBridge;
-      case 'http': return { request: httpNodeRequest, get: httpNodeGet, post: httpBridge.post, httpRequest: httpRequest, Agent: function(){}, createServer: mod.createServer, Server: mod.Server };
-      case 'https': return { request: httpNodeRequest, get: httpNodeGet, post: httpBridge.post, httpRequest: httpRequest, Agent: function(){}, createServer: mod.createServer, Server: mod.Server };
+      case 'http': return { request: httpNodeRequest, get: httpNodeGet, post: httpBridge.post, httpRequest: httpRequest, Agent: function(){}, createServer: (handler) => createHttpServerBridge(mod, handler), Server: mod.Server };
+      case 'https': return { request: httpNodeRequest, get: httpNodeGet, post: httpBridge.post, httpRequest: httpRequest, Agent: function(){}, createServer: (handler) => createHttpServerBridge(mod, handler), Server: mod.Server };
       case 'url': return {
         URL: URL,
         parse: (u) => {
