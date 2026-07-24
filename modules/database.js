@@ -68,6 +68,13 @@ function init(_Core) {
   Core.db = createDbInterface();
   
   if (!sqliteAvailable) {
+    // 🔧 S8: 明确提示用户数据库降级状态
+    console.warn('⚠️ [database] 当前使用 JSON 文件存储（性能受限）');
+    setTimeout(function() {
+      if (Core.showToast) {
+        Core.showToast('⚠️ 数据库降级：SQLite 不可用，已回退到 JSON 存储。建议执行 npm rebuild better-sqlite3', 'warning', 8000);
+      }
+    }, 2000);
   }
 }
 
