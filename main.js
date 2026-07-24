@@ -35,6 +35,16 @@ const crypto = require('crypto');
 const { setupMobileRoutes } = require('./web-server');
 const { registerApiRoutes } = require('./api-routes');
 
+// 🔒 S5: 自动更新（electron-updater）
+let autoUpdater = null;
+try {
+  autoUpdater = require('electron-updater').autoUpdater;
+  autoUpdater.autoDownload = false; // 不自动下载，由用户确认
+  autoUpdater.autoInstallOnAppQuit = true; // 退出时自动安装已下载的更新
+} catch (e) {
+  console.warn('[updater] electron-updater 初始化失败（开发模式或无发布配置）:', e.message);
+}
+
 // 🔧 GPU 缓存清理已移至 app.whenReady() 内部（见下方），确保 app.getPath 可用
 // DATA_ROOT 优先使用 E:\my-ai-data，仅当不存在时才回退到 userData
 
@@ -914,6 +924,7 @@ app.whenReady().then(async () => {
   app.setAppUserModelId('com.yourcompany.ai-agent');
   createWindow();
   await startWebServer();
+  initAutoUpdater(); // 🔒 S5: 窗口就绪后启动自动更新检查
   setTimeout(() => { try { new Notification({ title: 'AI智能体', body: '你的AI助手已就绪！' }).show(); } catch(e) { console.warn('⚠️ [main] 显示就绪通知失败:', e.message); } }, 3000);
 });
 
@@ -959,6 +970,87 @@ ipcMain.on('toggle-devtools', () => {
   if (mainWindow && mainWindow.webContents) {
     mainWindow.webContents.toggleDevTools();
   }
+});
+
+// 🔒 S5: 自动更新——事件转发 + IPC 控制
+let _updateStatus = 'idle'; // idle | checking | available | downloading | downloaded | error
+
+function initAutoUpdater() {
+  if (!autoUpdater) return;
+  try {
+    autoUpdater.on('checking-for-update', () => {
+      _updateStatus = 'checking';
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('app:update', { status: 'checking' });
+    });
+    autoUpdater.on('update-available', (info) => {
+      _updateStatus = 'available';
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('app:update', { status: 'available', version: info.version, releaseDate: info.releaseDate });
+      }
+      log.info('[updater] 发现新版本:', info.version);
+    });
+    autoUpdater.on('update-not-available', () => {
+      _updateStatus = 'idle';
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('app:update', { status: 'up-to-date' });
+    });
+    autoUpdater.on('download-progress', (progress) => {
+      _updateStatus = 'downloading';
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('app:update', { status: 'downloading', percent: Math.round(progress.percent) });
+      }
+    });
+    autoUpdater.on('update-downloaded', (info) => {
+      _updateStatus = 'downloaded';
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('app:update', { status: 'downloaded', version: info.version });
+      }
+      log.info('[updater] 更新已下载，等待安装:', info.version);
+    });
+    autoUpdater.on('error', (err) => {
+      _updateStatus = 'error';
+      console.warn('[updater] 错误:', err.message);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('app:update', { status: 'error', message: err.message });
+      }
+    });
+    // 启动后延迟 10 秒检查（避免启动时网络竞争）
+    setTimeout(() => { autoUpdater.checkForUpdates().catch(() => {}); }, 10000);
+    // 每 4 小时定期检查
+    setInterval(() => { autoUpdater.checkForUpdates().catch(() => {}); }, 4 * 60 * 60 * 1000);
+    console.log('✅ [updater] 自动更新已启用');
+  } catch (e) {
+    console.warn('[updater] 初始化事件监听失败:', e.message);
+  }
+}
+
+// 渲染进程 → 主进程：手动触发检查
+ipcMain.handle('check-for-update', async () => {
+  if (!autoUpdater) return { status: 'unavailable', message: 'electron-updater 未初始化' };
+  try {
+    await autoUpdater.checkForUpdates();
+    return { status: _updateStatus };
+  } catch (e) {
+    return { status: 'error', message: e.message };
+  }
+});
+
+// 渲染进程 → 主进程：开始下载更新
+ipcMain.on('download-update', () => {
+  if (autoUpdater && _updateStatus === 'available') {
+    autoUpdater.downloadUpdate().catch(e => console.warn('[updater] 下载失败:', e.message));
+  }
+});
+
+// 渲染进程 → 主进程：安装更新并重启
+ipcMain.on('install-update', () => {
+  if (autoUpdater && _updateStatus === 'downloaded') {
+    autoUpdater.quitAndInstall(false, true);
+  }
+});
+
+// 渲染进程 → 主进程：获取当前更新状态
+ipcMain.handle('get-update-status', async () => {
+  return { status: _updateStatus, version: app.getVersion() };
 });
 
 // 🔧 快捷键在 createWindow 中通过 before-input-event 注册

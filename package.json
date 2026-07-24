@@ -29,6 +29,7 @@
     "docx": "^9.7.1",
     "dompurify": "^3.4.12",
     "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9",
     "express": "^4.22.2",
     "highlight.js": "^11.11.1",
     "katex": "^0.18.1",

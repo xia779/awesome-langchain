@@ -898,7 +898,8 @@ const electronAPIBridge = {
         'get-auth-token', 'app:get-path-sync', 'list-plugin-dirs',
         'copy-plugin-dir', 'delete-plugin-dir', 'open-external',
         'open-devtools', 'app-minimize', 'app-maximize', 'app-close',
-        'select-directory', 'select-file', 'get-app-version'
+        'select-directory', 'select-file', 'get-app-version',
+        'download-update', 'install-update'
       ];
       if (allowed.includes(channel)) {
         ipcRenderer.send(channel, ...args);
@@ -920,7 +921,8 @@ const electronAPIBridge = {
       const allowedOn = [
         'server:port', 'agent:response', 'agent:step', 'agent:error',
         'agent:done', 'agent:typing', 'config:changed', 'session:updated',
-        'notification', 'tray:action', 'app:shutdown', 'trigger-export'
+        'notification', 'tray:action', 'app:shutdown', 'trigger-export',
+        'app:update'
       ];
       if (allowedOn.includes(channel)) {
         const sub = (_event, ...args) => callback(...args);
@@ -931,7 +933,7 @@ const electronAPIBridge = {
       return () => {};
     },
     invoke: (channel, ...args) => {
-      const allowedInvoke = ['select-directory', 'select-file', 'get-app-info'];
+      const allowedInvoke = ['select-directory', 'select-file', 'get-app-info', 'check-for-update', 'get-update-status'];
       if (allowedInvoke.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
       }

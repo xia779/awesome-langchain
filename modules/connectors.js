@@ -4,36 +4,37 @@ var Core = null;
 
 // ===== 连接器注册表 =====
 // type: 'builtin' = 内置能力（Agent 已可直接使用）；'external' = 外部服务（可开关）
+// status: 'active' = 已有可用后端实现；'planned' = 规划中（尚无后端）
 var CONNECTOR_REGISTRY = [
   // —— 系统与本地 ——
-  { id: 'filesystem', name: '文件系统', desc: '读写本地文件与目录', icon: 'folder_open', category: 'system', type: 'builtin' },
-  { id: 'shell', name: '命令行', desc: '执行终端命令与脚本', icon: 'terminal', category: 'system', type: 'builtin' },
-  { id: 'clipboard', name: '剪贴板', desc: '读取与写入系统剪贴板', icon: 'content_paste', category: 'system', type: 'builtin' },
-  { id: 'browser', name: '浏览器', desc: '网页浏览与自动化操作', icon: 'public', category: 'system', type: 'external' },
+  { id: 'filesystem', name: '文件系统', desc: '读写本地文件与目录', icon: 'folder_open', category: 'system', type: 'builtin', status: 'active' },
+  { id: 'shell', name: '命令行', desc: '执行终端命令与脚本', icon: 'terminal', category: 'system', type: 'builtin', status: 'active' },
+  { id: 'clipboard', name: '剪贴板', desc: '读取与写入系统剪贴板', icon: 'content_paste', category: 'system', type: 'builtin', status: 'active' },
+  { id: 'browser', name: '浏览器', desc: '网页浏览与自动化操作', icon: 'public', category: 'system', type: 'external', status: 'active' },
 
   // —— 通讯协作 ——
-  { id: 'wechat', name: '微信', desc: '消息收发与文件传输', icon: 'chat', category: 'communication', type: 'external' },
-  { id: 'dingtalk', name: '钉钉', desc: '企业消息与日程管理', icon: 'mark_chat_unread', category: 'communication', type: 'external' },
-  { id: 'feishu', name: '飞书', desc: '文档、表格与多维表格', icon: 'quickreply', category: 'communication', type: 'external' },
-  { id: 'email', name: '电子邮件', desc: '收发邮件（IMAP/SMTP）', icon: 'mail', category: 'communication', type: 'external' },
+  { id: 'wechat', name: '微信', desc: '消息收发与文件传输', icon: 'chat', category: 'communication', type: 'external', status: 'planned' },
+  { id: 'dingtalk', name: '钉钉', desc: '企业消息与日程管理', icon: 'mark_chat_unread', category: 'communication', type: 'external', status: 'planned' },
+  { id: 'feishu', name: '飞书', desc: '文档、表格与多维表格', icon: 'quickreply', category: 'communication', type: 'external', status: 'planned' },
+  { id: 'email', name: '电子邮件', desc: '收发邮件（IMAP/SMTP）', icon: 'mail', category: 'communication', type: 'external', status: 'planned' },
 
   // —— 开发工具 ——
-  { id: 'github', name: 'GitHub', desc: '仓库、Issue 与 PR 管理', icon: 'code', category: 'development', type: 'external' },
-  { id: 'vscode', name: 'VS Code', desc: '编辑器集成与代码操作', icon: 'code_blocks', category: 'development', type: 'external' },
-  { id: 'docker', name: 'Docker', desc: '容器与镜像管理', icon: 'deployed_code', category: 'development', type: 'external' },
-  { id: 'ssh', name: 'SSH', desc: '远程服务器连接', icon: 'dns', category: 'development', type: 'external' },
+  { id: 'github', name: 'GitHub', desc: '仓库、Issue 与 PR 管理', icon: 'code', category: 'development', type: 'external', status: 'active' },
+  { id: 'vscode', name: 'VS Code', desc: '编辑器集成与代码操作', icon: 'code_blocks', category: 'development', type: 'external', status: 'planned' },
+  { id: 'docker', name: 'Docker', desc: '容器与镜像管理', icon: 'deployed_code', category: 'development', type: 'external', status: 'planned' },
+  { id: 'ssh', name: 'SSH', desc: '远程服务器连接', icon: 'dns', category: 'development', type: 'external', status: 'planned' },
 
   // —— 效率办公 ——
-  { id: 'notion', name: 'Notion', desc: '笔记与知识库同步', icon: 'note_alt', category: 'productivity', type: 'external' },
-  { id: 'obsidian', name: 'Obsidian', desc: '本地 Markdown 知识库', icon: 'edit_note', category: 'productivity', type: 'external' },
-  { id: 'calendar', name: '日历', desc: '日程与提醒管理', icon: 'calendar_month', category: 'productivity', type: 'external' },
-  { id: 'office', name: 'Office', desc: 'Word / Excel / PPT 文档', icon: 'description', category: 'productivity', type: 'external' },
+  { id: 'notion', name: 'Notion', desc: '笔记与知识库同步', icon: 'note_alt', category: 'productivity', type: 'external', status: 'planned' },
+  { id: 'obsidian', name: 'Obsidian', desc: '本地 Markdown 知识库', icon: 'edit_note', category: 'productivity', type: 'external', status: 'planned' },
+  { id: 'calendar', name: '日历', desc: '日程与提醒管理', icon: 'calendar_month', category: 'productivity', type: 'external', status: 'planned' },
+  { id: 'office', name: 'Office', desc: 'Word / Excel / PPT 文档', icon: 'description', category: 'productivity', type: 'external', status: 'active' },
 
   // —— 数据服务 ——
-  { id: 'sqlite', name: 'SQLite', desc: '本地数据库查询', icon: 'storage', category: 'data', type: 'builtin' },
-  { id: 'mysql', name: 'MySQL', desc: '关系型数据库连接', icon: 'database', category: 'data', type: 'external' },
-  { id: 'redis', name: 'Redis', desc: '内存缓存与队列', icon: 'memory', category: 'data', type: 'external' },
-  { id: 'websearch', name: '网络搜索', desc: '实时联网检索信息', icon: 'travel_explore', category: 'data', type: 'builtin' }
+  { id: 'sqlite', name: 'SQLite', desc: '本地数据库查询', icon: 'storage', category: 'data', type: 'builtin', status: 'active' },
+  { id: 'mysql', name: 'MySQL', desc: '关系型数据库连接', icon: 'database', category: 'data', type: 'external', status: 'planned' },
+  { id: 'redis', name: 'Redis', desc: '内存缓存与队列', icon: 'memory', category: 'data', type: 'external', status: 'planned' },
+  { id: 'websearch', name: '网络搜索', desc: '实时联网检索信息', icon: 'travel_explore', category: 'data', type: 'builtin', status: 'active' }
 ];
 
 var CATEGORY_LABELS = {
@@ -110,16 +111,19 @@ function renderConnectors() {
       var conn = items[i];
       var enabled = isEnabled(conn);
       var isBuiltin = conn.type === 'builtin';
-      html += '<div class="connector-card">' +
+      var isPlanned = conn.status === 'planned';
+      // 🔒 S10: 状态徽标——诚实标注真实可用性
+      var statusBadge = isPlanned
+        ? ' <span class="connector-badge connector-badge-planned">规划中</span>'
+        : (isBuiltin ? ' <span class="connector-badge">内置</span>' : ' <span class="connector-badge connector-badge-active">已接入</span>');
+      html += '<div class="connector-card' + (isPlanned ? ' connector-card-planned' : '') + '">' +
         '<span class="material-icons-outlined connector-icon">' + esc(conn.icon) + '</span>' +
         '<div class="connector-info">' +
-          '<div class="connector-name">' + esc(conn.name) +
-            (isBuiltin ? ' <span class="connector-badge">内置</span>' : '') +
-          '</div>' +
+          '<div class="connector-name">' + esc(conn.name) + statusBadge + '</div>' +
           '<div class="connector-desc">' + esc(conn.desc) + '</div>' +
         '</div>' +
         '<label class="connector-switch">' +
-          '<input type="checkbox" data-connector-id="' + esc(conn.id) + '"' + (enabled ? ' checked' : '') + ' />' +
+          '<input type="checkbox" data-connector-id="' + esc(conn.id) + '"' + (enabled ? ' checked' : '') + (isPlanned ? ' disabled' : '') + ' />' +
           '<span class="connector-slider"></span>' +
         '</label>' +
       '</div>';
