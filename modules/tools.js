@@ -1304,6 +1304,49 @@ const tools = {
       } catch (e) { return '❌ 深度研究异常: ' + e.message; }
     },
   },
+
+  // ===== 智能网页抓取（Playwright 渲染 + 正文提取 + 可选递归）=====
+  web_crawl: {
+    description: '智能抓取网页内容：Playwright 渲染整页→正文评分提取→结构化输出。支持单页精读和多页递归爬取。比 read_url 强大：支持 SPA/动态页面、自动提取正文、过滤广告导航。',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: '要抓取的网页 URL' },
+        mode: { type: 'string', description: 'single=单页精读(默认), crawl=递归爬取整站', enum: ['single', 'crawl'] },
+        max_pages: { type: 'number', description: '递归模式最大页面数（默认10，最大20）' },
+        max_depth: { type: 'number', description: '递归模式最大深度（默认2）' },
+        save_to_knowledge: { type: 'boolean', description: '是否自动存入知识库（默认false）' }
+      },
+      required: ['url']
+    },
+    handler: async function(params) {
+      if (!Core.crawlService) return '❌ 爬取服务未加载';
+      try {
+        if (params.mode === 'crawl') {
+          var result = await Core.crawlService.crawl(params.url, {
+            maxPages: Math.min(params.max_pages || 10, 20),
+            maxDepth: params.max_depth || 2,
+            saveToKnowledge: params.save_to_knowledge || false,
+            summarize: true
+          });
+          if (!result.success) return '❌ 爬取失败: ' + (result.error || '未知错误');
+          var output = '✅ 爬取完成：' + result.totalPages + ' 页，耗时 ' + Math.round(result.duration / 1000) + 's';
+          if (result.errors > 0) output += '（' + result.errors + ' 页失败）';
+          output += '\n\n';
+          result.pages.forEach(function(pg, i) {
+            output += '【' + (i + 1) + '】' + (pg.title || pg.url) + '\n';
+            if (pg.summary) output += '摘要: ' + pg.summary + '\n';
+            output += '正文(' + pg.content.length + '字): ' + pg.content.substring(0, 500) + '...\n\n';
+          });
+          return output.substring(0, 15000);
+        } else {
+          return await Core.crawlService.smartFetch(params.url, {
+            saveToKnowledge: params.save_to_knowledge || false
+          });
+        }
+      } catch (e) { return '❌ 爬取异常: ' + e.message; }
+    },
+  },
 };
 
 // ===== 获取工具定义（用于 Ollama API） =====

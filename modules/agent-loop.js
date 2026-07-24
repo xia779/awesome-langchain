@@ -48,6 +48,8 @@ const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主�
   参数: {"query": "搜索关键词"}
 - read_url: 抓取网页内容，读取指定URL的网页正文
   参数: {"url": "网页URL地址"}
+- web_crawl: 智能网页抓取（Playwright渲染+正文提取，支持SPA/动态页面）。比read_url更强：自动过滤广告导航、提取正文、支持递归爬取。需要高质量网页内容时优先使用。
+  参数: {"url": "网页URL", "mode": "single|crawl", "max_pages": 10, "save_to_knowledge": false}
 - read_file: 读取本地文件
   参数: {"path": "文件路径"}
 - write_file: 写入本地文件
@@ -197,6 +199,7 @@ var ACTION_ZH_MAP = {
   'knowledge_search': '知识检索',
   'stock_quote': '行情查询',
   'deep_research': '深度研究',
+  'web_crawl': '网页爬取',
   // MCP 本地工具
   'list_directory': '列出目录',
   'execute_command': '执行命令',
@@ -331,7 +334,7 @@ async function _executeAgentActionRaw(action, params) {
          'browser_navigate', 'browser_screenshot', 'browser_click', 'browser_type', 'browser_extract', 'browser_wait',
          'github_pr', 'github_issue', 'github_repo', 'github_release',
          'image_search', 'image_download', 'stock_quote', 'deep_research',
-         'get_current_time', 'calculate'].includes(action)) {
+         'get_current_time', 'calculate', 'web_crawl'].includes(action)) {
       try {
         const result = await Core.toolsRegistry.executeTool(action, mappedParams);
         return result;
