@@ -551,13 +551,21 @@ async function sendToAgent(task, isDeepThink) {
         var pCtx = Core.projectContext.getContextString();
         if (pCtx) agentPrompt += pCtx;
       }
+      // 🔍 查询改写：将指代性任务描述转为完整查询，提升记忆/知识召回精度
+      var agentSearchQuery = task;
+      if (Core.queryRewriter) {
+        try {
+          var agentRw = await Core.queryRewriter.rewrite(task);
+          if (agentRw.changed) agentSearchQuery = agentRw.rewritten;
+        } catch (e) { /* 改写失败不影响主流程 */ }
+      }
       if (Core.memoryEnhance && Core.memoryEnhance.getEnhancedContext) {
-        var memCtx = await Core.memoryEnhance.getEnhancedContext(task);
+        var memCtx = await Core.memoryEnhance.getEnhancedContext(agentSearchQuery);
         if (memCtx) agentPrompt += '\n\n' + memCtx;
       }
       // 📚 注入历史经验教训：避免 Agent 重复犯同样的错误（如 ComfyUI 未启动、CUDA OOM 等）
       if (Core.knowledgeDistill && Core.knowledgeDistill.getRelevantLessons) {
-        var lessons = Core.knowledgeDistill.getRelevantLessons(null, task);
+        var lessons = Core.knowledgeDistill.getRelevantLessons(null, agentSearchQuery);
         if (lessons && lessons.length > 0) {
           agentPrompt += Core.knowledgeDistill.formatLessonsForPrompt(lessons);
         }

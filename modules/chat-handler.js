@@ -158,6 +158,29 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   Core.dom.chatContainer.appendChild(userDiv);
   Core.dom.chatContainer.scrollTop = Core.dom.chatContainer.scrollHeight;
   
+  // 🔧 智能建议（主动式助理）— 非侵入式提示，仅在检测到特定意图时显示
+  try {
+    if (Core.proactive && Core.proactive.suggestions) {
+      var suggestions = Core.proactive.suggestions(text);
+      if (suggestions && suggestions.length > 0) {
+        var hintDiv = document.createElement('div');
+        hintDiv.className = 'msg ai smart-hint';
+        hintDiv.style.opacity = '0.7';
+        hintDiv.style.fontSize = '13px';
+        hintDiv.style.padding = '8px 16px';
+        hintDiv.innerHTML = suggestions.map(function(s) { return s.text; }).join('<br>');
+        Core.dom.chatContainer.appendChild(hintDiv);
+        Core.dom.chatContainer.scrollTop = Core.dom.chatContainer.scrollHeight;
+        // 3秒后淡出
+        setTimeout(function() {
+          hintDiv.style.transition = 'opacity 1s';
+          hintDiv.style.opacity = '0';
+          setTimeout(function() { if (hintDiv.parentNode) hintDiv.parentNode.removeChild(hintDiv); }, 1000);
+        }, 5000);
+      }
+    }
+  } catch (e) { /* 智能建议失败不影响正常聊天 */ }
+  
   // 🔧 P5: 发送状态指示
   Core.dom.status.textContent = '📤 正在发送...';
 
@@ -199,8 +222,18 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
     const firstColon = selectedValue.indexOf(':');
     model = selectedValue.substring(firstColon + 1);
   }
-  if (!model) model = Core.config.ollamaModel;
-  
+  if (!model) {
+    const defaultMap = {
+      ollama: Core.config.ollamaModel,
+      deepseek: Core.config.deepseekModel,
+      qwen: Core.config.qwenModel,
+      doubao: Core.config.doubaoModel,
+      silicon: Core.config.siliconModel,
+      custom: Core.config.customModel
+    };
+    model = defaultMap[provider] || Core.config.ollamaModel;
+  }
+
   // 🔧 模型验证：动态检查（不再硬编码，支持用户安装的所有 Ollama 模型）
   if (!model || model.trim() === '') {
     // 模型名为空，使用默认模型
@@ -274,12 +307,20 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   const finalSystemPrompt = Core.skills.applySkillToPrompt ? Core.skills.applySkillToPrompt(userSystemPrompt) : userSystemPrompt;
 
   // 🔧 智能记忆注入：用户画像 + 关键记忆 + 相关记忆 + 日志
+  // 查询改写：将指代性追问转为完整查询，提升记忆召回精度
+  var memorySearchQuery = text;
+  if (Core.queryRewriter) {
+    try {
+      var memRw = await Core.queryRewriter.rewrite(text);
+      if (memRw.changed) memorySearchQuery = memRw.rewritten;
+    } catch (e) { /* 改写失败不影响主流程 */ }
+  }
   var memoryContext = '';
   if (Core.memoryEnhance && Core.memoryEnhance.getEnhancedContext) {
-    memoryContext = await Core.memoryEnhance.getEnhancedContext(text);
+    memoryContext = await Core.memoryEnhance.getEnhancedContext(memorySearchQuery);
   } else if (Core.memory) {
     if (Core.memory.smartContext) {
-      memoryContext = await Core.memory.smartContext(text, 8);
+      memoryContext = await Core.memory.smartContext(memorySearchQuery, 8);
     } else if (Core.memory.getContext) {
       memoryContext = Core.memory.getContext(10);
     }

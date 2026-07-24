@@ -1164,8 +1164,15 @@ async function _doSendMessage() {
       console.warn('beforeSend 钩子执行失败:', e.message);
     }
 
-    // 5. 知识库自动检索（使用 RRF 融合搜索 + 源引用）
+    // 5. 查询改写 + 知识库自动检索（使用 RRF 融合搜索 + 源引用）
     var knowledgeContext = '';
+    var searchQuery = text; // 检索用查询（可能被改写）
+    if (Core.queryRewriter) {
+      try {
+        var rwResult = await Core.queryRewriter.rewrite(text);
+        if (rwResult.changed) searchQuery = rwResult.rewritten;
+      } catch (e) { console.warn('[api] 查询改写失败:', e.message); }
+    }
     var hasKnowledgeDocs = false;
     try {
       if (Core.knowledge && Core.knowledge.listDocuments) {
@@ -1177,7 +1184,7 @@ async function _doSendMessage() {
         // 🔥 优先查蒸馏索引（热缓存层，毫秒级）
         var distilledHit = false;
         if (Core.knowledgeDistill && Core.knowledgeDistill.searchDistilled) {
-          var distilledResult = Core.knowledgeDistill.searchDistilled(text, 3);
+          var distilledResult = Core.knowledgeDistill.searchDistilled(searchQuery, 3);
           if (distilledResult && distilledResult.results && distilledResult.results.length > 0) {
             knowledgeContext = distilledResult.context + '\n\n📚 参考来源（蒸馏）：\n' + distilledResult.citations;
             console.log('[distill] 蒸馏索引命中', distilledResult.results.length, '条主题');
@@ -1188,13 +1195,13 @@ async function _doSendMessage() {
         // 蒸馏未命中 → 全量 BM25/RRF 检索
         if (!distilledHit) {
           if (Core.knowledge.searchWithCitations) {
-            var kbResult = await Core.knowledge.searchWithCitations(text, 3);
+            var kbResult = await Core.knowledge.searchWithCitations(searchQuery, 3);
             if (kbResult && kbResult.results && kbResult.results.length > 0) {
               knowledgeContext = kbResult.context + '\n\n📚 参考来源：\n' + kbResult.citations;
               console.log('知识库 RRF 检索到', kbResult.results.length, '条相关片段');
             }
           } else if (Core.knowledge.search) {
-            var knowledgeResults = await Core.knowledge.search(text, 3);
+            var knowledgeResults = await Core.knowledge.search(searchQuery, 3);
             if (knowledgeResults && knowledgeResults.length > 0) {
               knowledgeContext = '';
               knowledgeResults.forEach(function(r) {
