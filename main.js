@@ -204,12 +204,17 @@ function createWindow() {
       height: 44
     },
     webPreferences: {
-      nodeIntegration: false,        // 🔒 #11: 已迁移到 preload 桥接，渲染进程不再直接访问 Node.js
-      contextIsolation: true,        // 🔒 #11: 启用上下文隔离，防止 XSS 获取 Node.js 权限
-      sandbox: false,                // preload 需要 Node.js 访问以提供桥接层
+      // 🔒 Phase 3 安全锁定（勿修改，除非完整评估桥接层迁移）
+      // contextIsolation:true 是核心安全边界——渲染进程 XSS 无法触及 Node.js
+      // sandbox:false 是务实决策：preload 含 14 个原生 require（better-sqlite3 同步 C++ 插件、ws 等），
+      //   开启 sandbox 需将整个桥接层迁移为主进程 IPC + 异步重写 DB 层，收益对本地应用极小
+      // 本应用仅加载 file:// 本地内容，不加载远程 URL，contextIsolation 已提供充分隔离
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
       allowRunningInsecureContent: false,
       webSecurity: true,
-      preload: path.join(__dirname, 'preload.js')  // 安全桥接层（所有 Node API 通过 contextBridge 暴露）
+      preload: path.join(__dirname, 'preload.js')
     },
   });
 
@@ -462,6 +467,82 @@ ipcMain.on('get-app-dir', (event) => {
 ipcMain.on('window-minimize', (event) => { if (mainWindow) mainWindow.minimize(); });
 ipcMain.on('window-maximize', (event) => { if (mainWindow) { mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize(); } });
 ipcMain.on('window-close', (event) => { if (mainWindow) mainWindow.hide(); });
+
+// 🔒 Phase 3: 补齐 preload 白名单中引用的 IPC 通道（消除渲染进程调用无响应的隐患）
+// 窗口控制别名（preload 白名单使用 app-* 命名）
+ipcMain.on('app-minimize', (event) => { if (mainWindow) mainWindow.minimize(); });
+ipcMain.on('app-maximize', (event) => { if (mainWindow) { mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize(); } });
+ipcMain.on('app-close', (event) => { if (mainWindow) mainWindow.hide(); });
+
+// DevTools（preload 白名单使用 open-devtools 命名）
+ipcMain.on('open-devtools', () => {
+  if (mainWindow && mainWindow.webContents) mainWindow.webContents.toggleDevTools();
+});
+
+// 删除插件目录（路径必须在 plugins/ 下，移入回收站而非永久删除）
+ipcMain.on('delete-plugin-dir', (event, dirPath) => {
+  try {
+    const pluginsRoot = path.join(DATA_ROOT, 'plugins');
+    const resolved = path.resolve(dirPath || '');
+    if (!resolved.startsWith(pluginsRoot)) {
+      event.returnValue = { success: false, error: '路径必须在插件目录内' };
+      return;
+    }
+    if (!fs.existsSync(resolved)) {
+      event.returnValue = { success: false, error: '目录不存在' };
+      return;
+    }
+    // 移入系统回收站（Electron shell.trashItem 异步，此处用同步 fs 重命名到 .trash 后备）
+    const trashDir = path.join(DATA_ROOT, '.trash');
+    if (!fs.existsSync(trashDir)) fs.mkdirSync(trashDir, { recursive: true });
+    const trashDest = path.join(trashDir, path.basename(resolved) + '-' + Date.now());
+    fs.renameSync(resolved, trashDest);
+    event.returnValue = { success: true, trashPath: trashDest };
+  } catch (err) {
+    event.returnValue = { success: false, error: err.message };
+  }
+});
+
+// 获取应用版本号
+ipcMain.on('get-app-version', (event) => {
+  event.returnValue = app.getVersion();
+});
+
+// 目录选择对话框（invoke 异步模式）
+ipcMain.handle('select-directory', async (event, options) => {
+  if (!mainWindow) return { canceled: true };
+  return dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: (options && options.title) || '选择目录',
+    defaultPath: (options && options.defaultPath) || DATA_ROOT
+  });
+});
+
+// 文件选择对话框（invoke 异步模式）
+ipcMain.handle('select-file', async (event, options) => {
+  if (!mainWindow) return { canceled: true };
+  return dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    title: (options && options.title) || '选择文件',
+    filters: (options && options.filters) || undefined,
+    defaultPath: (options && options.defaultPath) || DATA_ROOT
+  });
+});
+
+// 应用信息（invoke 异步模式）
+ipcMain.handle('get-app-info', async () => {
+  return {
+    version: app.getVersion(),
+    name: app.getName(),
+    electron: process.versions.electron,
+    node: process.versions.node,
+    chrome: process.versions.chrome,
+    platform: process.platform,
+    arch: process.arch,
+    dataRoot: DATA_ROOT,
+    appDir: __dirname
+  };
+});
 
 ipcMain.handle('show-save-dialog', async (event, options) => {
   if (!mainWindow) return { canceled: true };

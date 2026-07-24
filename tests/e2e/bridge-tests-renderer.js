@@ -286,5 +286,38 @@
     return '正常提交 / 异常回滚 / 读-写-分支交错 / 变体 全通过';
   });
 
+  // --------------------------------------------------------------------------
+  // 10. safeStorage 桥（Phase 3）：接口存在性 + 加密/解密往返
+  // --------------------------------------------------------------------------
+  await test('safeStorage 桥：接口存在 + 加密解密往返', () => {
+    const api = nb.electronAPI;
+    assert(api, 'nodeBridge.electronAPI 不存在');
+    const ss = api.safeStorage;
+    assert(ss, 'electronAPI.safeStorage 不存在');
+    assert(typeof ss.isEncryptionAvailable === 'function', 'safeStorage.isEncryptionAvailable 缺失');
+    assert(typeof ss.encryptString === 'function', 'safeStorage.encryptString 缺失');
+    assert(typeof ss.decryptString === 'function', 'safeStorage.decryptString 缺失');
+
+    const available = ss.isEncryptionAvailable();
+    if (!available) {
+      return 'safeStorage 接口齐全；当前环境加密不可用（跳过往返）';
+    }
+
+    // 完整往返测试
+    const secret = 'sk-test-' + Math.random().toString(36).slice(2) + '-中文密钥';
+    const encrypted = ss.encryptString(secret);
+    assert(typeof encrypted === 'string' && encrypted.length > 0, 'encryptString 应返回 base64 字符串，实际: ' + JSON.stringify(encrypted));
+    assert(encrypted !== secret, '密文不应等于明文');
+
+    const decrypted = ss.decryptString(encrypted);
+    assert(decrypted === secret, '解密往返不一致: ' + JSON.stringify(decrypted) + ' !== ' + JSON.stringify(secret));
+
+    // 错误入参处理
+    const errResult = ss.encryptString(12345);
+    assert(errResult && errResult.error, '非字符串入参应返回 {error}');
+
+    return 'safeStorage 加密解密往返通过（DPAPI/Keychain）';
+  });
+
   return results;
 })();

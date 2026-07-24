@@ -334,6 +334,11 @@ var encryptSensitiveFields = _cryptoModule ? _cryptoModule.encryptSensitiveField
 var decryptSensitiveFields = _cryptoModule ? _cryptoModule.decryptSensitiveFields : function(c) { return c; };
 var SENSITIVE_KEY_FIELDS = _cryptoModule ? _cryptoModule.SENSITIVE_KEY_FIELDS : [];
 var ENC_PREFIX = _cryptoModule ? _cryptoModule.ENC_PREFIX : 'enc:v1:';
+// 🔒 Phase 3: 识别两种密文格式（v1=AES-GCM 机器身份密钥，v2=safeStorage OS 钥匙串）
+var ENC_PREFIX_V2 = _cryptoModule ? _cryptoModule.ENC_PREFIX_V2 : 'enc:v2:';
+var isEncryptedValue = _cryptoModule ? _cryptoModule.isEncryptedValue : function(v) {
+  return typeof v === 'string' && (v.indexOf('enc:v1:') === 0 || v.indexOf('enc:v2:') === 0);
+};
 
 // ===== 动态获取数据路径 =====
 var app = null;
@@ -700,13 +705,13 @@ const Core = {
     if (!this.config.favorites) this.config.favorites = [];
     if (this.config.notification === undefined) this.config.notification = true;
     
-    // 🔒 解密敏感字段（自动兼容旧的明文配置）
+    // 🔒 解密敏感字段（自动兼容旧的明文配置，支持 enc:v1 AES-GCM + enc:v2 safeStorage 双格式）
     let hadPlaintextKeys = false;
     // 🔒 记录解密失败的字段：防止后续 saveConfig 用空值覆盖数据库中的真实加密密钥
     var decryptFailedFields = {};
     for (const field of SENSITIVE_KEY_FIELDS) {
       if (this.config[field] && typeof this.config[field] === 'string') {
-        if (this.config[field].startsWith(ENC_PREFIX)) {
+        if (isEncryptedValue(this.config[field])) {
           var _decrypted = decryptValue(this.config[field]);
           if (_decrypted === '' || _decrypted === null || _decrypted === undefined) {
             // 解密失败：内存置空（UI 显示未配置），但标记该字段，保存时不回写空值
@@ -722,6 +727,15 @@ const Core = {
       }
     }
     this._decryptFailedFields = decryptFailedFields;
+    // 🔒 Phase 3: 解密失败可见化——换机/重装后密钥无法解密时明确提示用户，而非静默置空
+    var _failedCount = Object.keys(decryptFailedFields).length;
+    if (_failedCount > 0) {
+      setTimeout(() => {
+        try {
+          this.showNotification('warning', '⚠️ ' + _failedCount + ' 个 API Key 无法解密（可能更换了电脑/系统或重装），请在设置中重新输入');
+        } catch(e) { console.warn('[config] 解密失败通知发送异常:', e.message); }
+      }, 2000);
+    }
     // 如果检测到旧的明文密钥，自动重新保存为加密格式
     if (hadPlaintextKeys) {
       setTimeout(() => {

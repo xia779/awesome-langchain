@@ -11,6 +11,12 @@
 - `contextIsolation: true` + `nodeIntegration: false` + `sandbox: false`
 - 渲染进程主世界**没有** `require` / `process` / `Buffer` / `__dirname`
 - 唯一 Node 入口：`window.nodeBridge`（由 `preload.js` 的 `contextBridge.exposeInMainWorld` 注入）
+- **sandbox:false 决策（Phase 3 锁定）**：
+  - preload.js 是"胖预加载"，含 14 个原生 require（fs/path/crypto/os/child_process/http/https/url + better-sqlite3 同步 C++ 插件 + ws + jsdom + dompurify + electron-log）
+  - sandbox:true 会禁用所有原生 require，需将整个桥接层迁移为主进程 IPC
+  - better-sqlite3 是**同步** API，IPC 化意味着全量异步重写 DB 层
+  - 本应用仅加载 `file://` 本地内容，不加载远程 URL；`contextIsolation:true` 已提供核心 XSS 隔离
+  - 结论：sandbox:true 收益极小、风险极大，**有意保持 false**
 - `contextBridge` 序列化规则：
   - 可过桥：纯对象、数组、字符串、数字、布尔、`null`、`undefined`、`Function`（仅 preload→renderer 方向的代理）
   - **不可过桥**：类实例（丢失原型）、`Buffer`（变空对象）、`Promise`（需 preload 侧处理）、`Symbol`
@@ -232,7 +238,7 @@ txn('a', 'b');  // → result
 npm run test:e2e
 ```
 
-当前覆盖（10 项）：
+当前覆盖（11 项）：
 1. nodeBridge 暴露 + 命名空间齐全
 2. fs + BufferProxy 双往返
 3. crypto AES-256-GCM 往返（API Key 路径）
@@ -243,6 +249,7 @@ npm run test:e2e
 8. 事务原子性：BEGIN/ROLLBACK/COMMIT（桥接机制）
 9. 事务原子性：preload 数组式事务中途失败回滚
 10. **DatabaseShim.transaction（真实 shim）**：提交 / 异常回滚 / 读-写-分支交错 / 变体
+11. **safeStorage 桥（Phase 3）**：接口存在性 + 加密解密往返（DPAPI/Keychain）
 
 **修改桥接口后必须跑 `npm run test:e2e` 验证。**
 
@@ -266,9 +273,54 @@ npm run test:e2e
 
 ---
 
-## 9. 变更历史
+## 9. 敏感数据加密（Phase 3）
+
+### 9.1 safeStorage 桥
+
+`window.nodeBridge.electronAPI.safeStorage` 暴露 Electron safeStorage API：
+
+```js
+const ss = window.nodeBridge.electronAPI.safeStorage;
+ss.isEncryptionAvailable()       // → boolean（OS 钥匙串是否可用）
+ss.encryptString(plainText)      // → base64 string | {error}
+ss.decryptString(b64)            // → plainText string | {error}
+```
+
+底层使用操作系统密钥管理：Windows DPAPI / macOS Keychain / Linux libsecret。
+
+### 9.2 双格式密文
+
+| 前缀 | 后端 | 密钥来源 | 强度 |
+|------|------|---------|------|
+| `enc:v1:` | AES-256-GCM | PBKDF2(机器身份 + 硬编码 salt) | 中（可离线推导） |
+| `enc:v2:` | Electron safeStorage | OS 钥匙串（DPAPI/Keychain/libsecret） | 高（绑定用户登录凭据） |
+
+**加密优先级**：`encryptValue()` 优先尝试 v2（safeStorage），不可用时降级 v1（AES-GCM），均不可用时返回明文。
+
+**解密路由**：`decryptValue()` 根据前缀自动选择对应后端。
+
+**兼容规则**：
+- 旧 v1 密文继续正常解密（不强制迁移）
+- 新保存的密钥自动使用 v2（若 safeStorage 可用）
+- `isEncryptedValue(str)` 检测两种前缀，替代旧的 `startsWith(ENC_PREFIX)`
+
+### 9.3 解密失败可见化
+
+换机/重装后 v1 密钥无法解密（机器身份变化 → 派生密钥不同 → GCM authTag 校验失败）。
+Phase 3 修复：`loadConfig` 检测到解密失败字段时弹出 Toast 通知用户重新输入，不再静默置空。
+`saveConfig` 中 `_decryptFailedFields` 保护机制不变：未重新输入的字段不用空值覆盖数据库。
+
+### 9.4 web-server.js 降级
+
+`web-server.js` 是纯 Node Express 服务（无 Electron），`require('electron')` 返回字符串路径。
+因此 web-server 始终使用 v1（AES-GCM）后端，无法使用 safeStorage。这是预期行为。
+
+---
+
+## 10. 变更历史
 
 | 日期 | 变更 | Commit |
 |-----|------|--------|
 | 2026-07-24 | 初版：定义桥契约 + 错误约定 + marshalling 规则 | Phase 1 |
 | 2026-07-24 | 修复 DatabaseShim.transaction 假事务 → 真实 BEGIN/COMMIT/ROLLBACK | Phase 1 |
+| 2026-07-24 | Phase 3：safeStorage 桥 + enc:v2 双格式加密 + 解密失败可见化 + IPC 补齐 + sandbox 决策锁定 | Phase 3 |

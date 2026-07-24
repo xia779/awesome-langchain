@@ -3,7 +3,7 @@
 // Exposes all required Node.js APIs via contextBridge.exposeInMainWorld('nodeBridge', ...)
 'use strict';
 
-const { ipcRenderer, contextBridge, shell, clipboard, Notification } = require('electron');
+const { ipcRenderer, contextBridge, shell, clipboard, Notification, safeStorage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -999,6 +999,30 @@ const electronAPIBridge = {
       maximize: () => ipcRenderer.send('app-maximize'),
       close: () => ipcRenderer.send('app-close')
     })
+  },
+  // 🔒 Phase 3: safeStorage 桥接（OS 钥匙串：Windows DPAPI / macOS Keychain / Linux libsecret）
+  //    用于 API Key 加密，取代「hostname+硬编码 salt 派生密钥」的弱方案。
+  //    渲染进程通过 require('electron').safeStorage 或 window.nodeBridge.electronAPI.safeStorage 访问。
+  safeStorage: {
+    isEncryptionAvailable: () => {
+      try { return safeStorage.isEncryptionAvailable(); } catch (e) { return false; }
+    },
+    // 加密字符串 → base64 密文（失败返回 {error}）
+    encryptString: (plainText) => {
+      try {
+        if (typeof plainText !== 'string') return { error: 'encryptString: 入参必须是字符串' };
+        if (!safeStorage.isEncryptionAvailable()) return { error: 'safeStorage 加密不可用' };
+        return safeStorage.encryptString(plainText).toString('base64');
+      } catch (e) { return { error: e.message }; }
+    },
+    // 解密 base64 密文 → 原文（失败返回 {error}）
+    decryptString: (b64) => {
+      try {
+        if (typeof b64 !== 'string') return { error: 'decryptString: 入参必须是 base64 字符串' };
+        if (!safeStorage.isEncryptionAvailable()) return { error: 'safeStorage 解密不可用' };
+        return safeStorage.decryptString(Buffer.from(b64, 'base64'));
+      } catch (e) { return { error: e.message }; }
+    }
   }
 };
 
