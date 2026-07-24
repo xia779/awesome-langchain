@@ -936,7 +936,8 @@ const electronAPIBridge = {
     },
     invoke: (channel, ...args) => {
       const allowedInvoke = ['select-directory', 'select-file', 'get-app-info', 'check-for-update', 'get-update-status',
-        'plugin-worker:load', 'plugin-worker:hook', 'plugin-worker:destroy', 'plugin-worker:status'];
+        'plugin-worker:load', 'plugin-worker:hook', 'plugin-worker:destroy', 'plugin-worker:status',
+        'search-execute'];
       if (allowedInvoke.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
       }

@@ -419,6 +419,84 @@ ipcMain.on('get-server-port', (event) => {
   // 🔧 返回 0 表示服务器尚未启动成功，避免渲染进程把未启动状态误判为 8080
   event.returnValue = actualPort || 0;
 });
+
+// 🔧 Wave 2: IPC 搜索——渲染进程直接调用，无需 HTTP 代理
+ipcMain.handle('search-execute', async (event, { query, engine, apiKeys }) => {
+  try {
+    let results = '';
+    const scriptsDir = path.join(__dirname, 'scripts');
+
+    if (engine === 'bing') {
+      const bingScript = path.join(scriptsDir, 'search_bing.py');
+      if (!fs.existsSync(bingScript)) return { success: false, error: 'search_bing.py 不存在' };
+      const out = await new Promise((resolve, reject) => {
+        const proc = spawn('python', [bingScript, '--query', query, '--max-results', '5'], { timeout: 20000 });
+        let stdout = '', stderr = '';
+        proc.stdout.on('data', d => stdout += d.toString());
+        proc.stderr.on('data', d => stderr += d.toString());
+        proc.on('close', () => resolve(stdout));
+        proc.on('error', e => reject(e));
+      });
+      try {
+        const data = JSON.parse(out.trim());
+        if (data.success && data.results && data.results.length > 0) {
+          results = data.results.map(r => `${r.title}\n${r.snippet}\n${r.url || ''}`).join('\n\n');
+        }
+      } catch (pe) { /* parse failed */ }
+    } else if (engine === 'duckduckgo') {
+      const ddgScript = path.join(scriptsDir, 'search_ddg.py');
+      if (!fs.existsSync(ddgScript)) return { success: false, error: 'search_ddg.py 不存在' };
+      const out = await new Promise((resolve, reject) => {
+        const proc = spawn('python', [ddgScript, '--query', query, '--max-results', '5'], { timeout: 20000 });
+        let stdout = '', stderr = '';
+        proc.stdout.on('data', d => stdout += d.toString());
+        proc.stderr.on('data', d => stderr += d.toString());
+        proc.on('close', () => resolve(stdout));
+        proc.on('error', e => reject(e));
+      });
+      try {
+        const data = JSON.parse(out.trim());
+        if (data.success && data.results && data.results.length > 0) {
+          results = data.results.map(r => `${r.title}\n${r.snippet}\n${r.url || ''}`).join('\n\n');
+        }
+      } catch (pe) { /* parse failed */ }
+    } else if (engine === 'tavily' && apiKeys && apiKeys.tavilyApiKey) {
+      const resp = await fetch('https://api.tavily.com/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: apiKeys.tavilyApiKey, query, max_results: 5, include_answer: true }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.answer) results = `摘要：${data.answer}\n\n`;
+        if (data.results && data.results.length > 0) {
+          results += data.results.map(r => `${r.title}\n${r.content}\n${r.url || ''}`).join('\n\n');
+        }
+      }
+    } else if (engine === 'bocha' && apiKeys && apiKeys.bochaApiKey) {
+      const resp = await fetch('https://api.bochaai.com/v1/web-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKeys.bochaApiKey}` },
+        body: JSON.stringify({ query, count: 5 }),
+        signal: AbortSignal.timeout(15000)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.data && data.data.webPages && data.data.webPages.value) {
+          results = data.data.webPages.value.map(r => `${r.name}\n${r.snippet}\n${r.url || ''}`).join('\n\n');
+        }
+      }
+    }
+
+    if (results && results.trim().length > 10) {
+      return { success: true, results };
+    }
+    return { success: false, error: '未找到有效结果' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
 ipcMain.on('get-auth-token', (event) => { event.returnValue = API_TOKEN; });
 
 ipcMain.on('show-notification', (event, arg) => {

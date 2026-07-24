@@ -7,6 +7,10 @@ const crypto = require('crypto');
 
 let Core = null;
 
+// FTS5 全文索引需要 SQLite 数据库实例（当前知识库为 JSON 文件存储，FTS5 暂不激活）
+// 未来迁移到 SQLite 后，在此处赋值 db 实例即可自动启用 FTS5 加速检索
+var db = null;
+
 // ===== 配置 =====
 function getKnowledgeDir() {
   // 🔧 优先使用全局数据根目录下的知识库，回退到动态路径
@@ -86,6 +90,8 @@ function ensureDir() {
 }
 
 // ===== 检测嵌入模型是否可用（支持 fallback 链）=====
+var _ollamaRecoveryTimer = null;
+
 async function checkEmbeddingModel(force) {
   if (embeddingAvailable !== null && !force) return embeddingAvailable;
 
@@ -103,65 +109,79 @@ async function checkEmbeddingModel(force) {
       m.includes(preferred) || m.startsWith(preferred + ':')
     );
 
+    let candidateModel = null;
     if (foundPreferred) {
-      embeddingAvailable = true;
-      activeEmbeddingModel = preferred;
-      console.log(`✅ 嵌入模型 ${preferred} 已就绪`);
-      return true;
-    }
-
-    // 回退到 fallback 模型
-    if (preferred !== FALLBACK_EMBEDDING_MODEL) {
+      candidateModel = preferred;
+    } else if (preferred !== FALLBACK_EMBEDDING_MODEL) {
       const foundFallback = models.some(m =>
         m.includes(FALLBACK_EMBEDDING_MODEL) || m.startsWith(FALLBACK_EMBEDDING_MODEL + ':')
       );
       if (foundFallback) {
-        embeddingAvailable = true;
-        activeEmbeddingModel = FALLBACK_EMBEDDING_MODEL;
+        candidateModel = FALLBACK_EMBEDDING_MODEL;
         console.log(`⚠️ ${preferred} 未安装，回退到 ${FALLBACK_EMBEDDING_MODEL}`);
         console.log(`💡 推荐安装: ollama pull ${preferred}`);
-        return true;
       }
     }
 
-    // 都不可用
-    embeddingAvailable = false;
-    activeEmbeddingModel = null;
-    console.warn(`⚠️ 嵌入模型 ${preferred} 和 ${FALLBACK_EMBEDDING_MODEL} 均未安装`);
-    console.warn(`💡 安装方法: ollama pull ${preferred}`);
-    console.warn(`📂 知识库将使用 BM25 文本检索（无需嵌入模型，功能正常）`);
-    return false;
+    if (!candidateModel) {
+      // 都不可用
+      embeddingAvailable = false;
+      activeEmbeddingModel = null;
+      console.warn(`⚠️ 嵌入模型 ${preferred} 和 ${FALLBACK_EMBEDDING_MODEL} 均未安装`);
+      console.warn(`💡 安装方法: ollama pull ${preferred}`);
+      console.warn(`📂 知识库将使用 BM25 文本检索（无需嵌入模型，功能正常）`);
+      _scheduleOllamaRecovery();
+      return false;
+    }
+
+    // 🔧 验证 /api/embeddings 端点是否真的可调用（避免 tags 通但 embed 卡死）
+    try {
+      const probeResp = await fetch(`${OLLAMA_BASE}/api/embeddings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: candidateModel, prompt: 'test' }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!probeResp.ok) throw new Error(`HTTP ${probeResp.status}`);
+      const probeData = await probeResp.json();
+      if (!probeData.embedding || !Array.isArray(probeData.embedding)) {
+        throw new Error('embeddings 端点返回异常');
+      }
+    } catch (probeErr) {
+      embeddingAvailable = false;
+      activeEmbeddingModel = null;
+      console.warn('⚠️ Ollama embeddings 端点探测失败:', probeErr.message.split('\n')[0]);
+      console.warn('📂 知识库将使用 BM25 文本检索');
+      _scheduleOllamaRecovery();
+      return false;
+    }
+
+    // 验证通过
+    embeddingAvailable = true;
+    activeEmbeddingModel = candidateModel;
+    if (_ollamaRecoveryTimer) { clearTimeout(_ollamaRecoveryTimer); _ollamaRecoveryTimer = null; }
+    console.log(`✅ 嵌入模型 ${candidateModel} 已就绪（含 embeddings 端点验证）`);
+    return true;
   } catch (e) {
     embeddingAvailable = false;
     activeEmbeddingModel = null;
     console.warn('⚠️ 无法检测 Ollama 服务，嵌入模型不可用:', e.message.split('\n')[0]);
     console.warn('📂 知识库将使用 BM25 文本检索');
+    _scheduleOllamaRecovery();
     return false;
   }
+}
 
-  // 🔧 额外验证 /api/embeddings 端点是否真的可调用（避免 tags 通但 embed 卡死）
-  try {
-    const model = activeEmbeddingModel || getPreferredEmbeddingModel();
-    const probeResp = await fetch(`${OLLAMA_BASE}/api/embeddings`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: model, prompt: 'test' }),
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!probeResp.ok) throw new Error(`HTTP ${probeResp.status}`);
-    const probeData = await probeResp.json();
-    if (!probeData.embedding || !Array.isArray(probeData.embedding)) {
-      throw new Error('embeddings 端点返回异常');
+// Ollama 自动恢复：每 5 分钟重新探测（Ollama 可能稍后启动）
+function _scheduleOllamaRecovery() {
+  if (_ollamaRecoveryTimer) return; // 已有定时器
+  _ollamaRecoveryTimer = setTimeout(function() {
+    _ollamaRecoveryTimer = null;
+    if (embeddingAvailable === false) {
+      console.log('🔄 重新探测 Ollama 嵌入模型...');
+      checkEmbeddingModel(true);
     }
-  } catch (e) {
-    embeddingAvailable = false;
-    activeEmbeddingModel = null;
-    console.warn('⚠️ Ollama embeddings 端点探测失败:', e.message.split('\n')[0]);
-    console.warn('📂 知识库将使用 BM25 文本检索');
-    return false;
-  }
-
-  return embeddingAvailable;
+  }, 5 * 60 * 1000);
 }
 
 // ===== 读取文档内容（支持 .txt / .md / .pdf）=====

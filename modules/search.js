@@ -46,9 +46,46 @@ function getEffectiveEngine() {
   return engine;
 }
 
-// ===== 主搜索函数：优先走后端代理，降级直接请求 =====
+// ===== 主搜索函数：优先 IPC 直连（无需 HTTP），降级走后端代理 =====
+
+// IPC 搜索：通过 preload 桥直接调用主进程，完全绕过 HTTP 代理
+async function _searchViaIPC(query, engine) {
+  try {
+    var bridge = (typeof window !== 'undefined' && window.nodeBridge && window.nodeBridge.ipc) ? window.nodeBridge.ipc : null;
+    if (!bridge || typeof bridge.invoke !== 'function') return null; // 非 Electron 环境
+    var result = await bridge.invoke('search-execute', {
+      query: query,
+      engine: engine,
+      apiKeys: { bochaApiKey: Core.config.bochaApiKey, tavilyApiKey: Core.config.tavilyApiKey }
+    });
+    if (result && result.success && result.results) {
+      console.log('✅ IPC搜索成功 (' + engine + '): ' + result.results.length + ' 字符');
+      return result.results;
+    }
+    return null; // IPC 可用但无结果，让调用方决定是否降级
+  } catch (e) {
+    console.warn('⚠️ IPC搜索异常:', e.message);
+    return null;
+  }
+}
+
 async function webSearch(query) {
   const engine = getEffectiveEngine();
+
+  // 🚀 Wave 2: 优先 IPC 直连（Electron 环境下无需 HTTP 代理）
+  var ipcResult = await _searchViaIPC(query, engine);
+  if (ipcResult) return ipcResult;
+  // IPC 无结果时，对免费引擎尝试付费引擎 IPC 降级
+  if (!ipcResult && (engine === 'bing' || engine === 'duckduckgo' || engine === 'searxng')) {
+    if (Core.config.bochaApiKey) {
+      var bochaIpc = await _searchViaIPC(query, 'bocha');
+      if (bochaIpc) return bochaIpc;
+    }
+    if (Core.config.tavilyApiKey) {
+      var tavilyIpc = await _searchViaIPC(query, 'tavily');
+      if (tavilyIpc) return tavilyIpc;
+    }
+  }
 
   // 🔒 S12: 后端不可用时，超过 3 分钟自动重新探测（允许中途恢复）
   if (!_backendSearchHealthy) {
