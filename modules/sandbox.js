@@ -281,14 +281,14 @@ function _checkCommandSafety(command) {
 }
 
 function _cleanup(filePath) {
-  try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
+  try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
 }
 
 // ===== 沙箱状态 =====
 function getSandboxStatus() {
   var sandbox = getSandboxDir();
   var files = [];
-  try { files = fs.readdirSync(sandbox).filter(function(f) { return !f.startsWith('.'); }); } catch (e) {}
+  try { files = fs.readdirSync(sandbox).filter(function(f) { return !f.startsWith('.'); }); } catch (e) { console.warn('⚠️ [sandbox] 操作失败:', e.message || e); }
   return {
     dir: sandbox,
     dockerAvailable: _dockerAvailable,
@@ -305,10 +305,10 @@ function cleanSandbox() {
     var files = fs.readdirSync(sandbox);
     files.forEach(function(f) {
       if (f.startsWith('script_') || f.startsWith('py_') || f.endsWith('.tmp')) {
-        try { fs.unlinkSync(path.join(sandbox, f)); cleaned++; } catch (e) {}
+        try { fs.unlinkSync(path.join(sandbox, f)); cleaned++; } catch (e) { console.warn('⚠️ [sandbox] 操作失败:', e.message || e); }
       }
     });
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [sandbox] 操作失败:', e.message || e); }
   return { success: true, cleaned: cleaned };
 }
 

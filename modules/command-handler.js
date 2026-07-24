@@ -560,7 +560,7 @@ async function handleCommand(text) {
       if (typeof window !== 'undefined' && window.open) {
         window.open(url, '_blank');
       }
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [command-handler] 操作失败:', e.message || e); }
     Core.session.addMessage('🎨 AI 漫画工作室已打开\n\n' + url + '\n\n💡 首次使用需在页面内设置 Google Gemini API Key', 'ai');
     return true;
   }
@@ -644,7 +644,7 @@ async function handleCommand(text) {
     if (!goalText) { Core.session.addMessage('用法: /goal <目标描述>\n\n示例: /goal 分析本周A股走势并生成报告', 'ai'); return true; }
     if (!Core.taskQueue) { Core.session.addMessage('❌ 任务队列模块未加载', 'ai'); return true; }
     var sessionId = null;
-    try { sessionId = Core.session.getCurrentId(); } catch (e) {}
+    try { sessionId = Core.session.getCurrentId(); } catch (e) { console.warn('⚠️ [command-handler] 操作失败:', e.message || e); }
     var result = Core.taskQueue.create({ prompt: goalText, title: goalText.substring(0, 30), mode: 'goal', sessionId: sessionId });
     if (result.success) {
       Core.session.addMessage('🎯 目标已设定（ID: ' + result.taskId + '）\n\n「' + goalText + '」\n\nAgent 将在后台持续推进直到完成，完成后桌面通知你。输入 /resume ' + result.taskId + ' 查看进度。', 'ai');
@@ -826,7 +826,7 @@ async function handleCommand(text) {
       try {
         var docs = Core.knowledge.listDocuments();
         output += '📚 **知识库**: ' + docs.length + ' 篇文档\n';
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [command-handler] 操作失败:', e.message || e); }
     }
 
     Core.session.addMessage(output, 'ai');
@@ -1013,6 +1013,151 @@ async function handleCommand(text) {
       return true;
     }
     Core.session.addMessage('用法:\n/sync status - 查看同步状态\n/sync now - 立即同步', 'ai');
+    return true;
+  }
+
+  // ===== /morning 命令 — 手动触发晨报 =====
+  if (text === '/morning' || text === '/briefing') {
+    if (!Core.proactive || !Core.proactive.briefing) {
+      Core.session.addMessage('❌ 主动式助理模块未加载', 'ai');
+      return true;
+    }
+    Core.session.addMessage('☀️ 正在生成晨报，请稍候...', 'ai');
+    Core.proactive.briefing().then(function(result) {
+      if (!result.success) {
+        Core.session.addMessage('❌ 晨报生成失败: ' + (result.error || '未知错误'), 'ai');
+      }
+      // 成功时 briefing 内部已通过 session.addMessage 输出报告
+    }).catch(function(e) {
+      Core.session.addMessage('❌ 晨报异常: ' + e.message, 'ai');
+    });
+    return true;
+  }
+
+  // ===== /translate 命令 — 快速翻译 =====
+  if (text.startsWith('/translate ') || text.startsWith('/tr ')) {
+    var trArg = text.startsWith('/translate ') ? text.slice(11).trim() : text.slice(4).trim();
+    if (!trArg) {
+      Core.session.addMessage('🌐 **快速翻译**\n\n用法:\n/translate <文本> — 自动检测并翻译为中文\n/translate en <文本> — 翻译为英文\n/translate ja <文本> — 翻译为日文\n\n示例: /translate Hello World', 'ai');
+      return true;
+    }
+    var trTarget = 'zh';
+    var trText = trArg;
+    var trParts = trArg.split(/\s+/);
+    if (trParts.length > 1 && /^[a-z]{2}$/i.test(trParts[0])) {
+      trTarget = trParts[0].toLowerCase();
+      trText = trParts.slice(1).join(' ');
+    }
+    var trTargetName = { zh: '中文', en: '英文', ja: '日文', ko: '韩文', fr: '法文', de: '德文', es: '西班牙文', ru: '俄文' }[trTarget] || trTarget;
+    Core.session.addMessage('🌐 正在翻译为' + trTargetName + '...', 'ai');
+    try {
+      var trPrompt = '请将以下内容翻译成' + trTargetName + '，只输出翻译结果，不要解释：\n\n' + trText;
+      Core.api.callAPI(trPrompt, '你是一个专业翻译引擎，准确、自然地翻译文本。', 0.3).then(function(result) {
+        var translated = (result && result.message && result.message.content) || (typeof result === 'string' ? result : '') || '翻译失败';
+        Core.session.addMessage('🌐 **翻译结果** (' + trTargetName + ')\n\n' + translated, 'ai');
+      }).catch(function(e) {
+        Core.session.addMessage('❌ 翻译失败: ' + e.message, 'ai');
+      });
+    } catch (e) {
+      Core.session.addMessage('❌ 翻译异常: ' + e.message, 'ai');
+    }
+    return true;
+  }
+
+  // ===== /summarize 命令 — 总结对话或文本 =====
+  if (text === '/summarize' || text.startsWith('/summarize ')) {
+    var sumArg = text.startsWith('/summarize ') ? text.slice(11).trim() : '';
+    if (sumArg) {
+      // 总结提供的文本
+      Core.session.addMessage('📝 正在总结...', 'ai');
+      Core.api.callAPI('请总结以下内容的要点，用简洁的中文输出：\n\n' + sumArg, '你是一个专业的文本摘要助手。', 0.3).then(function(result) {
+        var summary = (result && result.message && result.message.content) || '总结失败';
+        Core.session.addMessage('📝 **摘要**\n\n' + summary, 'ai');
+      }).catch(function(e) {
+        Core.session.addMessage('❌ 总结失败: ' + e.message, 'ai');
+      });
+      return true;
+    }
+    // 总结当前对话
+    var currentId = Core.session.getCurrentId();
+    var sessionData = Core.session.sessions && Core.session.sessions[currentId];
+    if (!sessionData || !sessionData.messages || sessionData.messages.length < 2) {
+      Core.session.addMessage('⚠️ 当前对话消息不足，无法总结。', 'ai');
+      return true;
+    }
+    // 提取对话文本（跳过系统消息和图片）
+    var convText = '';
+    sessionData.messages.forEach(function(m) {
+      if (m.role === 'user' || m.role === 'assistant') {
+        var content = typeof m.content === 'string' ? m.content : (m.content || '');
+        if (content && content.length > 0 && !content.startsWith('data:image')) {
+          convText += (m.role === 'user' ? '用户' : 'AI') + ': ' + content.substring(0, 500) + '\n';
+        }
+      }
+    });
+    if (convText.length < 20) {
+      Core.session.addMessage('⚠️ 对话内容太少，无法生成有意义的摘要。', 'ai');
+      return true;
+    }
+    Core.session.addMessage('📝 正在总结当前对话（' + sessionData.messages.length + ' 条消息）...', 'ai');
+    Core.api.callAPI('请总结以下对话的要点和关键结论：\n\n' + convText.substring(0, 4000), '你是一个对话摘要助手，提取关键信息。', 0.3).then(function(result) {
+      var summary = (result && result.message && result.message.content) || '总结失败';
+      Core.session.addMessage('📝 **对话摘要**\n\n' + summary, 'ai');
+    }).catch(function(e) {
+      Core.session.addMessage('❌ 总结失败: ' + e.message, 'ai');
+    });
+    return true;
+  }
+
+  // ===== /remind 命令 — 设置提醒 =====
+  if (text.startsWith('/remind') || text === '/remind') {
+    var remindArg = text.slice(7).trim();
+    if (!Core.scheduler) {
+      Core.session.addMessage('❌ 定时任务模块未加载', 'ai');
+      return true;
+    }
+    if (!remindArg || remindArg === 'list') {
+      var remindTasks = Core.scheduler.list ? Core.scheduler.list() : [];
+      if (!remindTasks || remindTasks.length === 0) {
+        Core.session.addMessage('⏰ 当前没有提醒。\n\n用法:\n/remind 30m 喝水休息 — 30分钟后提醒\n/remind 2h 检查邮件 — 2小时后提醒\n/remind 09:30 开会 — 定时提醒\n/remind list — 查看所有提醒', 'ai');
+      } else {
+        var remindLines = remindTasks.map(function(t) {
+          return '  ' + (t.enabled ? '🟢' : '⚪') + ' [' + t.id + '] ' + t.name + ' — ' + (t.nextRun ? new Date(t.nextRun).toLocaleString('zh-CN') : '待执行');
+        });
+        Core.session.addMessage('⏰ 提醒列表:\n' + remindLines.join('\n'), 'ai');
+      }
+      return true;
+    }
+    // 解析: /remind <时间> <内容>
+    var remindParts = remindArg.match(/^(\S+)\s+(.+)$/);
+    if (!remindParts) {
+      Core.session.addMessage('❌ 格式错误。用法: /remind <时间> <内容>\n\n示例:\n/remind 30m 喝水休息\n/remind 2h 检查邮件\n/remind 09:30 开会', 'ai');
+      return true;
+    }
+    var remindTime = remindParts[1];
+    var remindContent = remindParts[2];
+    var remindResult;
+    // 判断是定时(09:30)还是倒计时(30m)
+    if (/^\d{1,2}:\d{2}$/.test(remindTime)) {
+      remindResult = Core.scheduler.add({
+        name: '提醒: ' + remindContent.substring(0, 20),
+        schedule: { type: 'once', time: remindTime },
+        action: { type: 'message', content: '⏰ 提醒: ' + remindContent },
+        enabled: true
+      });
+    } else {
+      remindResult = Core.scheduler.add({
+        name: '提醒: ' + remindContent.substring(0, 20),
+        schedule: { type: 'delay', interval: remindTime },
+        action: { type: 'message', content: '⏰ 提醒: ' + remindContent },
+        enabled: true
+      });
+    }
+    if (remindResult && remindResult.id) {
+      Core.session.addMessage('✅ 提醒已设置！\n\n📌 内容: ' + remindContent + '\n🆔 ID: ' + remindResult.id + '\n⏰ ' + (remindResult.nextRun ? '下次触发: ' + new Date(remindResult.nextRun).toLocaleString('zh-CN') : '已加入队列'), 'ai');
+    } else {
+      Core.session.addMessage('❌ 提醒设置失败: ' + (remindResult && remindResult.error || '未知错误'), 'ai');
+    }
     return true;
   }
 

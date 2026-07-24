@@ -63,7 +63,7 @@ async function getModels() {
 
 function connectWs(clientId, onProgress) {
   try {
-    if (_ws) { try { _ws.close(); } catch (e) {} }
+    if (_ws) { try { _ws.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ } }
     var wsUrl = COMFYUI_BASE.replace('http', 'ws') + '/ws?clientId=' + clientId;
     _ws = new WebSocket(wsUrl);
     _ws.onmessage = function(event) {
@@ -76,7 +76,7 @@ function connectWs(clientId, onProgress) {
         } else if (msg.type === 'execution_error' && onProgress) {
           onProgress({ type: 'error', message: msg.data });
         }
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [manga-comfyui] 操作失败:', e.message || e); }
     };
     _ws.onerror = function() { console.warn('Manga: WebSocket 错误'); };
     _ws.onclose = function() { _ws = null; };
@@ -86,7 +86,7 @@ function connectWs(clientId, onProgress) {
 }
 
 function closeWs() {
-  if (_ws) { try { _ws.close(); } catch (e) {} _ws = null; }
+  if (_ws) { try { _ws.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ } _ws = null; }
 }
 
 // ================================================================

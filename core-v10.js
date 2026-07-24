@@ -25,7 +25,7 @@ window.addEventListener('error', function(e) {
     if (window.Core && Core.showToast) {
       Core.showToast('应用内部错误: ' + (e.message || '未知异常'), 'error', 8000);
     }
-  } catch (_) {}
+  } catch (_) { console.warn('⚠️ [core-v10] 操作失败:', _.message || _); }
 });
 window.addEventListener('unhandledrejection', function(e) {
   console.error('🚨 [unhandledRejection]', e.reason && e.reason.stack || e.reason);
@@ -33,7 +33,7 @@ window.addEventListener('unhandledrejection', function(e) {
     if (window.Core && Core.showToast) {
       Core.showToast('异步操作异常: ' + (e.reason && e.reason.message || '未知'), 'error', 6000);
     }
-  } catch (_) {}
+  } catch (_) { console.warn('⚠️ [core-v10] 操作失败:', _.message || _); }
 });
 
 // ===== 兼容性检测 =====
@@ -197,7 +197,7 @@ function _createDatabaseShim() {
         if (commitRes && commitRes.error) throw new Error('COMMIT 失败: ' + commitRes.error);
         return result;
       } catch (e) {
-        try { dbBridge.exec(dbId, 'ROLLBACK'); } catch (_) {}
+        try { dbBridge.exec(dbId, 'ROLLBACK'); } catch (_) { console.warn('⚠️ [core-v10] 操作失败:', _.message || _); }
         throw e;
       }
     }
@@ -845,7 +845,7 @@ const Core = {
         document.title = newConfig.appName;
         if (Core.dom && Core.dom.appTitle) Core.dom.appTitle.textContent = newConfig.appName;
       }
-    } catch (_) {}
+    } catch (_) { console.warn('⚠️ [core-v10] 操作失败:', _.message || _); }
   },
 
   loadModules() {
@@ -1366,7 +1366,7 @@ Core.renderMarkdown = function(text) {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification(title, { body: body });
         }
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [core-v10] 操作失败:', e.message || e); }
     },
 
     // 应用标题
@@ -1559,7 +1559,7 @@ Core.renderMarkdown = function(text) {
           Object.keys(sessions).forEach(function(sid) {
             var state = sessions[sid]._apiState;
             if (state && state.abortController) {
-              try { state.abortController.abort(); } catch (e) {}
+              try { state.abortController.abort(); } catch (e) { console.warn('⚠️ [core-v10] 操作失败:', e.message || e); }
             }
           });
           console.log('[renderer-shutdown] pending API 请求已取消');

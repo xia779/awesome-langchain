@@ -251,9 +251,9 @@ function _installSkill(skill, systemPrompt, promptMd) {
 
 function _extractJSON(text) {
   if (!text) return null;
-  try { return JSON.parse(text.trim()); } catch (e) {}
+  try { return JSON.parse(text.trim()); } catch (e) { console.warn('⚠️ [skill-generator] 操作失败:', e.message || e); }
   var match = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (match) { try { return JSON.parse(match[1].trim()); } catch (e) {} }
+  if (match) { try { return JSON.parse(match[1].trim()); } catch (e) { console.warn('⚠️ [skill-generator] 操作失败:', e.message || e); } }
   var start = text.indexOf('{');
   if (start !== -1) {
     var depth = 0, end = -1;
@@ -262,7 +262,7 @@ function _extractJSON(text) {
       else if (text[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
     }
     if (end !== -1) {
-      try { return JSON.parse(text.substring(start, end + 1)); } catch (e) {}
+      try { return JSON.parse(text.substring(start, end + 1)); } catch (e) { console.warn('⚠️ [skill-generator] 操作失败:', e.message || e); }
     }
   }
   return null;

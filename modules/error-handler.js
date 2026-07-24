@@ -159,8 +159,8 @@ function saveErrorLogs() {
     const fs = require('fs');
     const path = require('path');
     const logPath = path.join(Core.DATA_ROOT, 'error-logs.json');
-    fs.promises.writeFile(logPath, JSON.stringify(errorLogs.slice(-500), null, 2), 'utf8').catch(function() {});
-  } catch (e) {}
+    fs.promises.writeFile(logPath, JSON.stringify(errorLogs.slice(-500), null, 2), 'utf8').catch(function(_e) { /* 可忽略：错误日志持久化失败不影响主流程 */ });
+  } catch (e) { console.warn('⚠️ [error-handler] 操作失败:', e.message || e); }
 }
 
 function loadErrorLogs() {

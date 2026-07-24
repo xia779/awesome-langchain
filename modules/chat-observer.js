@@ -118,7 +118,7 @@ function init(Core) {
       _pendingMsgs.length = 0;
       for (var m = 0; m < msgs.length; m++) {
         for (var h = 0; h < _handlers.length; h++) {
-          try { _handlers[h](msgs[m]); } catch (e) {}
+          try { _handlers[h](msgs[m]); } catch (e) { console.warn('⚠️ [chat-observer] 操作失败:', e.message || e); }
         }
       }
     });
@@ -131,7 +131,7 @@ function init(Core) {
     onClear: function(fn) { _clearHandlers.push(fn); },
     processNode: function(node) {
       for (var i = 0; i < _handlers.length; i++) {
-        try { _handlers[i](node); } catch (e) {}
+        try { _handlers[i](node); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
       }
     },
     getObserver: function() { return _observer; }

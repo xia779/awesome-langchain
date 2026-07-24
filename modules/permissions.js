@@ -71,7 +71,7 @@ function getDefaultAllowedDirs() {
     dirs.push(path.join(os.homedir(), 'Desktop'));
     dirs.push(path.join(os.homedir(), 'Documents'));
     dirs.push(path.join(os.homedir(), 'Downloads'));
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [permissions] 操作失败:', e.message || e); }
   return dirs;
 }
 

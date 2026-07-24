@@ -52,7 +52,7 @@ function exportCurrentSession(format) {
   }
   setTimeout(() => { Core.dom.status.textContent = '✅ 已就绪'; }, 3000);
   // 打开导出目录
-  try { require('electron').shell.openPath(exportDir); } catch(e) {}
+  try { require('electron').shell.openPath(exportDir); } catch (e) { console.warn('⚠️ [export] 操作失败:', e.message || e); }
 }
 
 // ===== 复制会话到剪贴板 =====
@@ -188,7 +188,7 @@ function exportCurrentSessionAsHtml() {
   Core.dom.status.textContent = '✅ 已导出HTML: ' + fileName;
   showToast('✅ 导出成功（HTML格式，含代码高亮）\n保存位置:\n' + filePath, 'success');
   setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪'; }, 3000);
-  try { require('electron').shell.openPath(exportDir); } catch(e) {}
+  try { require('electron').shell.openPath(exportDir); } catch (e) { console.warn('⚠️ [export] 操作失败:', e.message || e); }
 }
 
 // ===== 批量导出会话树（主会话 + 所有子会话）=====
@@ -265,7 +265,7 @@ function exportSessionTree(format) {
     showToast('✅ 批量导出成功（Markdown）\n会话数: ' + treeIds.length + '\n保存位置:\n' + filePath, 'success');
   }
   setTimeout(function() { Core.dom.status.textContent = '✅ 已就绪'; }, 3000);
-  try { require('electron').shell.openPath(exportDir); } catch(e) {}
+  try { require('electron').shell.openPath(exportDir); } catch (e) { console.warn('⚠️ [export] 操作失败:', e.message || e); }
 }
 // ===== 导入会话 =====
 function importSession(filePath) {

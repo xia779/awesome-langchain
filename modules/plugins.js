@@ -40,6 +40,7 @@ try {
 let Core;
 let pluginsDir;
 let loadedPlugins = {}; // id -> { manifest, instance, enabled }
+let workerPlugins = {}; // id -> { registeredHooks: string[] } — 在 Worker 线程中运行的插件
 let hooks = {
   beforeSend: [],      // (message) -> modifiedMessage | null (阻断)
   afterResponse: [],    // (message, response) -> void
@@ -86,7 +87,7 @@ function init(_Core) {
   // 加载本地市场注册表
   var localMarketplace = path.join(Core.DATA_ROOT, 'plugins-marketplace.json');
   if (fs.existsSync(localMarketplace)) {
-    try { marketplaceRegistry = JSON.parse(fs.readFileSync(localMarketplace, 'utf8')); } catch(e) {}
+    try { marketplaceRegistry = JSON.parse(fs.readFileSync(localMarketplace, 'utf8')); } catch (e) { console.warn('⚠️ [plugins] 操作失败:', e.message || e); }
   }
 
   // 注册命令
@@ -95,7 +96,32 @@ function init(_Core) {
   // 启动自动更新检查
   setTimeout(function() { startAutoUpdateCheck(); }, 5000);
 
-  console.log('✅ 插件系统已加载');
+  // Phase 5: 监听插件 Worker 崩溃通知
+  if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.on) {
+    window.electronAPI.on('plugin-worker:crashed', function(data) {
+      var pid = data && data.pluginId;
+      if (pid && loadedPlugins[pid]) {
+        console.error('💥 插件 ' + pid + ' 的 Worker 线程崩溃 (code=' + (data.code || '?') + ')');
+        loadedPlugins[pid].inWorker = false;
+        delete workerPlugins[pid];
+        // 注销该插件通过 Worker 注册的 RPC 代理钩子
+        Object.keys(hooks).forEach(function(hookName) {
+          hooks[hookName] = hooks[hookName].filter(function(h) { return h.pluginId !== pid; });
+        });
+        if (Core.showNotification) {
+          Core.showNotification('warning', '⚠️ 插件 ' + pid + ' 已崩溃并被隔离，不影响主程序运行');
+        }
+      }
+    });
+    // 监听插件配置保存请求
+    window.electronAPI.on('plugin-worker:config-save', function(data) {
+      if (data && data.pluginId && data.data) {
+        savePluginConfig(data.pluginId, data.data);
+      }
+    });
+  }
+
+  console.log('✅ 插件系统已加载（Phase 5: Worker 线程隔离已就绪）');
 }
 
 // 将项目目录中的示例插件复制到用户插件目录
@@ -180,7 +206,10 @@ function loadAllPlugins() {
       try {
         const stat = fs.statSync(pluginPath);
         if (stat.isDirectory()) {
-          loadPluginFromDir(entry, pluginPath);
+          // Phase 5: loadPluginFromDir 现在是 async（Worker 加载）
+          loadPluginFromDir(entry, pluginPath).catch(function(e) {
+            console.warn('⚠️ 插件异步加载失败:', entry, e.message);
+          });
         }
       } catch (e) {
         console.warn('⚠️ 插件状态检查失败:', entry, e.message);
@@ -329,7 +358,112 @@ function _loadPluginSandboxed(entryPath, pluginDir) {
   return moduleObj.exports;
 }
 
-function loadPluginFromDir(pluginId, pluginPath) {
+// ===== 🔧 Phase 5: Worker Thread 插件隔离 =====
+
+// 判断插件是否应在 Worker 线程中运行
+// 需要 DOM 访问（ui 权限 + onMessageRender）的插件留在主线程
+function _shouldUseWorker(manifest) {
+  // 如果 electronAPI 桥不可用（如测试环境），回退到主线程沙箱
+  if (typeof window === 'undefined' || !window.electronAPI || !window.electronAPI.invoke) {
+    return false;
+  }
+  // 声明需要 UI 权限的插件留在主线程（需要 DOM 访问）
+  var perms = manifest.permissions || [];
+  if (perms.indexOf('ui') >= 0) {
+    return false;
+  }
+  // 声明 mainThread: true 的插件强制主线程
+  if (manifest.mainThread === true) {
+    return false;
+  }
+  return true;
+}
+
+// 通过 IPC 将插件加载到主进程的 Worker 线程中
+async function _loadPluginInWorker(manifest, entryPath, pluginPath) {
+  var pluginId = manifest.id;
+  var permissions = manifest.permissions || [];
+
+  // 读取插件私有配置
+  var pluginConfig = {};
+  try {
+    var configPath = path.join(pluginPath, 'config.json');
+    if (fs.existsSync(configPath)) {
+      pluginConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+  } catch (e) { console.warn('⚠️ [plugins] 操作失败:', e.message || e); }
+
+  try {
+    var result = await window.electronAPI.invoke('plugin-worker:load', {
+      pluginId: pluginId,
+      entryPath: entryPath,
+      pluginDir: pluginPath,
+      manifest: { id: manifest.id, name: manifest.name, version: manifest.version },
+      permissions: permissions,
+      pluginConfig: pluginConfig
+    });
+
+    if (result && result.success) {
+      // 记录 Worker 插件状态
+      workerPlugins[pluginId] = { registeredHooks: result.registeredHooks || [] };
+
+      // 为 Worker 插件注册 RPC 代理钩子（除 onMessageRender 外）
+      var rpcHooks = (result.registeredHooks || []).filter(function(h) {
+        return h !== 'onMessageRender'; // DOM 相关钩子不支持跨线程
+      });
+      for (var i = 0; i < rpcHooks.length; i++) {
+        (function(hookName) {
+          registerHook(pluginId, hookName, function() {
+            var args = Array.from(arguments);
+            return _callWorkerHook(pluginId, hookName, args);
+          });
+        })(rpcHooks[i]);
+      }
+
+      console.log('✅ 插件 ' + pluginId + ' 已在 Worker 线程中隔离运行');
+      return true;
+    } else {
+      console.warn('⚠️ 插件 ' + pluginId + ' Worker 加载失败: ' + (result ? result.error : '未知错误') + '，回退到主线程沙箱');
+      return false;
+    }
+  } catch (err) {
+    console.warn('⚠️ 插件 ' + pluginId + ' Worker IPC 失败: ' + err.message + '，回退到主线程沙箱');
+    return false;
+  }
+}
+
+// RPC 代理：调用 Worker 线程中的插件钩子
+async function _callWorkerHook(pluginId, hookName, args) {
+  try {
+    var result = await window.electronAPI.invoke('plugin-worker:hook', {
+      pluginId: pluginId,
+      hookName: hookName,
+      args: args
+    });
+    if (result && result.blocked) return null;
+    if (result && result.error) {
+      console.error('[插件:' + pluginId + '] Worker 钩子错误: ' + result.error);
+      return undefined;
+    }
+    return result ? result.result : undefined;
+  } catch (err) {
+    console.error('[插件:' + pluginId + '] Worker 钩子 IPC 失败: ' + err.message);
+    return undefined;
+  }
+}
+
+// 销毁 Worker 线程中的插件
+async function _destroyWorkerPlugin(pluginId) {
+  if (!workerPlugins[pluginId]) return;
+  try {
+    await window.electronAPI.invoke('plugin-worker:destroy', { pluginId: pluginId });
+  } catch (e) {
+    console.warn('⚠️ 销毁插件 Worker 失败: ' + e.message);
+  }
+  delete workerPlugins[pluginId];
+}
+
+async function loadPluginFromDir(pluginId, pluginPath) {
   try {
     const manifestPath = path.join(pluginPath, 'plugin.json');
     if (!fs.existsSync(manifestPath)) {
@@ -348,24 +482,31 @@ function loadPluginFromDir(pluginId, pluginPath) {
     const enabled = !disabledPlugins.includes(manifest.id);
 
     let instance = null;
-      if (enabled) {
-      // 加载插件实例
+    let useWorker = false;
+
+    if (enabled) {
       const entryPath = path.join(pluginPath, manifest.entry || 'index.js');
       if (fs.existsSync(entryPath)) {
-        try {
-          // 🔧 #9: 沙箱加载 — 不再直接 require，改用 Function 包装 + 受限 require
-          const PluginClass = _loadPluginSandboxed(entryPath, pluginPath);
-          if (typeof PluginClass === 'function') {
-            instance = new PluginClass(createPluginAPI(manifest.id));
-            if (instance.init && typeof instance.init === 'function') {
-              // 🔒 #27: 初始化超时保护，防止恶意插件 init() 阻塞主线程
-              _runWithTimeout(function() {
-                instance.init();
-              }, PLUGIN_INIT_TIMEOUT, manifest.id);
+        // 🔧 Phase 5: 优先尝试 Worker 线程隔离加载
+        if (_shouldUseWorker(manifest)) {
+          useWorker = await _loadPluginInWorker(manifest, entryPath, pluginPath);
+        }
+
+        // Worker 加载失败或不适用时，回退到主线程沙箱
+        if (!useWorker) {
+          try {
+            const PluginClass = _loadPluginSandboxed(entryPath, pluginPath);
+            if (typeof PluginClass === 'function') {
+              instance = new PluginClass(createPluginAPI(manifest.id));
+              if (instance.init && typeof instance.init === 'function') {
+                _runWithTimeout(function() {
+                  instance.init();
+                }, PLUGIN_INIT_TIMEOUT, manifest.id);
+              }
             }
+          } catch (err) {
+            console.error(`❌ 插件 ${manifest.id} 加载失败:`, err.message);
           }
-        } catch (err) {
-          console.error(`❌ 插件 ${manifest.id} 加载失败:`, err.message);
         }
       }
     }
@@ -375,6 +516,7 @@ function loadPluginFromDir(pluginId, pluginPath) {
       instance: instance,
       enabled: enabled,
       path: pluginPath,
+      inWorker: useWorker,
     };
 
   } catch (err) {
@@ -398,7 +540,7 @@ function createPluginAPI(pluginId) {
     loadPluginConfig: () => loadPluginConfig(pluginId),
     // 发送通知
     notify: (title, body) => {
-      try { Core.showNotification && Core.showNotification(title, body); } catch (e) {}
+      try { Core.showNotification && Core.showNotification(title, body); } catch (e) { console.warn('⚠️ [plugins] 操作失败:', e.message || e); }
     },
     // 日志
     log: (...args) => console.log(`[插件:${pluginId}]`, ...args),
@@ -438,6 +580,8 @@ function listPlugins() {
     author: p.manifest.author || '',
     enabled: p.enabled,
     entry: p.manifest.entry || 'index.js',
+    inWorker: !!p.inWorker,
+    workerHooks: workerPlugins[p.manifest.id] ? workerPlugins[p.manifest.id].registeredHooks : [],
   }));
 }
 
@@ -467,9 +611,11 @@ function enablePlugin(pluginId) {
     Core.saveConfig({ disabledPlugins: disabledPlugins });
   }
 
-  // 重新加载插件
+  // 重新加载插件（Phase 5: async Worker 加载）
   p.enabled = true;
-  loadPluginFromDir(pluginId, p.path);
+  loadPluginFromDir(pluginId, p.path).catch(function(e) {
+    console.warn('⚠️ 插件 ' + pluginId + ' 重新加载失败:', e.message);
+  });
   return true;
 }
 
@@ -487,7 +633,12 @@ function disablePlugin(pluginId) {
 
   // 调用卸载钩子
   if (p.instance && p.instance.destroy && typeof p.instance.destroy === 'function') {
-    try { p.instance.destroy(); } catch (e) {}
+    try { p.instance.destroy(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
+  }
+
+  // Phase 5: 销毁 Worker 线程中的插件
+  if (workerPlugins[pluginId]) {
+    _destroyWorkerPlugin(pluginId);
   }
 
   // 注销该插件的所有钩子
@@ -531,7 +682,7 @@ function hotUpdatePlugin(pluginId) {
   const entryPath = path.join(p.path, p.manifest.entry || 'index.js');
   try {
     delete require.cache[require.resolve(entryPath)];
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [plugins] 操作失败:', e.message || e); }
   
   // 3. 重新加载
   enablePlugin(pluginId);
@@ -600,7 +751,7 @@ function installPlugin(sourcePath) {
         fs.rmSync(tmpDir, { recursive: true, force: true });
         return result;
       } catch (zipErr) {
-        try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) {}
+        try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) { console.warn('⚠️ [plugins] 操作失败:', e.message || e); }
         return { success: false, error: 'ZIP 解压失败: ' + zipErr.message };
       }
     }
@@ -758,7 +909,7 @@ async function updatePlugin(pluginId, downloadUrl, expectedSha256) {
     fs.writeFileSync(tmpZip, buffer);
     // 安装（会先卸载旧版）
     const result = installPlugin(tmpZip);
-    try { fs.unlinkSync(tmpZip); } catch (e) {}
+    try { fs.unlinkSync(tmpZip); } catch (e) { console.warn('⚠️ [plugins] 操作失败:', e.message || e); }
     return result;
   } catch (e) {
     return { success: false, error: '更新失败: ' + e.message };
@@ -854,7 +1005,7 @@ async function fetchMarketplace(url) {
     marketplaceRegistry = await resp.json();
     // 缓存到本地
     var cachePath = path.join(Core.DATA_ROOT, 'plugins-marketplace-cache.json');
-    try { fs.writeFileSync(cachePath, JSON.stringify(marketplaceRegistry, null, 2)); } catch(e) {}
+    try { fs.writeFileSync(cachePath, JSON.stringify(marketplaceRegistry, null, 2)); } catch (e) { console.warn('⚠️ [plugins] 操作失败:', e.message || e); }
     return marketplaceRegistry;
   } catch (err) {
     console.warn('⚠️ 市场: 远程获取失败，尝试本地缓存:', err.message);
@@ -1004,7 +1155,7 @@ function getPluginManifest(pluginId) {
     if (fs.existsSync(pluginPath)) {
       return JSON.parse(fs.readFileSync(pluginPath, 'utf8'));
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [plugins] 操作失败:', e.message || e); }
   return null;
 }
 
@@ -1078,7 +1229,7 @@ function getInstalledPlugins() {
         result.push({ id: dir, name: manifest.name || dir, version: manifest.version || '0.0.0' });
       }
     });
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [plugins] 操作失败:', e.message || e); }
   return result;
 }
 

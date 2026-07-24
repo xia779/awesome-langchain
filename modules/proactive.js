@@ -34,7 +34,7 @@ async function generateMorningBriefing(options) {
           });
           sections.push('## 大盘行情\n\n' + marketLines.join('\n'));
         }
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [proactive] 操作失败:', e.message || e); }
     }
 
     // 2. 关注主题新闻
@@ -48,7 +48,7 @@ async function generateMorningBriefing(options) {
             var lines = result.split('\n\n').slice(0, 3);
             newsItems.push('### ' + opts.topics[i] + '\n' + lines.join('\n'));
           }
-        } catch (e) {}
+        } catch (e) { console.warn('⚠️ [proactive] 操作失败:', e.message || e); }
       }
       if (newsItems.length > 0) {
         sections.push('## 关注领域动态\n\n' + newsItems.join('\n\n'));
@@ -95,7 +95,7 @@ async function generateMorningBriefing(options) {
           { disableTools: true, _background: true }
         );
         briefing = (result && result.message && result.message.content) || '';
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [proactive] 操作失败:', e.message || e); }
     }
 
     var fullReport = '☀️ **早安晨报** (' + new Date().toLocaleDateString('zh-CN') + ')\n\n';
@@ -108,7 +108,7 @@ async function generateMorningBriefing(options) {
       if (typeof Notification !== 'undefined') {
         new Notification('☀️ 早安晨报', { body: briefing || '今日晨报已生成，请查看' });
       }
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [proactive] 操作失败:', e.message || e); }
 
     // 会话消息
     if (Core.session && Core.session.addMessage) {
@@ -128,7 +128,7 @@ async function generateMorningBriefing(options) {
           filePath: filePath,
           metadata: { format: 'markdown', auto: true }
         });
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [proactive] 操作失败:', e.message || e); }
     }
 
     return { success: true, report: fullReport };
@@ -145,7 +145,7 @@ function setupBriefingSchedule() {
   if (Core.scheduler && Core.scheduler.add) {
     // 先清除旧的晨报任务
     if (_briefingTaskId) {
-      try { Core.scheduler.delete(_briefingTaskId); } catch (e) {}
+      try { Core.scheduler.delete(_briefingTaskId); } catch (e) { console.warn('⚠️ [proactive] 操作失败:', e.message || e); }
     }
 
     var result = Core.scheduler.add({

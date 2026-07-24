@@ -108,8 +108,8 @@ function createCheckpoint(filePath, sessionId) {
     // 超出上限时删除最旧版本
     while (fileEntry.versions.length > MAX_VERSIONS_PER_FILE) {
       var oldest = fileEntry.versions.shift();
-      try { fs.unlinkSync(oldest.path); } catch (e) {}
-      try { fs.unlinkSync(oldest.path + '.meta.json'); } catch (e) {}
+      try { fs.unlinkSync(oldest.path); } catch (e) { console.warn('⚠️ [file-checkpoint] 操作失败:', e.message || e); }
+      try { fs.unlinkSync(oldest.path + '.meta.json'); } catch (e) { console.warn('⚠️ [file-checkpoint] 操作失败:', e.message || e); }
     }
     manifest[filePath] = fileEntry;
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
@@ -213,10 +213,10 @@ function cleanupCheckpoints(keepSessions) {
 
     var toDelete = sessions.slice(keepSessions);
     toDelete.forEach(function(s) {
-      try { fs.rmSync(path.join(cpRoot, s.name), { recursive: true, force: true }); } catch (e) {}
+      try { fs.rmSync(path.join(cpRoot, s.name), { recursive: true, force: true }); } catch (e) { console.warn('⚠️ [file-checkpoint] 操作失败:', e.message || e); }
     });
     if (toDelete.length > 0) console.log('🧹 已清理 ' + toDelete.length + ' 个过期 checkpoint 会话');
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [file-checkpoint] 操作失败:', e.message || e); }
 }
 
 // ===== 查询文件的可用版本 =====

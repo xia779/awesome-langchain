@@ -317,7 +317,7 @@ function saveStats() {
       patternStats: patternStats,
       suggestionHistory: suggestionHistory.slice(-50),
     }, null, 2));
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [skill-suggest] 操作失败:', e.message || e); }
 }
 
 function loadStats() {
@@ -328,7 +328,7 @@ function loadStats() {
       patternStats = data.patternStats || {};
       suggestionHistory = data.suggestionHistory || [];
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [skill-suggest] 操作失败:', e.message || e); }
 }
 
 // ===== 格式化输出 =====

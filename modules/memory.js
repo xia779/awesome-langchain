@@ -522,7 +522,7 @@ module.exports = {
 
     // 延迟后台填充记忆嵌入（启动 10 秒后，不阻塞）
     setTimeout(function() {
-      enhance.backfillMemoryEmbeddings().catch(function() {});
+      enhance.backfillMemoryEmbeddings().catch(function(_e) { console.warn('⚠️ [memory] 向量回填失败:', _e.message || _e); });
     }, 10000);
 
     // 启动时自动构建画像
@@ -532,7 +532,7 @@ module.exports = {
         if (!profile.name && Core.memory) {
           enhance.buildProfileFromMemories();
         }
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [memory] 操作失败:', e.message || e); }
     }, 2000);
 
     console.log('✅ Memory 模块已加载（CRUD+画像+日志+重要性+精炼）');

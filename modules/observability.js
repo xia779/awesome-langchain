@@ -270,7 +270,7 @@ function _flush() {
       flushedAt: Date.now()
     };
     fs.writeFileSync(_statsFile, JSON.stringify(data), 'utf8');
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [observability] 操作失败:', e.message || e); }
 }
 
 function _load() {
@@ -282,7 +282,7 @@ function _load() {
       _metrics.tokenUsage = data.tokenUsage || [];
       _metrics.errors = data.errors || [];
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [observability] 操作失败:', e.message || e); }
 }
 
 // ===== 重置 =====

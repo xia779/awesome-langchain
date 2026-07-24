@@ -23,6 +23,9 @@ console.log('🔒 [安全] contextIsolation=true, nodeIntegration=false（preloa
 // 🔧 S6: 日志持久化 — 初始化 electron-log 主进程（注册 IPC handler）
 const log = require('electron-log/main');
 log.initialize();
+
+// 🔧 Phase 5: 插件 Worker 线程隔离 — 主进程 Worker 池管理器
+const pluginHost = require('./modules/lib/plugin-host');
 log.transports.file.maxSize = 5 * 1024 * 1024;
 log.info('[main] 应用启动');
 
@@ -925,6 +928,7 @@ app.whenReady().then(async () => {
   createWindow();
   await startWebServer();
   initAutoUpdater(); // 🔒 S5: 窗口就绪后启动自动更新检查
+  pluginHost.registerIPC(); // 🔧 Phase 5: 注册插件 Worker 线程 IPC 处理器
   setTimeout(() => { try { new Notification({ title: 'AI智能体', body: '你的AI助手已就绪！' }).show(); } catch(e) { console.warn('⚠️ [main] 显示就绪通知失败:', e.message); } }, 3000);
 });
 
@@ -950,6 +954,9 @@ app.on('before-quit', () => {
   if (tray) {
     try { tray.destroy(); } catch (e) { console.warn('[shutdown] tray.destroy 失败:', e.message); }
   }
+
+  // 3.5 Phase 5: 终止所有插件 Worker 线程
+  try { pluginHost.terminateAllWorkers(); } catch (e) { console.warn('[shutdown] terminateAllWorkers 失败:', e.message); }
 
   // 4. 关闭 SQLite 数据库（通过渲染进程的 Core.db.close()）
   //    渲染进程收到 app:shutdown 后应调用 Core.db.close()

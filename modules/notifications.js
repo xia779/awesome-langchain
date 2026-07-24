@@ -59,7 +59,7 @@ function push(notification) {
     showDesktopNotification(n);
   }
   updateBellBadge();
-  _listeners.forEach(function(fn) { try { fn(n); } catch (e) {} });
+  _listeners.forEach(function(fn) { try { fn(n); } catch (e) { console.warn('⚠️ [notifications] 操作失败:', e.message || e); } });
   saveNotifications();
   return n;
 }
@@ -119,7 +119,7 @@ function showDesktopNotification(n) {
     } else if (Notification.permission !== 'denied') {
       Notification.requestPermission();
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [notifications] 操作失败:', e.message || e); }
 }
 
 // ===== 通知面板 =====
@@ -244,8 +244,8 @@ function saveNotifications() {
     try {
       var data = _notifications.slice(0, 50).map(function(n) { return { id: n.id, type: n.type, title: n.title, message: n.message, timestamp: n.timestamp, read: n.read }; });
       var fs = require('fs'), path = require('path');
-      fs.promises.writeFile(path.join(Core.DATA_ROOT, 'notifications.json'), JSON.stringify(data), 'utf8').catch(function() {});
-    } catch (e) {}
+      fs.promises.writeFile(path.join(Core.DATA_ROOT, 'notifications.json'), JSON.stringify(data), 'utf8').catch(function(_e) { /* 可忽略：通知持久化写入失败不影响功能 */ });
+    } catch (e) { console.warn('⚠️ [notifications] 操作失败:', e.message || e); }
   }, 500);
 }
 function loadNotifications() {
@@ -253,7 +253,7 @@ function loadNotifications() {
     var fs = require('fs'), path = require('path');
     var fp = path.join(Core.DATA_ROOT, 'notifications.json');
     if (fs.existsSync(fp)) { var data = JSON.parse(fs.readFileSync(fp, 'utf8')); if (Array.isArray(data)) { _notifications = data; _unreadCount = data.filter(function(n) { return !n.read; }).length; } }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [notifications] 操作失败:', e.message || e); }
 }
 
 // ===== 命令 =====

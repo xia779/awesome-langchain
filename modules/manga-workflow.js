@@ -183,13 +183,13 @@ async function generateScript(outline) {
         if (rawJson[i] === '{') { if (depth === 0) start = i; depth++; }
         else if (rawJson[i] === '}') { depth--; if (depth === 0 && start >= 0) {
           var candidate = rawJson.substring(start, i + 1).replace(/,\s*([\]}])/g, '$1');
-          try { scriptData = JSON.parse(candidate); break; } catch (e3) {}
+          try { scriptData = JSON.parse(candidate); break; } catch (e3) { console.warn('⚠️ [manga-workflow] 操作失败:', e3.message || e3); }
         }}
       }
       // 截断修复：关闭未闭合的字符串和括号
       if (!scriptData) {
         var repaired = repairTruncatedJSON(rawJson);
-        try { scriptData = JSON.parse(repaired); log('  JSON 截断已自动修复'); } catch (e4) {}
+        try { scriptData = JSON.parse(repaired); log('  JSON 截断已自动修复'); } catch (e4) { console.warn('⚠️ [manga-workflow] 操作失败:', e4.message || e4); }
       }
     }
   }
@@ -452,7 +452,7 @@ async function waitForComfyUIImage(promptId, saveDir, prefix) {
                 break;
               }
             }
-          } catch (_) {}
+          } catch (_) { console.warn('⚠️ [manga-workflow] 操作失败:', _.message || _); }
           throw new Error(errMsg);
         }
       }
@@ -1080,27 +1080,27 @@ async function checkServices() {
   try {
     await httpGet(COMFYUI_PROXY + '/status', 3000);
     status.comfyui = 'ok';
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [manga-workflow] 操作失败:', e.message || e); }
 
   try {
     await httpGet(OLLAMA_URL + '/api/tags', 3000);
     status.ollama = 'ok';
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [manga-workflow] 操作失败:', e.message || e); }
 
   try {
     await httpGet(TTS_URL + '/health', 3000);
     status.tts = 'ok';
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [manga-workflow] 操作失败:', e.message || e); }
 
   try {
     await httpGet(AUDIOLDM_URL + '/health', 3000);
     status.audioldm = 'ok';
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [manga-workflow] 操作失败:', e.message || e); }
 
   try {
     await httpGet(MUSICGEN_URL + '/health', 3000);
     status.musicgen = 'ok';
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [manga-workflow] 操作失败:', e.message || e); }
 
   return status;
 }

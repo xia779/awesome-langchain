@@ -899,7 +899,8 @@ const electronAPIBridge = {
         'copy-plugin-dir', 'delete-plugin-dir', 'open-external',
         'open-devtools', 'app-minimize', 'app-maximize', 'app-close',
         'select-directory', 'select-file', 'get-app-version',
-        'download-update', 'install-update'
+        'download-update', 'install-update',
+        'plugin-worker:config'
       ];
       if (allowed.includes(channel)) {
         ipcRenderer.send(channel, ...args);
@@ -922,7 +923,8 @@ const electronAPIBridge = {
         'server:port', 'agent:response', 'agent:step', 'agent:error',
         'agent:done', 'agent:typing', 'config:changed', 'session:updated',
         'notification', 'tray:action', 'app:shutdown', 'trigger-export',
-        'app:update'
+        'app:update',
+        'plugin-worker:crashed', 'plugin-worker:log', 'plugin-worker:notify', 'plugin-worker:config-save'
       ];
       if (allowedOn.includes(channel)) {
         const sub = (_event, ...args) => callback(...args);
@@ -933,7 +935,8 @@ const electronAPIBridge = {
       return () => {};
     },
     invoke: (channel, ...args) => {
-      const allowedInvoke = ['select-directory', 'select-file', 'get-app-info', 'check-for-update', 'get-update-status'];
+      const allowedInvoke = ['select-directory', 'select-file', 'get-app-info', 'check-for-update', 'get-update-status',
+        'plugin-worker:load', 'plugin-worker:hook', 'plugin-worker:destroy', 'plugin-worker:status'];
       if (allowedInvoke.includes(channel)) {
         return ipcRenderer.invoke(channel, ...args);
       }
@@ -981,8 +984,8 @@ const electronAPIBridge = {
   Notification: function(opts) {
     const n = new Notification(opts || {});
     return {
-      show: () => { try { n.show(); } catch (e) {} },
-      close: () => { try { n.close(); } catch (e) {} },
+      show: () => { try { n.show(); } catch (e) { console.warn('⚠️ [preload] 操作失败:', e.message || e); } },
+      close: () => { try { n.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ } },
       on: (event, cb) => { n.on(event, cb); }
     };
   },
@@ -1337,17 +1340,17 @@ function createHttpServerBridge(mod, handler) {
       }
     };
     const resProxy = {
-      writeHead: (code, headers) => { try { res.writeHead(code, headers); } catch (e) {} return resProxy; },
-      setHeader: (name, value) => { try { res.setHeader(name, value); } catch (e) {} return resProxy; },
+      writeHead: (code, headers) => { try { res.writeHead(code, headers); } catch (e) { console.warn('⚠️ [preload] 操作失败:', e.message || e); } return resProxy; },
+      setHeader: (name, value) => { try { res.setHeader(name, value); } catch (e) { console.warn('⚠️ [preload] 操作失败:', e.message || e); } return resProxy; },
       getHeader: (name) => { try { return res.getHeader(name); } catch (e) { return undefined; } },
-      removeHeader: (name) => { try { res.removeHeader(name); } catch (e) {} return resProxy; },
+      removeHeader: (name) => { try { res.removeHeader(name); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ } return resProxy; },
       write: (data, encoding) => { try { return res.write(data, encoding); } catch (e) { return false; } },
-      end: (data, encoding) => { try { res.end(data, encoding); } catch (e) {} return resProxy; }
+      end: (data, encoding) => { try { res.end(data, encoding); } catch (e) { console.warn('⚠️ [preload] 操作失败:', e.message || e); } return resProxy; }
     };
     try {
       rendererHandler(reqProxy, resProxy);
     } catch (e) {
-      try { res.writeHead(500); res.end('Internal Server Error: ' + e.message); } catch (_) {}
+      try { res.writeHead(500); res.end('Internal Server Error: ' + e.message); } catch (_) { console.warn('⚠️ [preload] 操作失败:', _.message || _); }
     }
   }
 

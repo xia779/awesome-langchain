@@ -208,7 +208,7 @@ function _connectComfyUIWs(clientId, onProgress) {
   var baseUrl = Core.config.comfyuiBase || 'http://127.0.0.1:8188';
   var wsUrl = baseUrl.replace(/^http/, 'ws') + '/ws?clientId=' + clientId;
   try {
-    if (_comfyuiWs) { try { _comfyuiWs.close(); } catch (e) {} }
+    if (_comfyuiWs) { try { _comfyuiWs.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ } }
     _comfyuiWs = new WebSocket(wsUrl);
     _comfyuiWs.onmessage = function(event) {
       try {
@@ -224,7 +224,7 @@ function _connectComfyUIWs(clientId, onProgress) {
         } else if (msg.type === 'execution_error') {
           console.error('ComfyUI 执行错误:', msg.data);
         }
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [image-gen] 操作失败:', e.message || e); }
     };
     _comfyuiWs.onerror = function(e) { console.warn('ComfyUI WebSocket 错误'); };
     _comfyuiWs.onclose = function() { _comfyuiWs = null; };
@@ -410,7 +410,7 @@ async function generateComfyUI(prompt, options) {
                   console.warn('⚠️ ComfyUI 图片 base64 转换失败，使用原始 URL');
                 }
                 // 关闭 WebSocket
-                if (_comfyuiWs) { try { _comfyuiWs.close(); } catch (e) {} _comfyuiWs = null; }
+                if (_comfyuiWs) { try { _comfyuiWs.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ } _comfyuiWs = null; }
                 return {
                   url: imgUrl,
                   revised_prompt: '',
@@ -424,12 +424,12 @@ async function generateComfyUI(prompt, options) {
       }
     } catch (e) {
       if (e.message.indexOf('ComfyUI') === 0) {
-        if (_comfyuiWs) { try { _comfyuiWs.close(); } catch (e2) {} _comfyuiWs = null; }
+        if (_comfyuiWs) { try { _comfyuiWs.close(); } catch (e2) { /* 可忽略：清理路径，失败不影响主流程 */ } _comfyuiWs = null; }
         throw e;
       }
     }
   }
-  if (_comfyuiWs) { try { _comfyuiWs.close(); } catch (e) {} _comfyuiWs = null; }
+  if (_comfyuiWs) { try { _comfyuiWs.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ } _comfyuiWs = null; }
   throw new Error('ComfyUI 生成超时（3 分钟），任务 ID: ' + promptId);
 }
 

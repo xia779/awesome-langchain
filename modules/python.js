@@ -50,13 +50,13 @@ function runPython(code) {
     child.stderr.on('data', function(data) { stderr += data.toString(); });
 
     child.on('error', function(err) {
-      try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch (e) {}
+      try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch (e) { console.warn('⚠️ [python] 操作失败:', e.message || e); }
       reject('Python 执行失败: ' + err.message);
     });
 
     child.on('close', function(exitCode) {
       // 清理临时文件
-      try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch (e) {}
+      try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
 
       if (exitCode !== 0) {
         reject(stderr || 'Python 退出码: ' + exitCode);

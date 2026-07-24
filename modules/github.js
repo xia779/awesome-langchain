@@ -11,7 +11,7 @@ try {
   fs = require('fs');
   path = require('path');
   childProcess = require('child_process');
-} catch (e) {}
+} catch (e) { console.warn('⚠️ [github] 操作失败:', e.message || e); }
 
 // 解析 Windows .cmd/.bat 包装器，避免使用 shell:true（DEP0190 警告）
 function _resolveCmd(cmd) {
@@ -21,7 +21,7 @@ function _resolveCmd(cmd) {
     var pathDirs = (process.env.PATH || '').split(path.delimiter);
     for (var j = 0; j < pathDirs.length; j++) {
       var full = path.join(pathDirs[j], cmd + extensions[i]);
-      try { if (fs.existsSync(full)) return full; } catch(e) {}
+      try { if (fs.existsSync(full)) return full; } catch (e) { console.warn('⚠️ [github] 操作失败:', e.message || e); }
     }
   }
   return cmd;

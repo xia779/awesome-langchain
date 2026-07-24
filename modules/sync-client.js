@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const https = require('https');
 
 let Core = null;
 
@@ -14,6 +15,16 @@ let _syncTimer = null;
 let _lastSyncTime = 0;
 let _syncing = false;
 let _syncLog = []; // 最近 20 条同步记录
+
+// ===== Phase 5 增强：健康监控 + 退避 + 离线队列 =====
+let _consecutiveFailures = 0;       // 连续失败次数
+const MAX_CONSECUTIVE_FAILURES = 5;  // 超过此数通知用户
+let _backoffMs = 0;                  // 当前退避延迟
+const BACKOFF_BASE = 30000;          // 退避基数 30s
+const BACKOFF_MAX = 900000;          // 退避上限 15min
+let _offlineQueue = [];              // 离线期间的待推送变更
+let _offlineQueuePath = '';          // 离线队列持久化路径
+let _sessionWatermarks = {};         // sessionId → 上次同步的消息时间戳（增量同步）
 
 const MAX_LOG = 20;
 
@@ -61,7 +72,7 @@ async function pushChanges() {
     // 收集自上次同步以来的变更
     var since = _lastSyncTime || 0;
 
-    // 1. 会话变更
+    // 1. 会话变更（Phase 5: 增量消息）
     if (cfg.syncSessions && Core.db && Core.db._backend === 'sqlite') {
       changes.sessions = _getChangedSessions(since);
     }
@@ -76,6 +87,13 @@ async function pushChanges() {
       changes.config = _getSafeConfig();
     }
 
+    // Phase 5: 先 flush 离线队列中的历史变更
+    var queuedChanges = _flushOfflineQueue();
+    if (queuedChanges) {
+      changes.sessions = (queuedChanges.sessions || []).concat(changes.sessions);
+      changes.memories = (queuedChanges.memories || []).concat(changes.memories);
+    }
+
     // 推送到服务端
     var payload = {
       deviceId: cfg.deviceId,
@@ -87,6 +105,11 @@ async function pushChanges() {
 
     if (response && response.success) {
       _lastSyncTime = Date.now();
+      // Phase 5: 更新增量水位线
+      _updateWatermarks(changes.sessions);
+      // Phase 5: 重置健康计数
+      _consecutiveFailures = 0;
+      _backoffMs = 0;
       _logSync('push', changes.sessions.length, changes.memories.length, null);
       return {
         success: true,
@@ -95,10 +118,19 @@ async function pushChanges() {
       };
     } else {
       var err = (response && response.error) || '服务端拒绝';
+      _handleSyncFailure(err);
+      // Phase 5: 网络错误时入离线队列
+      if (_isNetworkError(err)) {
+        _enqueueOffline(changes);
+      }
       _logSync('push', 0, 0, err);
       return { success: false, error: err };
     }
   } catch (e) {
+    _handleSyncFailure(e.message);
+    if (_isNetworkError(e.message)) {
+      _enqueueOffline(changes);
+    }
     _logSync('push', 0, 0, e.message);
     return { success: false, error: e.message };
   } finally {
@@ -135,7 +167,7 @@ async function pullChanges() {
         try {
           Core.db.saveSession(s.id, s);
           applied.sessions++;
-        } catch (e) {}
+        } catch (e) { console.warn('⚠️ [sync-client] 操作失败:', e.message || e); }
       });
     }
 
@@ -149,7 +181,7 @@ async function pullChanges() {
               .run(m.id, m.user_id || 'admin', m.content, m.tags || '', m.created_at || Date.now());
             applied.memories++;
           }
-        } catch (e) {}
+        } catch (e) { console.warn('⚠️ [sync-client] 操作失败:', e.message || e); }
       });
     }
 
@@ -168,10 +200,14 @@ async function pullChanges() {
     }
 
     _lastSyncTime = Date.now();
+    // Phase 5: 重置健康计数
+    _consecutiveFailures = 0;
+    _backoffMs = 0;
     _logSync('pull', applied.sessions, applied.memories, null);
 
     return { success: true, applied: applied, duration: Date.now() - startTime };
   } catch (e) {
+    _handleSyncFailure(e.message);
     _logSync('pull', 0, 0, e.message);
     return { success: false, error: e.message };
   } finally {
@@ -190,29 +226,40 @@ async function syncBoth() {
   };
 }
 
-// ===== 自动同步定时器 =====
+// ===== 自动同步定时器（Phase 5: 指数退避）=====
 function startAutoSync() {
   var cfg = getSyncConfig();
   stopAutoSync();
   if (!cfg.enabled || cfg.intervalMs < 60000) return;
 
-  _syncTimer = setInterval(function() {
-    syncBoth().catch(function(e) {
-      console.warn('⚠️ 自动同步失败:', e.message);
-    });
-  }, cfg.intervalMs);
+  // Phase 5: 使用 setTimeout 链式调用（支持动态退避间隔）
+  function scheduleNext() {
+    var delay = cfg.intervalMs;
+    // 如果有退避，使用退避间隔（但不超过配置间隔的 3 倍）
+    if (_backoffMs > 0) {
+      delay = Math.min(_backoffMs, cfg.intervalMs * 3);
+    }
+    _syncTimer = setTimeout(function() {
+      syncBoth().catch(function(e) {
+        console.warn('⚠️ 自动同步失败:', e.message);
+      }).finally(function() {
+        scheduleNext(); // 链式调度下一次
+      });
+    }, delay);
+  }
 
-  console.log('🔄 自动同步已启动（间隔 ' + Math.round(cfg.intervalMs / 60000) + ' 分钟）');
+  scheduleNext();
+  console.log('🔄 自动同步已启动（间隔 ' + Math.round(cfg.intervalMs / 60000) + ' 分钟，支持退避）');
 }
 
 function stopAutoSync() {
   if (_syncTimer) {
-    clearInterval(_syncTimer);
+    clearTimeout(_syncTimer);
     _syncTimer = null;
   }
 }
 
-// ===== 辅助：获取变更的会话 =====
+// ===== 辅助：获取变更的会话（Phase 5: 增量消息同步）=====
 function _getChangedSessions(since) {
   var results = [];
   try {
@@ -224,8 +271,10 @@ function _getChangedSessions(since) {
     ).all(since);
 
     rows.forEach(function(row) {
-      // 附带消息
-      var msgs = db.prepare('SELECT role, content, timestamp FROM messages WHERE session_id = ? ORDER BY id ASC').all(row.id);
+      // Phase 5: 增量消息 — 只取该会话自上次同步后的新消息
+      var watermark = _sessionWatermarks[row.id] || 0;
+      var msgs = db.prepare('SELECT role, content, timestamp FROM messages WHERE session_id = ? AND timestamp > ? ORDER BY id ASC').all(row.id, watermark);
+      // 如果会话元数据变了但没有新消息，仍然同步元数据（标记 messages: null 表示仅元数据）
       results.push({
         id: row.id,
         userId: row.user_id,
@@ -235,13 +284,48 @@ function _getChangedSessions(since) {
         roleType: row.role_type,
         timestamp: row.timestamp,
         createdAt: row.created_at,
-        messages: msgs
+        messages: msgs.length > 0 ? msgs : null,
+        incremental: true  // 标记为增量模式
       });
     });
   } catch (e) {
     console.warn('Sync: 获取会话变更失败', e.message);
   }
   return results;
+}
+
+// Phase 5: 推送成功后更新消息水位线
+function _updateWatermarks(sessions) {
+  if (!sessions || !sessions.length) return;
+  sessions.forEach(function(s) {
+    if (s.messages && s.messages.length > 0) {
+      var maxTs = 0;
+      s.messages.forEach(function(m) { if (m.timestamp > maxTs) maxTs = m.timestamp; });
+      _sessionWatermarks[s.id] = maxTs;
+    }
+  });
+  // 持久化水位线
+  _persistWatermarks();
+}
+
+function _persistWatermarks() {
+  try {
+    if (_offlineQueuePath) {
+      var wmPath = _offlineQueuePath.replace('offline-queue.json', 'watermarks.json');
+      fs.writeFileSync(wmPath, JSON.stringify(_sessionWatermarks));
+    }
+  } catch (e) { console.warn('⚠️ [sync-client] 操作失败:', e.message || e); }
+}
+
+function _loadWatermarks() {
+  try {
+    if (_offlineQueuePath) {
+      var wmPath = _offlineQueuePath.replace('offline-queue.json', 'watermarks.json');
+      if (fs.existsSync(wmPath)) {
+        _sessionWatermarks = JSON.parse(fs.readFileSync(wmPath, 'utf8'));
+      }
+    }
+  } catch (e) { _sessionWatermarks = {}; }
 }
 
 // ===== 辅助：获取变更的记忆 =====
@@ -255,7 +339,7 @@ function _getChangedMemories(since) {
     try {
       var cols = db.prepare("PRAGMA table_info(memories)").all();
       hasUpdatedAt = cols.some(function(c) { return c.name === 'updated_at'; });
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [sync-client] 操作失败:', e.message || e); }
 
     var sql = hasUpdatedAt
       ? 'SELECT id, user_id, content, tags, created_at, updated_at FROM memories WHERE updated_at > ? ORDER BY updated_at DESC LIMIT 100'
@@ -281,11 +365,75 @@ function _getSafeConfig() {
   return safe;
 }
 
-// ===== HTTP 工具 =====
+// ===== Phase 5: 离线队列 + 健康监控 =====
+
+function _isNetworkError(msg) {
+  if (!msg) return false;
+  return msg.indexOf('ECONNREFUSED') !== -1 || msg.indexOf('ENOTFOUND') !== -1 ||
+    msg.indexOf('ETIMEDOUT') !== -1 || msg.indexOf('ECONNRESET') !== -1 ||
+    msg.indexOf('timeout') !== -1 || msg.indexOf('Failed to fetch') !== -1 ||
+    msg.indexOf('network') !== -1;
+}
+
+function _handleSyncFailure(errMsg) {
+  _consecutiveFailures++;
+  // 指数退避
+  _backoffMs = Math.min(BACKOFF_BASE * Math.pow(2, _consecutiveFailures - 1), BACKOFF_MAX);
+
+  if (_consecutiveFailures === MAX_CONSECUTIVE_FAILURES) {
+    console.error('⚠️ [sync] 连续 ' + _consecutiveFailures + ' 次同步失败，退避间隔: ' + Math.round(_backoffMs / 1000) + 's');
+    if (Core && Core.showNotification) {
+      Core.showNotification('warning', '⚠️ 云同步连续失败 ' + _consecutiveFailures + ' 次，请检查网络或服务器状态');
+    }
+  }
+}
+
+function _enqueueOffline(changes) {
+  if (!changes) return;
+  _offlineQueue.push({ time: Date.now(), changes: changes });
+  // 限制队列大小（最多 50 条）
+  if (_offlineQueue.length > 50) _offlineQueue = _offlineQueue.slice(-50);
+  _persistOfflineQueue();
+}
+
+function _flushOfflineQueue() {
+  if (_offlineQueue.length === 0) return null;
+  // 合并所有排队变更
+  var merged = { sessions: [], memories: [] };
+  _offlineQueue.forEach(function(item) {
+    if (item.changes.sessions) merged.sessions = merged.sessions.concat(item.changes.sessions);
+    if (item.changes.memories) merged.memories = merged.memories.concat(item.changes.memories);
+  });
+  _offlineQueue = [];
+  _persistOfflineQueue();
+  console.log('🔄 [sync] 已合并 ' + merged.sessions.length + ' 条离线会话变更');
+  return merged;
+}
+
+function _persistOfflineQueue() {
+  try {
+    if (_offlineQueuePath) {
+      fs.writeFileSync(_offlineQueuePath, JSON.stringify(_offlineQueue));
+    }
+  } catch (e) { console.warn('⚠️ [sync-client] 操作失败:', e.message || e); }
+}
+
+function _loadOfflineQueue() {
+  try {
+    if (_offlineQueuePath && fs.existsSync(_offlineQueuePath)) {
+      _offlineQueue = JSON.parse(fs.readFileSync(_offlineQueuePath, 'utf8'));
+      if (_offlineQueue.length > 0) {
+        console.log('📦 [sync] 恢复 ' + _offlineQueue.length + ' 条离线待同步变更');
+      }
+    }
+  } catch (e) { _offlineQueue = []; }
+}
+
+// ===== HTTP 工具（Phase 5: 支持 HTTPS）=====
 // 🔒 #7 修复：获取并缓存认证 Token
 function _resolveAuthToken() {
   if (!_cachedToken && Core && typeof Core.getAuthToken === 'function') {
-    try { _cachedToken = Core.getAuthToken() || ''; } catch (e) {}
+    try { _cachedToken = Core.getAuthToken() || ''; } catch (e) { console.warn('⚠️ [sync-client] 操作失败:', e.message || e); }
   }
   return _cachedToken;
 }
@@ -295,6 +443,8 @@ function _httpPost(url, data) {
     try {
       var parsed = new (require('url').URL)(url);
       var body = JSON.stringify(data);
+      // Phase 5: 根据协议选择 http/https 模块
+      var transport = parsed.protocol === 'https:' ? https : http;
 
       var doRequest = function(retried) {
         var headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) };
@@ -304,13 +454,13 @@ function _httpPost(url, data) {
 
         var options = {
           hostname: parsed.hostname,
-          port: parsed.port,
+          port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
           path: parsed.pathname,
           method: 'POST',
           headers: headers,
           timeout: 15000
         };
-        var req = http.request(options, function(res) {
+        var req = transport.request(options, function(res) {
           // 🔒 #7 修复：检测 401 并尝试刷新 Token 后重试一次
           if (res.statusCode === 401 && !retried) {
             console.warn('⚠️ [sync] 收到 401，尝试刷新 Token...');
@@ -355,6 +505,8 @@ function _httpGet(url) {
   return new Promise(function(resolve) {
     try {
       var parsed = new (require('url').URL)(url);
+      // Phase 5: 根据协议选择 http/https 模块
+      var transport = parsed.protocol === 'https:' ? https : http;
 
       var doRequest = function(retried) {
         var headers = {};
@@ -364,13 +516,13 @@ function _httpGet(url) {
 
         var options = {
           hostname: parsed.hostname,
-          port: parsed.port,
+          port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
           path: parsed.pathname + parsed.search,
           method: 'GET',
           headers: headers,
           timeout: 15000
         };
-        var req = http.request(options, function(res) {
+        var req = transport.request(options, function(res) {
           // 🔒 #7 修复：检测 401 并尝试刷新 Token 后重试一次
           if (res.statusCode === 401 && !retried) {
             console.warn('⚠️ [sync] 收到 401，尝试刷新 Token...');
@@ -432,7 +584,14 @@ function getSyncStatus() {
     lastSyncTime: _lastSyncTime,
     syncing: _syncing,
     autoSyncRunning: !!_syncTimer,
-    recentLog: _syncLog.slice(0, 5)
+    recentLog: _syncLog.slice(0, 5),
+    // Phase 5: 健康指标
+    health: {
+      consecutiveFailures: _consecutiveFailures,
+      backoffMs: _backoffMs,
+      offlineQueueSize: _offlineQueue.length,
+      watermarkCount: Object.keys(_sessionWatermarks).length
+    }
   };
 }
 
@@ -442,6 +601,17 @@ module.exports = {
   dependencies: ['database'],
   init: function(_Core) {
     Core = _Core;
+
+    // Phase 5: 初始化离线队列和水位线路径
+    try {
+      var syncDir = path.join(Core.DATA_ROOT, 'sync');
+      if (!fs.existsSync(syncDir)) fs.mkdirSync(syncDir, { recursive: true });
+      _offlineQueuePath = path.join(syncDir, 'offline-queue.json');
+      _loadOfflineQueue();
+      _loadWatermarks();
+    } catch (e) {
+      console.warn('⚠️ [sync] 初始化持久化路径失败:', e.message);
+    }
 
     Core.syncClient = {
       push: pushChanges,
@@ -453,12 +623,40 @@ module.exports = {
       getConfig: getSyncConfig
     };
 
+    // Phase 5: 注册 /sync 命令
+    if (Core.custom && Core.custom.registerCommand) {
+      Core.custom.registerCommand('sync', '手动触发云同步 / 查看同步状态', function(args) {
+        var sub = (args || '').trim().toLowerCase();
+        if (sub === 'status' || sub === '') {
+          var st = getSyncStatus();
+          var lines = [
+            '📡 云同步状态:',
+            '  启用: ' + (st.enabled ? '是' : '否'),
+            '  服务器: ' + st.serverUrl,
+            '  设备: ' + st.deviceId,
+            '  上次同步: ' + (st.lastSyncTime ? new Date(st.lastSyncTime).toLocaleString() : '从未'),
+            '  自动同步: ' + (st.autoSyncRunning ? '运行中' : '未运行'),
+            '  连续失败: ' + st.health.consecutiveFailures + ' 次',
+            '  离线队列: ' + st.health.offlineQueueSize + ' 条待推送'
+          ];
+          return lines.join('\n');
+        }
+        if (sub === 'push' || sub === 'pull' || sub === 'both') {
+          var task = sub === 'push' ? pushChanges() : sub === 'pull' ? pullChanges() : syncBoth();
+          return task.then(function(r) {
+            return r.success ? '✅ 同步完成: ' + JSON.stringify(r.pushed || r.applied || r) : '❌ 同步失败: ' + r.error;
+          });
+        }
+        return '用法: /sync [status|push|pull|both]';
+      });
+    }
+
     // 如果配置中启用了同步，自动启动
     var cfg = getSyncConfig();
     if (cfg.enabled) {
       setTimeout(startAutoSync, 5000);
     }
 
-    console.log('✅ 同步客户端已加载（设备: ' + cfg.deviceId + ', ' + (cfg.enabled ? '已启用' : '未启用') + '）');
+    console.log('✅ 同步客户端已加载（设备: ' + cfg.deviceId + ', ' + (cfg.enabled ? '已启用' : '未启用') + ', Phase 5 增强）');
   }
 };

@@ -23,7 +23,7 @@ function _loadWatchers() {
 function _saveWatchers() {
   try {
     fs.writeFileSync(_watchFile, JSON.stringify(_watchers, null, 2), 'utf8');
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [watcher] 操作失败:', e.message || e); }
 }
 
 // ===== 添加监控 =====
@@ -175,7 +175,7 @@ function _fireNotification(w) {
     if (typeof Notification !== 'undefined') {
       new Notification(title, { body: body });
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [watcher] 操作失败:', e.message || e); }
 
   // 应用内通知
   if (Core.notifications && Core.notifications.pushWarning) {
@@ -195,7 +195,7 @@ function _ensureTimer() {
   if (_checkTimer) return;
   if (_watchers.some(function(w) { return w.enabled; })) {
     _checkTimer = setInterval(function() {
-      checkAll().catch(function(e) {});
+      checkAll().catch(function(e) { console.warn('⚠️ [watcher] checkAll 失败:', e.message || e); });
     }, CHECK_INTERVAL);
   }
 }

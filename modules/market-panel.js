@@ -104,7 +104,7 @@ async function addWatch(input) {
     try {
       var q = await Core.marketData.getQuote([sym]);
       name = q[0] && q[0].name;
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [market-panel] 操作失败:', e.message || e); }
   }
   Core.marketDb.addWatch(sym, name || sym, Core.marketDb.listWatch().length);
   ensureWatching();
@@ -118,14 +118,14 @@ function ensureWatching() {
   var codes = Core.marketDb.listWatch().map(function(w) { return w.code; });
   if (!codes.length) return;
   _watchSubId = Core.marketData.subscribe(codes, function(snaps) {
-    snaps.forEach(function(s) { try { Core.marketDb.insertSnap(s); } catch (e) {} });
+    snaps.forEach(function(s) { try { Core.marketDb.insertSnap(s); } catch (e) { console.warn('⚠️ [market-panel] 操作失败:', e.message || e); } });
   });
 }
 
 // 🔧 B17: 取消盯盘订阅（清空自选股或模块卸载时调用）
 function stopWatching() {
   if (_watchSubId != null && Core.marketData && Core.marketData.unsubscribe) {
-    try { Core.marketData.unsubscribe(_watchSubId); } catch (e) {}
+    try { Core.marketData.unsubscribe(_watchSubId); } catch (e) { console.warn('⚠️ [market-panel] 操作失败:', e.message || e); }
     _watchSubId = null;
   }
 }

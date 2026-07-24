@@ -340,7 +340,7 @@ function createMessageElement(msg, index) {
     if (window.marked && window.marked.parse) {
       content = Core.renderMarkdown(content);
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [performance] 操作失败:', e.message || e); }
   div.innerHTML = '<div class="msg-container">'
     + '<div class="msg-avatar">' + (msg.role === 'user' ? '\ud83d\udc64' : '\ud83e\udd16') + '</div>'
     + '<div class="msg-content">' + content + '</div>'
@@ -423,7 +423,7 @@ function saveDraft() {
 function flushDraft() {
   try {
     saveDraft();
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [performance] 操作失败:', e.message || e); }
 }
 
 function flushPendingSaves() {
@@ -433,11 +433,11 @@ function flushPendingSaves() {
       var sessions = Core.session.sessions;
       Object.keys(sessions).forEach(function(id) {
         if (Core.session.saveSession) {
-          try { Core.session.saveSession(id); } catch (e) {}
+          try { Core.session.saveSession(id); } catch (e) { console.warn('⚠️ [performance] 操作失败:', e.message || e); }
         }
       });
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [performance] 操作失败:', e.message || e); }
 }
 
 function saveGenerationState() {
@@ -543,7 +543,7 @@ function checkGenerationRecovery() {
     }
 
     fs.unlinkSync(statePath);
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [performance] 操作失败:', e.message || e); }
 }
 
 function getCrashRecovery() {
@@ -562,7 +562,7 @@ function clearCrashRecovery() {
     if (fs.existsSync(recoveryPath)) fs.unlinkSync(recoveryPath);
     var statePath = Core.pathService.perUser('generation-state.json');
     if (fs.existsSync(statePath)) fs.unlinkSync(statePath);
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [performance] 操作失败:', e.message || e); }
 }
 
 // ================================================================
@@ -651,7 +651,7 @@ function triggerGC() {
   // 1. 清理离线 blob URL
   document.querySelectorAll('img[src^="blob:"]').forEach(function(img) {
     if (!img.isConnected) {
-      try { URL.revokeObjectURL(img.src); } catch (e) {}
+      try { URL.revokeObjectURL(img.src); } catch (e) { console.warn('⚠️ [performance] 操作失败:', e.message || e); }
     }
   });
 
@@ -670,7 +670,7 @@ function triggerGC() {
 
   // 4. 建议浏览器 GC
   if (window.gc) {
-    try { window.gc(); } catch (e) {}
+    try { window.gc(); } catch (e) { console.warn('⚠️ [performance] 操作失败:', e.message || e); }
   }
 }
 
@@ -731,7 +731,7 @@ function archiveOldSessions(maxAge) {
       // 逐个保存受影响的会话
       if (Core.session && Core.session.saveSession) {
         Object.keys(sessions).forEach(function(sid) {
-          try { Core.session.saveSession(sid); } catch (e) {}
+          try { Core.session.saveSession(sid); } catch (e) { console.warn('⚠️ [performance] 操作失败:', e.message || e); }
         });
       }
       // 刷新侧边栏
@@ -857,7 +857,7 @@ function setupPerformanceOptimizations() {
 
   // 预热 marked 解析器
   if (window.marked && window.marked.parse) {
-    try { window.marked.parse('warmup'); } catch (e) {}
+    try { window.marked.parse('warmup'); } catch (e) { console.warn('⚠️ [performance] 操作失败:', e.message || e); }
   }
 
   console.log('\u26a1 \u6027\u80fd\u4f18\u5316\u5df2\u542f\u52a8');

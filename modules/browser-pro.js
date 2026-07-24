@@ -210,7 +210,7 @@ async function closeTab(name) {
 // ===== 关闭浏览器 =====
 async function closeBrowser() {
   if (browser) {
-    try { await browser.close(); } catch(e) {}
+    try { await browser.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
     browser = null; defaultContext = null; defaultPage = null; pages = {}; isReady = false;
   }
 }

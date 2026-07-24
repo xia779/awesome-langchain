@@ -82,14 +82,14 @@ function loadStats() {
     if (fs.existsSync(filePath)) {
       return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [knowledge-distill] 操作失败:', e.message || e); }
   return { topicHits: {}, lastDistill: null, distillCount: 0 };
 }
 
 function saveStats(stats) {
   try {
     fs.writeFileSync(getStatsPath(), JSON.stringify(stats, null, 2), 'utf8');
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [knowledge-distill] 操作失败:', e.message || e); }
 }
 
 // ===== 核心：蒸馏引擎 =====

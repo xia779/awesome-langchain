@@ -8,7 +8,8 @@ const { createRouter } = require('./ws-router');
 const path = require('path');
 
 const PORT = parseInt(process.env.AI_SERVER_PORT || '3847', 10);
-const HOST = process.env.AI_SERVER_HOST || '0.0.0.0';
+// 🔒 默认仅监听本地 127.0.0.1，局域网访问需显式设置 AI_SERVER_HOST=0.0.0.0
+const HOST = process.env.AI_SERVER_HOST || '127.0.0.1';
 
 // ===== Initialize Core =====
 Core.loadConfig('admin');

@@ -757,7 +757,7 @@ function loadWorkflows() {
       try {
         var data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
         if (data.id) workflows[data.id] = data;
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [workflow] 操作失败:', e.message || e); }
     });
   } catch (e) { console.warn('加载工作流失败:', e.message); }
 }
@@ -985,7 +985,7 @@ function deleteWorkflow(id) {
   if (!workflows[id]) return { success: false, error: '工作流不存在' };
   delete workflows[id];
   var filePath = path.join(getWorkflowsDir(), id + '.json');
-  try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
+  try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) { console.warn('⚠️ [workflow] 操作失败:', e.message || e); }
   return { success: true };
 }
 
@@ -1036,7 +1036,7 @@ function matchRulesEnhanced(message) {
       var keywords = pat.split(',').map(function(k) { return k.trim(); }).filter(Boolean);
       matched = keywords.some(function(kw) { return text.indexOf(kw) >= 0; });
     } else if (trigger.type === 'regex') {
-      try { matched = new RegExp(pattern, trigger.caseSensitive ? '' : 'i').test(message); } catch (e) {}
+      try { matched = new RegExp(pattern, trigger.caseSensitive ? '' : 'i').test(message); } catch (e) { console.warn('⚠️ [workflow] 操作失败:', e.message || e); }
     } else if (trigger.type === 'prefix') {
       matched = text.indexOf(pat) === 0;
     }

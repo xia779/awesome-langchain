@@ -125,12 +125,12 @@ function loadCalendar() {
   try {
     var p = getCalendarPath();
     if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
-  } catch(e) {}
+  } catch (e) { console.warn('⚠️ [office-auto] 操作失败:', e.message || e); }
   return { events: [] };
 }
 
 function saveCalendar(data) {
-  try { fs.writeFileSync(getCalendarPath(), JSON.stringify(data, null, 2), 'utf8'); } catch(e) {}
+  try { fs.writeFileSync(getCalendarPath(), JSON.stringify(data, null, 2), 'utf8'); } catch (e) { console.warn('⚠️ [office-auto] 操作失败:', e.message || e); }
 }
 
 function addEvent(event) {

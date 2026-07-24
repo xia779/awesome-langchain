@@ -72,7 +72,7 @@ function createWindow(opts) {
 
 function destroyWindow(win) {
   if (win && !win.isDestroyed()) {
-    try { win.destroy(); } catch (e) {}
+    try { win.destroy(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
   }
 }
 
@@ -131,7 +131,7 @@ async function browserNavigate(url, options) {
   }
 
   var title = '';
-  try { title = currentWindow.getTitle(); } catch (e) {}
+  try { title = currentWindow.getTitle(); } catch (e) { console.warn('⚠️ [browser-automation] 操作失败:', e.message || e); }
   var finalUrl = currentWindow.webContents.getURL();
 
   // 记录历史
@@ -354,7 +354,7 @@ async function browserSubmit(selector) {
     try {
       result.finalUrl = currentWindow.webContents.getURL();
       result.finalTitle = currentWindow.getTitle();
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [browser-automation] 操作失败:', e.message || e); }
   }
   return JSON.stringify(result || { success: false, error: '执行失败' });
 }
@@ -376,7 +376,7 @@ async function browserWait(options) {
       try {
         var found = await currentWindow.webContents.executeJavaScript(code, true);
         if (found) return JSON.stringify({ success: true, found: true, waited: elapsed + 'ms' });
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [browser-automation] 操作失败:', e.message || e); }
       await sleep(interval);
       elapsed += interval;
     }
@@ -477,7 +477,7 @@ async function browserGetInfo() {
     info.windowTitle = currentWindow.getTitle();
     var bounds = currentWindow.getBounds();
     info.windowSize = { width: bounds.width, height: bounds.height };
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [browser-automation] 操作失败:', e.message || e); }
   return JSON.stringify({ success: true, info: info || {} });
 }
 

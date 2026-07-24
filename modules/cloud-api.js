@@ -89,7 +89,7 @@ function getApiKey(provider) {
 function getBaseURL(provider) {
   const service = SERVICES[provider];
   if (!service) throw new Error('不支持的提供商: ' + provider);
-  
+
   let baseURL = service.baseURL;
   if (provider === 'custom') {
     baseURL = Core.config.customBase;
@@ -98,6 +98,19 @@ function getBaseURL(provider) {
     if (!baseURL.endsWith('/v1')) baseURL = baseURL + '/v1';
   }
   return baseURL;
+}
+
+// 🔧 为每个云端提供商提供默认模型，避免 model 为空时错误地 fallback 到 gpt-3.5-turbo
+function resolveCloudModel(provider, model) {
+  if (model && typeof model === 'string' && model.trim() !== '') return model.trim();
+  const defaults = {
+    deepseek: Core.config.deepseekModel || 'deepseek-v4-flash',
+    qwen: Core.config.qwenModel || 'qwen-plus',
+    doubao: Core.config.doubaoModel || '',
+    silicon: Core.config.siliconModel || 'deepseek-ai/DeepSeek-V4-Flash',
+    custom: Core.config.customModel || 'gpt-3.5-turbo'
+  };
+  return defaults[provider] || model || 'gpt-3.5-turbo';
 }
 
 // 获取已配置 API Key 的可用云端提供商列表
@@ -361,7 +374,7 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
       const baseURL = getBaseURL(provider);
       const messages = options.messages || buildMessages(prompt, systemMsg);
 
-      let actualModel = model;
+      let actualModel = resolveCloudModel(provider, model);
       if (provider === 'doubao') {
         actualModel = model || Core.config.doubaoModel;
         if (!actualModel || !actualModel.startsWith('ep-')) {
@@ -372,7 +385,7 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
       // 🔧 temperature 强制 Float 格式（DashScope 严格要求）
       var _temp = _tempFloat(temperature);
       const requestBody = {
-        model: actualModel || 'gpt-3.5-turbo',
+        model: actualModel,
         messages: messages,
         temperature: _temp,
         max_tokens: 16384,
@@ -406,7 +419,7 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
       // 🔧 F12: 处理 tool_calls — 如果模型请求工具调用，执行后再次请求
       const toolCalls = data.choices?.[0]?.message?.tool_calls;
       if (toolCalls && toolCalls.length > 0) {
-        const followUpData = await handleToolCalls(toolCalls, messages, apiKey, baseURL, actualModel || 'gpt-3.5-turbo', temperature);
+        const followUpData = await handleToolCalls(toolCalls, messages, apiKey, baseURL, actualModel, temperature);
         if (followUpData) {
           data = followUpData;
           console.log('🔄 Function Calling: 最终回复已获取');
@@ -447,7 +460,7 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
   const baseURL = getBaseURL(provider);
   const messages = buildMessages(prompt, systemMsg);
   
-  let actualModel = model;
+  let actualModel = resolveCloudModel(provider, model);
   if (provider === 'doubao') {
     actualModel = model || Core.config.doubaoModel;
     if (!actualModel || !actualModel.startsWith('ep-')) {
@@ -457,7 +470,7 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
   // 确保 temperature 始终为有效浮点数且带小数点（DashScope 等 API 严格要求 Float 类型）
   var _temp = _tempFloat(temperature);
   var requestBody = {
-    model: actualModel || 'gpt-3.5-turbo',
+    model: actualModel,
     messages: messages,
     temperature: _temp,
     max_tokens: 16384,
@@ -616,7 +629,7 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
     console.log('🔄 Function Calling (stream): 请求最终回复...');
     var _fuTemp = _tempFloat(temperature);
     const followUpBody = {
-      model: actualModel || 'gpt-3.5-turbo',
+      model: actualModel,
       messages: messages,
       temperature: _fuTemp,
       max_tokens: 16384,

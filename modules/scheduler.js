@@ -472,7 +472,7 @@ async function executeTask(task) {
             title: '⏰ 定时提醒',
             body: (task.name || '') + ': ' + message.substring(0, 100)
           }).show();
-        } catch (e) {}
+        } catch (e) { console.warn('⚠️ [scheduler] 操作失败:', e.message || e); }
       }
     }
 

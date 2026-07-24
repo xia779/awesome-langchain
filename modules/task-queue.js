@@ -28,7 +28,7 @@ function _dbSaveTask(task) {
       "INSERT OR REPLACE INTO tasks (id, prompt, title, status, progress, progress_text, result, error, session_id, parent_task_id, mode, notify, created_at, started_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [task.id, task.prompt, task.title, task.status, task.progress, task.progressText || '', task.result || null, task.error || null, task.sessionId || null, task.parentTaskId || null, task.mode || 'normal', task.notifyOnComplete ? 1 : 0, task.createdAt, task.startedAt, task.completedAt]
     );
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [task-queue] 操作失败:', e.message || e); }
 }
 
 function _dbUpdateStatus(task) {
@@ -38,7 +38,7 @@ function _dbUpdateStatus(task) {
       "UPDATE tasks SET status=?, progress=?, progress_text=?, result=?, error=?, started_at=?, completed_at=? WHERE id=?",
       [task.status, task.progress, task.progressText || '', task.result || null, task.error || null, task.startedAt, task.completedAt, task.id]
     );
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [task-queue] 操作失败:', e.message || e); }
 }
 
 // ===== 断点恢复 =====
@@ -171,7 +171,7 @@ function _checkSubtaskAggregation(parentTaskId) {
       }
     }
     console.log('子任务聚合完成: ' + parentTaskId);
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [task-queue] 操作失败:', e.message || e); }
 }
 
 // ===== 进度更新 =====
@@ -187,7 +187,7 @@ function _notifyComplete(task) {
   var body = task.title + (task.status === 'error' ? ' - ' + task.error : '');
   try {
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification(title, { body: body });
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [task-queue] 操作失败:', e.message || e); }
   if (Core.emit) Core.emit('taskComplete', { taskId: task.id, title: task.title, status: task.status, mode: task.mode });
   console.log(title + ': ' + task.title);
 }
@@ -201,7 +201,7 @@ function getTask(taskId) {
     try {
       var rows = Core.db.query('SELECT * FROM tasks WHERE id = ?', [taskId]);
       if (rows && rows.length > 0) return _formatTask(rows[0]);
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [task-queue] 操作失败:', e.message || e); }
   }
   return null;
 }
@@ -241,7 +241,7 @@ function getTaskResult(taskId) {
     try {
       var rows = Core.db.query('SELECT result, status, error FROM tasks WHERE id = ?', [taskId]);
       if (rows && rows.length > 0) return { success: true, result: rows[0].result, status: rows[0].status, error: rows[0].error };
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [task-queue] 操作失败:', e.message || e); }
   }
   return { success: false, error: '任务不存在' };
 }

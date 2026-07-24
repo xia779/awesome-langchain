@@ -1712,6 +1712,117 @@ window._promptRoleInitialized = window._promptRoleInitialized || false;
       systemPrompt.value = Core.config.systemInstruction;
     }
   });
-  
+
+})();
+
+// ===== 右侧可折叠任务栏 =====
+(function initRightSidebar() {
+  var sidebar = document.getElementById('rightSidebar');
+  var toggle = document.getElementById('rightSidebarToggle');
+  if (!sidebar || !toggle) return;
+
+  // 从 localStorage 恢复折叠状态
+  try {
+    if (localStorage.getItem('rightSidebarCollapsed') === 'true') {
+      sidebar.classList.add('collapsed');
+    }
+  } catch (e) {}
+
+  toggle.addEventListener('click', function() {
+    sidebar.classList.toggle('collapsed');
+    try {
+      localStorage.setItem('rightSidebarCollapsed', sidebar.classList.contains('collapsed'));
+    } catch (e) {}
+  });
+
+  // 分组折叠
+  sidebar.querySelectorAll('.rs-section-title').forEach(function(title) {
+    title.addEventListener('click', function() {
+      var section = title.closest('.rs-section');
+      if (section) section.classList.toggle('collapsed');
+    });
+  });
+
+  // 快捷操作
+  sidebar.querySelectorAll('.rs-action-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var action = btn.dataset.action;
+      if (action === 'new-chat' && Core.api && Core.api.newChat) Core.api.newChat();
+      else if (action === 'clear-chat') {
+        var currentId = Core.session && Core.session.getCurrentId ? Core.session.getCurrentId() : null;
+        if (currentId && confirm('确定清空当前会话的所有消息吗？')) {
+          var sess = Core.session.sessions[currentId];
+          if (sess) { sess.messages = []; Core.session.saveSession(currentId); Core.session.renderMessages(currentId); }
+        }
+      }
+      else if (action === 'export-md' && Core.api && Core.api.exportCurrentSessionMarkdown) Core.api.exportCurrentSessionMarkdown();
+      else if (action === 'settings') {
+        var settingsModal = document.getElementById('settingsModal');
+        if (settingsModal) settingsModal.classList.add('active');
+      }
+    });
+  });
+
+  // 待办/任务列表更新
+  function updateTasks() {
+    var list = document.getElementById('rsTaskList');
+    if (!list) return;
+    var tasks = Core.api && Core.api.getBackgroundTasks ? Core.api.getBackgroundTasks() : [];
+    if (!tasks.length) {
+      list.innerHTML = '<div class="rs-empty">暂无待办任务</div>';
+      return;
+    }
+    list.innerHTML = tasks.map(function(t) {
+      var statusClass = t.status === 'running' ? 'rs-task-running' : (t.status === 'error' ? 'rs-task-error' : 'rs-task-done');
+      var statusText = t.status === 'running' ? '运行中' : (t.status === 'error' ? '失败' : '完成');
+      return '<div class="rs-item ' + statusClass + '"><span class="material-icons-outlined">' +
+        (t.status === 'running' ? 'hourglass_top' : (t.status === 'error' ? 'error' : 'check_circle')) +
+        '</span><span class="rs-status">' + statusText + '</span><span>' + (t.role || '任务') + '</span></div>';
+    }).join('');
+  }
+
+  // 产物列表更新（导出/生成的文件）
+  function updateOutputs() {
+    var list = document.getElementById('rsOutputList');
+    if (!list) return;
+    var outputs = Core.session && Core.session.currentOutputs ? Core.session.currentOutputs : [];
+    if (!outputs.length) {
+      list.innerHTML = '<div class="rs-empty">暂无产物文件</div>';
+      return;
+    }
+    list.innerHTML = outputs.map(function(f) {
+      return '<div class="rs-item" title="' + (f.name || '') + '"><span class="material-icons-outlined">description</span><span>' + (f.name || '产物') + '</span></div>';
+    }).join('');
+  }
+
+  // 工作文件列表更新
+  function updateFiles() {
+    var list = document.getElementById('rsFileList');
+    if (!list) return;
+    var files = Core.session && Core.session.currentAttachments ? Core.session.currentAttachments : [];
+    if (!files.length) {
+      list.innerHTML = '<div class="rs-empty">暂无工作文件</div>';
+      return;
+    }
+    list.innerHTML = files.map(function(f) {
+      return '<div class="rs-item" title="' + (f.name || '') + '"><span class="material-icons-outlined">insert_drive_file</span><span>' + (f.name || '文件') + '</span></div>';
+    }).join('');
+  }
+
+  // 定时刷新
+  setInterval(function() {
+    updateTasks();
+    updateOutputs();
+    updateFiles();
+  }, 1000);
+
+  // 事件监听
+  Core.on('typingEnd', function() { updateTasks(); updateOutputs(); });
+  Core.on('sessionSwitched', function() { updateTasks(); updateOutputs(); updateFiles(); });
+  Core.on('messageAdded', function() { updateTasks(); updateOutputs(); });
+
+  updateTasks();
+  updateOutputs();
+  updateFiles();
 })();
 

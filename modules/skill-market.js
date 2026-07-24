@@ -169,7 +169,7 @@ function publishLocal(skillId) {
 
     var skillJson = JSON.parse(fs.readFileSync(path.join(skillDir, 'skill.json'), 'utf8'));
     var promptMd = '';
-    try { promptMd = fs.readFileSync(path.join(skillDir, 'prompt.md'), 'utf8'); } catch (e) {}
+    try { promptMd = fs.readFileSync(path.join(skillDir, 'prompt.md'), 'utf8'); } catch (e) { console.warn('⚠️ [skill-market] 操作失败:', e.message || e); }
 
     _localRegistry.push(Object.assign({}, skillJson, { prompt: promptMd, publishedAt: Date.now() }));
 
@@ -195,11 +195,11 @@ function listInstalled() {
           try {
             var data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
             installed.push({ id: data.id || dir, name: data.name, description: data.description, version: data.version });
-          } catch (e) {}
+          } catch (e) { console.warn('⚠️ [skill-market] 操作失败:', e.message || e); }
         }
       });
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [skill-market] 操作失败:', e.message || e); }
   return installed;
 }
 
@@ -244,7 +244,7 @@ module.exports = {
     try {
       var regFile = Core.pathService.perUser('skill-registry-local.json');
       if (fs.existsSync(regFile)) _localRegistry = JSON.parse(fs.readFileSync(regFile, 'utf8'));
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [skill-market] 操作失败:', e.message || e); }
 
     Core.skillMarket = {
       search: searchSkills,

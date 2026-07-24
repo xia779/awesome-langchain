@@ -27,7 +27,7 @@ function getAllowedDirs() {
   try {
     const os = require('os');
     dirs.push(path.join(os.homedir(), 'Desktop'));
-  } catch(e) {}
+  } catch (e) { console.warn('⚠️ [tools] 操作失败:', e.message || e); }
   return dirs;
 }
 
@@ -385,7 +385,7 @@ const tools = {
         return new Promise((resolve) => {
           exec(`python "${tmpFile}"`, { timeout: 30000, cwd: tmpDir }, (error, stdout, stderr) => {
             // 清理临时文件
-            try { fs.unlinkSync(tmpFile); } catch (e) {}
+            try { fs.unlinkSync(tmpFile); } catch (e) { console.warn('⚠️ [tools] 操作失败:', e.message || e); }
             if (error) {
               resolve(`❌ Python执行错误：\n${stderr || error.message}`);
             } else {
@@ -400,7 +400,7 @@ const tools = {
           });
         });
       } catch (err) {
-        try { fs.unlinkSync(tmpFile); } catch (e) {}
+        try { fs.unlinkSync(tmpFile); } catch (e) { console.warn('⚠️ [tools] 操作失败:', e.message || e); }
         return `❌ 执行失败：${err.message}`;
       }
     }
@@ -486,7 +486,7 @@ const tools = {
                     size: stat.size,
                     modified: stat.mtime.toISOString().substring(0, 19).replace('T', ' '),
                   });
-                } catch (e) {}
+                } catch (e) { console.warn('⚠️ [tools] 操作失败:', e.message || e); }
               }
             }
           }
@@ -656,12 +656,12 @@ const tools = {
             var files = 0, dirs = 0;
             items.forEach(function(item) {
               var p = path.join(file_path, item);
-              try { if (fs.statSync(p).isDirectory()) dirs++; else files++; } catch(e) {}
+              try { if (fs.statSync(p).isDirectory()) dirs++; else files++; } catch (e) { console.warn('⚠️ [tools] 操作失败:', e.message || e); }
             });
             info['文件数'] = files;
             info['子目录数'] = dirs;
             info['项目总数'] = items.length;
-          } catch (e) {}
+          } catch (e) { console.warn('⚠️ [tools] 操作失败:', e.message || e); }
         }
 
         var output = '📋 文件信息\n\n';

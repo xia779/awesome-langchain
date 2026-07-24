@@ -76,9 +76,9 @@ function spawnService() {
   }
   var script = path.join(__dirname, '..', 'scripts', 'pytdx_service.py');
   var logDir = path.join(Core.DATA_ROOT, 'logs');
-  try { if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true }); } catch (e) {}
+  try { if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true }); } catch (e) { console.warn('⚠️ [market-data] 操作失败:', e.message || e); }
   var logStream;
-  try { logStream = fs.createWriteStream(path.join(logDir, 'pytdx_service.log'), { flags: 'a' }); } catch (e) {}
+  try { logStream = fs.createWriteStream(path.join(logDir, 'pytdx_service.log'), { flags: 'a' }); } catch (e) { console.warn('⚠️ [market-data] 操作失败:', e.message || e); }
   try {
     var child = spawn(python, [script, '--port', String(getPort())], {
       cwd: path.join(__dirname, '..'), windowsHide: true,
@@ -249,7 +249,7 @@ async function tick() {
     var snaps = await getQuote(Object.keys(codeSet));
     state.listeners.forEach(function(l) {
       var mine = snaps.filter(function(s) { return l.codes.indexOf(s.code) >= 0; });
-      if (mine.length) { try { l.cb(mine); } catch (e) {} }
+      if (mine.length) { try { l.cb(mine); } catch (e) { console.warn('⚠️ [market-data] 操作失败:', e.message || e); } }
     });
   } catch (e) { /* 本轮失败，下轮重试 */ }
 }
@@ -287,7 +287,7 @@ module.exports = {
       ensureService: ensureService, _reset: _reset,
     };
     if (!Core.config || Core.config.pytdxAutoStart !== false) {
-      setTimeout(function() { ensureService().catch(function() {}); }, 3000);
+      setTimeout(function() { ensureService().catch(function(_e) { console.warn('⚠️ [market-data] pytdx 服务启动失败:', _e.message || _e); }); }, 3000);
     }
     console.log('market-data 模块已加载（pytdx sidecar :' + getPort() + ' → 腾讯 → 缓存 三级降级）');
   },

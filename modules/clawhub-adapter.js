@@ -18,7 +18,7 @@ function loadInstalled() {
   try {
     var p = getInstalledPath();
     if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
-  } catch(e) {}
+  } catch (e) { console.warn('⚠️ [clawhub-adapter] 操作失败:', e.message || e); }
   return { skills: [], lastSync: null };
 }
 
@@ -27,7 +27,7 @@ function saveInstalled(data) {
     var dir = path.join(Core.DATA_ROOT, 'skills');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(getInstalledPath(), JSON.stringify(data, null, 2), 'utf8');
-  } catch(e) {}
+  } catch (e) { console.warn('⚠️ [clawhub-adapter] 操作失败:', e.message || e); }
 }
 
 // ===== HTTP 请求工具 =====

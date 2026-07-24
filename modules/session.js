@@ -495,7 +495,7 @@ function autoTitle(sessionId) {
           renderChatList();
         }
       }
-    }).catch(function() {});
+    }).catch(function(_e) { console.warn('⚠️ [session] 异步操作失败:', _e.message || _e); });
   }
 }
 

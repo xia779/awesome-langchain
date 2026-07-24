@@ -222,7 +222,7 @@ async function initKnowledgePanel() {
             const tmpFile = path.join(os.tmpdir(), 'knowledge-upload-' + Date.now() + '.' + ext);
             fs.writeFileSync(tmpFile, Buffer.from(content));
             result = await Core.knowledge.uploadDocument(tmpFile);
-            try { fs.unlinkSync(tmpFile); } catch(e) {}
+            try { fs.unlinkSync(tmpFile); } catch (e) { console.warn('⚠️ [settings] 操作失败:', e.message || e); }
           } else {
             result = await Core.knowledge.uploadDocument({ content: content, fileName: file.name });
           }

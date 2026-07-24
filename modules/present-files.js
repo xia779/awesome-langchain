@@ -11,7 +11,7 @@ try {
   fs = require('fs');
   path = require('path');
   shell = require('electron').shell;
-} catch (e) {}
+} catch (e) { console.warn('⚠️ [present-files] 操作失败:', e.message || e); }
 
 // 已处理的文件路径集合（防重复）
 var presentedFiles = new WeakSet();
@@ -97,7 +97,7 @@ function createFileCard(filepath) {
     stat = fs.statSync(filepath);
     sizeStr = formatFileSize(stat.size);
     modifiedStr = stat.mtime.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [present-files] 操作失败:', e.message || e); }
 
   // 卡片容器
   var card = document.createElement('div');

@@ -227,7 +227,7 @@ function init(_Core) {
       if (!response.ok || ctype.indexOf('json') !== -1) {
         this._voxcpmAbortController = null;
         var errData = {};
-        try { errData = await response.json(); } catch (e2) {}
+        try { errData = await response.json(); } catch (e2) { console.warn('⚠️ [voice] 操作失败:', e2.message || e2); }
         if (errData && errData.stale) return false; // 过期请求=已被取代，视为取消
         throw new Error('HTTP ' + response.status + ': ' + (errData.error || response.statusText));
       }
@@ -238,7 +238,7 @@ function init(_Core) {
       var AudioCtx = window.AudioContext || window.webkitAudioContext;
       var ctx;
       try { ctx = new AudioCtx({ sampleRate: sampleRate }); } catch (e) { ctx = new AudioCtx(); }
-      if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+      if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) { console.warn('⚠️ [voice] 操作失败:', e.message || e); } }
       this._streamCtx = ctx;
       this._streamSources = [];
 
@@ -400,7 +400,7 @@ function init(_Core) {
       var AudioCtx = window.AudioContext || window.webkitAudioContext;
       var ctx;
       try { ctx = new AudioCtx({ sampleRate: sampleRate }); } catch (e) { ctx = new AudioCtx(); }
-      if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+      if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) { console.warn('⚠️ [voice] 操作失败:', e.message || e); } }
       this._streamCtx = ctx;
       this._streamSources = [];
 
@@ -515,7 +515,7 @@ function init(_Core) {
         var ctype = response.headers.get('Content-Type') || '';
         if (!response.ok || ctype.indexOf('json') !== -1) {
           var errData = {};
-          try { errData = await response.json(); } catch (e2) {}
+          try { errData = await response.json(); } catch (e2) { console.warn('⚠️ [voice] 操作失败:', e2.message || e2); }
           this._voxcpmAbortController = null;
           if (errData && errData.stale) { this._cleanupStream(); return false; }
           var msg = 'HTTP ' + response.status + ': ' + (errData.error || response.statusText);
@@ -633,12 +633,12 @@ function init(_Core) {
       if (this._streamDoneTimer) { clearTimeout(this._streamDoneTimer); this._streamDoneTimer = null; }
       if (this._streamSources) {
         for (var i = 0; i < this._streamSources.length; i++) {
-          try { this._streamSources[i].stop(); } catch (e) {}
+          try { this._streamSources[i].stop(); } catch (e) { console.warn('⚠️ [voice] 操作失败:', e.message || e); }
         }
         this._streamSources = [];
       }
       if (this._streamCtx) {
-        try { this._streamCtx.close(); } catch (e) {}
+        try { this._streamCtx.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
         this._streamCtx = null;
       }
       if (this._streamResolve) {
@@ -671,7 +671,7 @@ function init(_Core) {
 
       if (!response.ok) {
         var errData = {};
-        try { errData = await response.json(); } catch (e2) {}
+        try { errData = await response.json(); } catch (e2) { console.warn('⚠️ [voice] 操作失败:', e2.message || e2); }
         throw new Error('HTTP ' + response.status + ': ' + (errData.error || response.statusText));
       }
 
@@ -720,7 +720,7 @@ function init(_Core) {
 
       if (!response.ok) {
         var errData = {};
-        try { errData = await response.json(); } catch (e2) {}
+        try { errData = await response.json(); } catch (e2) { console.warn('⚠️ [voice] 操作失败:', e2.message || e2); }
         throw new Error('HTTP ' + response.status + ': ' + (errData.error || response.statusText));
       }
 
@@ -780,7 +780,7 @@ function init(_Core) {
 
       if (!response.ok) {
         var errData = {};
-        try { errData = await response.json(); } catch (e2) {}
+        try { errData = await response.json(); } catch (e2) { console.warn('⚠️ [voice] 操作失败:', e2.message || e2); }
         throw new Error('HTTP ' + response.status + ': ' + (errData.error || response.statusText));
       }
 
@@ -835,7 +835,7 @@ function init(_Core) {
 
       if (!response.ok) {
         var errText = '';
-        try { errText = await response.text(); } catch (e2) {}
+        try { errText = await response.text(); } catch (e2) { console.warn('⚠️ [voice] 操作失败:', e2.message || e2); }
         throw new Error('HTTP ' + response.status + ': ' + errText);
       }
 
@@ -908,7 +908,7 @@ function init(_Core) {
           this.currentAudio.pause();
           this.currentAudio.currentTime = 0;
           if (this.currentAudio.src) URL.revokeObjectURL(this.currentAudio.src);
-        } catch (e) {}
+        } catch (e) { console.warn('⚠️ [voice] 操作失败:', e.message || e); }
         this.currentAudio = null;
       }
       // 停止浏览器朗读
@@ -1037,7 +1037,7 @@ function init(_Core) {
 
               if (!response.ok) {
                 var errData = {};
-                try { errData = await response.json(); } catch (e2) {}
+                try { errData = await response.json(); } catch (e2) { console.warn('⚠️ [voice] 操作失败:', e2.message || e2); }
                 throw new Error('HTTP ' + response.status + ': ' + (errData.error || ''));
               }
 
@@ -1141,7 +1141,7 @@ function init(_Core) {
 
       if (!response.ok) {
         var errText = '';
-        try { errText = await response.text(); } catch (e2) {}
+        try { errText = await response.text(); } catch (e2) { console.warn('⚠️ [voice] 操作失败:', e2.message || e2); }
         throw new Error('HTTP ' + response.status + ': ' + errText);
       }
 
@@ -1230,7 +1230,7 @@ function init(_Core) {
     stopListening() {
       // 云端 ASR：停止 MediaRecorder（触发 onstop → 自动上传）
       if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-        try { this.mediaRecorder.stop(); } catch (e) {}
+        try { this.mediaRecorder.stop(); } catch (e) { console.warn('⚠️ [voice] 操作失败:', e.message || e); }
       }
       this.mediaRecorder = null;
 
@@ -1242,7 +1242,7 @@ function init(_Core) {
 
       // 浏览器 SpeechRecognition
       if (this.recognition) {
-        try { this.recognition.stop(); } catch (e) {}
+        try { this.recognition.stop(); } catch (e) { console.warn('⚠️ [voice] 操作失败:', e.message || e); }
         this.recognition = null;
       }
 

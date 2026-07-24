@@ -9,7 +9,7 @@ var path = null;
 try {
   fs = require('fs');
   path = require('path');
-} catch (e) {}
+} catch (e) { console.warn('⚠️ [project-context] 操作失败:', e.message || e); }
 
 // ═══════════════════════════════════════════
 // 状态
@@ -269,7 +269,7 @@ function startWatching(dir) {
 
 function stopWatching() {
   if (state.fileWatcher) {
-    try { state.fileWatcher.close(); } catch (e) {}
+    try { state.fileWatcher.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
     state.fileWatcher = null;
   }
   if (state._reloadTimer) {

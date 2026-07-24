@@ -5,7 +5,7 @@ let Core = null;
 // 当前版本：优先从 package.json 读取（打包后用 electron app.getVersion 兜底）
 let CURRENT_VERSION = '1.1.0';
 try { CURRENT_VERSION = require('../package.json').version; } catch (e) {
-  try { CURRENT_VERSION = require('electron').app.getVersion(); } catch (e2) {}
+  try { CURRENT_VERSION = require('electron').app.getVersion(); } catch (e2) { console.warn('⚠️ [update] 操作失败:', e2.message || e2); }
 }
 
 // 远程 version.json 的 Raw 链接（替换为你自己的）

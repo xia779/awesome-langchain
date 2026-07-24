@@ -132,7 +132,7 @@ module.exports = function(ctx) {
       if (Core.config && Core.config._user_profiles) {
         return Core.config._user_profiles[userId] || {};
       }
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [memory-enhance] 操作失败:', e.message || e); }
     return {};
   }
 

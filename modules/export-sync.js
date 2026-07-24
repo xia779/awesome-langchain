@@ -3,7 +3,7 @@
 let Core = null;
 let ipcRenderer = null;
 var _htmlUtils = require('./html-utils');
-try { ipcRenderer = require('electron').ipcRenderer; } catch (e) {}
+try { ipcRenderer = require('electron').ipcRenderer; } catch (e) { console.warn('⚠️ [export-sync] 操作失败:', e.message || e); }
 
 // ===== 配置 =====
 const CONFIG = {
@@ -220,7 +220,7 @@ function getSyncConfig() {
     if (require('fs').existsSync(configPath)) {
       return JSON.parse(require('fs').readFileSync(configPath, 'utf8'));
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [export-sync] 操作失败:', e.message || e); }
   return { enabled: false, url: '', username: '', password: '', path: '/ai-agent-sync/' };
 }
 
@@ -386,7 +386,7 @@ function cleanupOldBackups(backupDir) {
       var oldest = files.shift();
       require('fs').unlinkSync(require('path').join(backupDir, oldest));
     }
-  } catch (e) {}
+  } catch (e) { console.warn('⚠️ [export-sync] 操作失败:', e.message || e); }
 }
 
 function getBackupVersions() {
@@ -496,7 +496,7 @@ function saveExportFile(result) {
       try {
         var clipboard = require('electron').clipboard;
         clipboard.writeText(result.content);
-      } catch (e) {}
+      } catch (e) { console.warn('⚠️ [export-sync] 操作失败:', e.message || e); }
     }
   } catch (e) {
     console.warn('保存导出文件失败:', e);

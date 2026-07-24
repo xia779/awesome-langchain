@@ -39,12 +39,12 @@ function getOverview() {
 
   // 分析数据
   if (Core.analytics && Core.analytics.getOverview) {
-    try { overview.analytics = Core.analytics.getOverview(7); } catch (e) {}
+    try { overview.analytics = Core.analytics.getOverview(7); } catch (e) { console.warn('⚠️ [dashboard] 操作失败:', e.message || e); }
   }
 
   // 连接健康
   if (Core.recovery && Core.recovery.getHealthStatus) {
-    try { overview.health = Core.recovery.getHealthStatus(); } catch (e) {}
+    try { overview.health = Core.recovery.getHealthStatus(); } catch (e) { console.warn('⚠️ [dashboard] 操作失败:', e.message || e); }
   }
 
   // 插件状态
@@ -55,17 +55,17 @@ function getOverview() {
         count: pluginList.length,
         list: pluginList.slice(0, 10),
       };
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [dashboard] 操作失败:', e.message || e); }
   }
 
   // 同步状态
   if (Core.exportSync && Core.exportSync.getSyncStatus) {
-    try { overview.sync = Core.exportSync.getSyncStatus(); } catch (e) {}
+    try { overview.sync = Core.exportSync.getSyncStatus(); } catch (e) { console.warn('⚠️ [dashboard] 操作失败:', e.message || e); }
   }
 
   // 性能统计
   if (Core.performance && Core.performance.getStats) {
-    try { overview.performance = Core.performance.getStats(); } catch (e) {}
+    try { overview.performance = Core.performance.getStats(); } catch (e) { console.warn('⚠️ [dashboard] 操作失败:', e.message || e); }
   }
 
   // 会话统计
@@ -82,7 +82,7 @@ function getOverview() {
         totalMessages: totalMessages,
         currentId: Core.session.getCurrentId ? Core.session.getCurrentId() : null,
       };
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [dashboard] 操作失败:', e.message || e); }
   }
 
   return overview;
@@ -157,7 +157,7 @@ function renderDashboard(args) {
   lines.push('   总消息: ' + (overview.sessions ? overview.sessions.totalMessages : '?'));
   if (overview.sessions && overview.sessions.currentId) {
     var currentTitle = '';
-    try { currentTitle = Core.session.sessions[overview.sessions.currentId].title || '未命名'; } catch (e) {}
+    try { currentTitle = Core.session.sessions[overview.sessions.currentId].title || '未命名'; } catch (e) { console.warn('⚠️ [dashboard] 操作失败:', e.message || e); }
     lines.push('   当前: ' + currentTitle.substring(0, 30));
   }
   lines.push('');

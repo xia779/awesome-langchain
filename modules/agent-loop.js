@@ -117,8 +117,7 @@ function extractJSONFromText(text) {
     try {
       const result = JSON.parse(trimmed);
       return result;
-    } catch (e) {
-    }
+    } catch (e) { console.warn('⚠️ [agent-loop] 操作失败:', e.message || e); }
   }
   
   // 尝试2：提取 ```json 代码块
@@ -127,8 +126,7 @@ function extractJSONFromText(text) {
     try {
       const result = JSON.parse(codeBlockMatch[1].trim());
       return result;
-    } catch (e) {
-    }
+    } catch (e) { console.warn('⚠️ [agent-loop] 操作失败:', e.message || e); }
   }
   
   // 尝试3：提取第一个完整JSON对象（括号匹配，处理多个JSON拼接）
@@ -145,8 +143,7 @@ function extractJSONFromText(text) {
       try {
         const result = JSON.parse(jsonStr);
         return result;
-      } catch (e) {
-      }
+      } catch (e) { console.warn('⚠️ [agent-loop] 操作失败:', e.message || e); }
     }
   }
   
@@ -156,8 +153,7 @@ function extractJSONFromText(text) {
     try {
       const result = JSON.parse(actionMatch[0]);
       return result;
-    } catch (e) {
-    }
+    } catch (e) { console.warn('⚠️ [agent-loop] 操作失败:', e.message || e); }
   }
   
   return null;

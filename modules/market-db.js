@@ -26,7 +26,7 @@ var DDL = [
 
 function createSqlImpl() {
   var dbPath = (Core.config && Core.config.marketDbPath) || path.join(Core.DATA_ROOT, 'market.db');
-  try { fs.mkdirSync(path.dirname(dbPath), { recursive: true }); } catch (e) {}
+  try { fs.mkdirSync(path.dirname(dbPath), { recursive: true }); } catch (e) { console.warn('⚠️ [market-db] 操作失败:', e.message || e); }
   var db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   DDL.forEach(function(sql) { db.exec(sql); });

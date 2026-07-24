@@ -167,7 +167,7 @@ async function connectServer(serverId) {
       capabilities: {},
       clientInfo: { name: 'ai-agent-pro', version: '1.1.0' },
     });
-    sendRpc(serverId, 'notifications/initialized', {}).catch(function () {});
+    sendRpc(serverId, 'notifications/initialized', {}).catch(function (_e) { /* 可忽略：初始化通知发送失败不影响连接 */ });
 
     externalServers[serverId].status = 'connected';
 
@@ -196,7 +196,7 @@ function disconnectServer(serverId) {
   if (!server) return;
   unregisterServerTools(serverId);
   if (server.process) {
-    try { server.process.kill(); } catch (e) {}
+    try { server.process.kill(); } catch (e) { console.warn('⚠️ [mcp] 操作失败:', e.message || e); }
     server.process = null;
   }
   server.status = 'disconnected';
@@ -252,8 +252,8 @@ function getAllowedDirs() {
   }
   dirs.push(Core.pathService.global());
   dirs.push('E:\\my-ai-desktop');
-  try { dirs.push(path.join(os.homedir(), 'Desktop')); } catch (e) {}
-  try { dirs.push(os.tmpdir()); } catch (e) {}
+  try { dirs.push(path.join(os.homedir(), 'Desktop')); } catch (e) { console.warn('⚠️ [mcp] 操作失败:', e.message || e); }
+  try { dirs.push(os.tmpdir()); } catch (e) { console.warn('⚠️ [mcp] 操作失败:', e.message || e); }
   return dirs.map(d => path.resolve(d));
 }
 

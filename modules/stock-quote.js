@@ -13,8 +13,8 @@ let iconv = null;
 try { iconv = require('iconv-lite'); } catch (e) { /* 用 TextDecoder 兜底 */ }
 
 function decodeGBK(buf) {
-  try { if (iconv) return iconv.decode(buf, 'gbk'); } catch (e) {}
-  try { return new TextDecoder('gbk').decode(buf); } catch (e) {}
+  try { if (iconv) return iconv.decode(buf, 'gbk'); } catch (e) { console.warn('⚠️ [stock-quote] 操作失败:', e.message || e); }
+  try { return new TextDecoder('gbk').decode(buf); } catch (e) { console.warn('⚠️ [stock-quote] 操作失败:', e.message || e); }
   return buf.toString('utf8');
 }
 

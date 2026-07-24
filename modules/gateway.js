@@ -121,7 +121,7 @@ function _setupConnectionHandler() {
         console.warn('[gateway] 认证超时，断开连接: ' + clientIp);
         sendToClient(ws, { type: 'error', message: '认证超时', code: 'AUTH_TIMEOUT' });
         clients.delete(ws);
-        try { ws.close(); } catch (e) {}
+        try { ws.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
       }
     }, AUTH_TIMEOUT);
     clients.get(ws).authTimer = authTimer;
@@ -169,11 +169,11 @@ function _startHeartbeat() {
       if (now - client.lastHeartbeat > DEVICE_TIMEOUT) {
         if (client.deviceId) setDeviceOffline(client.deviceId);
         clients.delete(ws);
-        try { ws.close(); } catch (e) {}
+        try { ws.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
         return;
       }
       // 主动发 ping，标准 WS 客户端自动回 pong（触发 ws.on('pong') 刷新 lastHeartbeat），避免误判离线
-      try { ws.ping(); } catch (e) {}
+      try { ws.ping(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
     });
   }, HEARTBEAT_INTERVAL);
 }
@@ -274,7 +274,7 @@ function handleAuth(ws, client, msg) {
 function getServerToken() {
   // 优先通过 Core.getAuthToken（core-v10.js 定义的 IPC 同步获取）
   if (Core && typeof Core.getAuthToken === 'function') {
-    try { return Core.getAuthToken() || ''; } catch (e) {}
+    try { return Core.getAuthToken() || ''; } catch (e) { console.warn('⚠️ [gateway] 操作失败:', e.message || e); }
   }
   // 回退：直接 IPC
   try {
@@ -507,7 +507,7 @@ function broadcast(msg) {
     try {
       // 🔒 仅向已认证客户端广播
       if (client.authenticated && ws.readyState === 1) ws.send(data);
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [gateway] 操作失败:', e.message || e); }
   });
 }
 
@@ -517,7 +517,7 @@ function broadcastToUser(userId, msg) {
   clients.forEach(function(client, ws) {
     try {
       if (client.authenticated && client.userId === userId && ws.readyState === 1) ws.send(data);
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [gateway] 操作失败:', e.message || e); }
   });
 }
 
@@ -660,7 +660,7 @@ function stopServer() {
   if (wss) {
     clients.forEach(function(client, ws) {
       if (client.authTimer) clearTimeout(client.authTimer);
-      try { ws.close(); } catch (e) {}
+      try { ws.close(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
     });
     clients.clear();
     wss.close();

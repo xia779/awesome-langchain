@@ -206,7 +206,7 @@ function connectSseStream(serverId) {
             try {
               var notification = JSON.parse(dataLine);
               handleServerNotification(serverId, notification);
-            } catch (e) {}
+            } catch (e) { console.warn('⚠️ [mcp-http] 操作失败:', e.message || e); }
           }
         });
       });
@@ -342,7 +342,7 @@ function disconnectHttpServer(serverId) {
 
   // 关闭 SSE 连接
   if (server._sseReq) {
-    try { server._sseReq.destroy(); } catch (e) {}
+    try { server._sseReq.destroy(); } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
     server._sseReq = null;
   }
 

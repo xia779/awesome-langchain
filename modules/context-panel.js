@@ -172,7 +172,7 @@ function collectKnowledgeContext(sessionId) {
 
   // 获取知识库状态
   if (Core.knowledge.getStats) {
-    try { result.stats = Core.knowledge.getStats(); } catch(e) {}
+    try { result.stats = Core.knowledge.getStats(); } catch (e) { console.warn('⚠️ [context-panel] 操作失败:', e.message || e); }
   }
 
   // 尝试搜索相关内容
@@ -205,7 +205,7 @@ function collectMemoryContext(sessionId) {
   var result = { enabled: true, relevant: [], stats: null };
 
   if (Core.memory.getStats) {
-    try { result.stats = Core.memory.getStats(); } catch(e) {}
+    try { result.stats = Core.memory.getStats(); } catch (e) { console.warn('⚠️ [context-panel] 操作失败:', e.message || e); }
   }
 
   // 获取相关记忆
@@ -220,7 +220,7 @@ function collectMemoryContext(sessionId) {
         try {
           var memories = Core.memory.search(lastMsg, 5);
           result.relevant = memories || [];
-        } catch(e) {}
+        } catch (e) { console.warn('⚠️ [context-panel] 操作失败:', e.message || e); }
       }
     }
   }
@@ -240,11 +240,11 @@ function collectAgentContext() {
       result.maxSteps = status.maxSteps;
       result.availableTools = status.availableTools || [];
       result.historyCount = status.historyCount || 0;
-    } catch(e) {}
+    } catch (e) { console.warn('⚠️ [context-panel] 操作失败:', e.message || e); }
   }
 
   if (Core.agent.getHistory) {
-    try { result.recentHistory = Core.agent.getHistory(3); } catch(e) {}
+    try { result.recentHistory = Core.agent.getHistory(3); } catch (e) { console.warn('⚠️ [context-panel] 操作失败:', e.message || e); }
   }
 
   return result;
@@ -281,11 +281,11 @@ function collectToolsInfo() {
   var result = { enabled: true, tools: [] };
 
   if (Core.toolsRegistry.listTools) {
-    try { result.tools = Core.toolsRegistry.listTools(); } catch(e) {}
+    try { result.tools = Core.toolsRegistry.listTools(); } catch (e) { console.warn('⚠️ [context-panel] 操作失败:', e.message || e); }
   }
 
   if (Core.toolsRegistry.getToolDefinitions) {
-    try { result.definitions = Core.toolsRegistry.getToolDefinitions(); } catch(e) {}
+    try { result.definitions = Core.toolsRegistry.getToolDefinitions(); } catch (e) { console.warn('⚠️ [context-panel] 操作失败:', e.message || e); }
   }
 
   return result;
@@ -296,11 +296,11 @@ function collectWorkflowInfo(sessionId) {
   var result = { enabled: true, active: null, templates: [] };
 
   if (Core.workflow.getActiveWorkflow) {
-    try { result.active = Core.workflow.getActiveWorkflow(); } catch(e) {}
+    try { result.active = Core.workflow.getActiveWorkflow(); } catch (e) { console.warn('⚠️ [context-panel] 操作失败:', e.message || e); }
   }
 
   if (Core.workflow.listTemplates) {
-    try { result.templates = Core.workflow.listTemplates(); } catch(e) {}
+    try { result.templates = Core.workflow.listTemplates(); } catch (e) { console.warn('⚠️ [context-panel] 操作失败:', e.message || e); }
   }
 
   return result;
@@ -323,7 +323,7 @@ function collectPerformanceInfo() {
     try {
       result.ollamaCircuit = Core.recovery.getCircuit('ollama');
       result.cloudCircuit = Core.recovery.getCircuit('cloud');
-    } catch(e) {}
+    } catch (e) { console.warn('⚠️ [context-panel] 操作失败:', e.message || e); }
   }
 
   return result;

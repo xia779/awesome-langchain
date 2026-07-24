@@ -289,7 +289,7 @@ async function checkAllHealth() {
       for (var i = 0; i < providers.length; i++) {
         results.cloud[providers[i]] = await checkCloudHealth(providers[i]);
       }
-    } catch (e) {}
+    } catch (e) { console.warn('⚠️ [error-recovery] 操作失败:', e.message || e); }
   }
   return results;
 }
@@ -326,7 +326,7 @@ function getFallbackProvider(currentProvider) {
           if (c.state === 'closed') return providers[i];
         }
       }
-    } catch (e) {}
+    } catch (e) { /* 可忽略：清理路径，失败不影响主流程 */ }
   }
   return null;
 }

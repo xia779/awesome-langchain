@@ -184,14 +184,17 @@ function startHttpServer() {
     }
   });
 
-  httpServer.listen(WEB_PORT, '0.0.0.0', function() {
-    console.log('🌐 [web-ui] Web Control UI: http://0.0.0.0:' + WEB_PORT);
+  // 🔒 默认仅监听本地，通过 AI_AGENT_BIND_HOST 环境变量可覆盖
+  var BIND_HOST = process.env.AI_AGENT_BIND_HOST || '127.0.0.1';
+
+  httpServer.listen(WEB_PORT, BIND_HOST, function() {
+    console.log('🌐 [web-ui] Web Control UI: http://' + BIND_HOST + ':' + WEB_PORT);
   });
 
   httpServer.on('error', function(e) {
     if (e.code === 'EADDRINUSE') {
       WEB_PORT++;
-      httpServer.listen(WEB_PORT, '0.0.0.0');
+      httpServer.listen(WEB_PORT, BIND_HOST);
     }
   });
 }
@@ -207,7 +210,7 @@ function registerCommands() {
     if (sub === 'status') {
       showMsg('🌐 Web Control UI\n地址: http://localhost:' + WEB_PORT + '\n状态: ' + (httpServer ? '运行中' : '未启动') + '\n\n手机/平板访问: http://<PC_IP>:' + WEB_PORT);
     } else if (sub === 'open') {
-      try { require('electron').shell.openExternal('http://localhost:' + WEB_PORT); } catch(e) {}
+      try { require('electron').shell.openExternal('http://localhost:' + WEB_PORT); } catch (e) { console.warn('⚠️ [web-ui] 操作失败:', e.message || e); }
       showMsg('已在浏览器中打开 Web UI');
     }
   });
