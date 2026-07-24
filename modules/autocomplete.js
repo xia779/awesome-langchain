@@ -27,41 +27,21 @@ function _getRegisteredCommands() {
       });
     }
   }
-  // 内置命令（补充动态注册之外的常用命令）
+  // 内置命令（精简版：大部分功能已可通过自然语言直接触发，仅保留需要显式模式切换的命令）
+  // 💡 用户无需记忆命令——直接说"帮我搜索/分析图片/写代码/查行情"即可
   var builtins = [
-    { name: '/agent', desc: 'Agent 模式（自主调用工具）' },
-    { name: '/memory', desc: '记忆管理' },
-    { name: '/context', desc: '上下文窗口状态' },
-    { name: '/url', desc: '抓取网页内容' },
-    { name: '/kb', desc: '知识库操作 (search/import/list)' },
-    { name: '/voice', desc: '语音控制 (auto/profiles/set)' },
-    { name: '/vision', desc: '图片理解分析' },
-    { name: '/ocr', desc: '图片文字识别' },
-    { name: '/screenshot', desc: '截屏分析' },
-    { name: '/draw', desc: 'AI 生成图片' },
-    { name: '/video', desc: 'AI 生成视频' },
-    { name: '/workflow', desc: '工作流管理' },
-    { name: '/template', desc: '会话模板管理' },
-    { name: '/rule', desc: '自动回复规则' },
-    { name: '/schedule', desc: '定时任务' },
-    { name: '/remind', desc: '快速提醒' },
+    { name: '/research', desc: '深度研究（多源调研报告）' },
+    { name: '/kb', desc: '知识库 (search/import/list)' },
+    { name: '/git', desc: 'Git 操作 (status/commit/push)' },
     { name: '/tasks', desc: '查看后台任务' },
-    { name: '/dispatch', desc: '并行分发到多个角色' },
-    { name: '/analytics', desc: '数据分析仪表盘' },
-    { name: '/stats', desc: '今日快速统计' },
-    { name: '/knowledge', desc: '知识库管理' },
-    { name: '/perf', desc: '性能监控' },
-    { name: '/skill', desc: '技能管理' },
-    { name: '/git', desc: 'Git 操作' },
-    { name: '/batch', desc: '批量操作' },
-    { name: '/summary', desc: '会话摘要' },
-    { name: '/bookmarks', desc: '书签管理' },
-    { name: '/tags', desc: '会话标签' },
+    { name: '/skill', desc: '技能管理 (list/use/install)' },
+    { name: '/memory', desc: '记忆管理 (search/delete)' },
+    { name: '/schedule', desc: '定时任务管理' },
+    { name: '/voice', desc: '语音控制 (auto/profiles/set)' },
     { name: '/manga', desc: 'AI 漫画工作室' },
-    { name: '/manga-char', desc: '生成角色立绘（ComfyUI）' },
-    { name: '/manga-scene', desc: '生成场景背景（ComfyUI）' },
-    { name: '/manga-gen', desc: '从 JSON 剧本批量生成' },
-    { name: '/manga-status', desc: '查看 ComfyUI 状态' },
+    { name: '/stats', desc: '今日统计' },
+    { name: '/sync', desc: '数据同步' },
+    { name: '/help', desc: '帮助（全部命令列表）' },
   ];
   builtins.forEach(function(b) {
     var exists = _commandCache.some(function(c) { return c.name === b.name; });
