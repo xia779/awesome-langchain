@@ -22,6 +22,43 @@ const DEFAULT_EMBEDDING_MODEL = 'bge-m3';
 const FALLBACK_EMBEDDING_MODEL = 'nomic-embed-text';
 const OLLAMA_BASE = 'http://127.0.0.1:11434';
 
+// 🔒 S9: SiliconFlow 云端嵌入兜底（与本地 bge-m3 向量兼容，同模型）
+const SILICONFLOW_EMBED_URL = 'https://api.siliconflow.cn/v1/embeddings';
+const SILICONFLOW_EMBED_MODEL = 'BAAI/bge-m3';
+
+// 检查是否配置了云端嵌入（复用 siliconFlowKey）
+function hasCloudEmbedding() {
+  return !!(Core && Core.config && Core.config.siliconFlowKey && Core.config.siliconFlowKey.length > 10);
+}
+
+// 云端嵌入（SiliconFlow OpenAI 兼容接口）
+async function getCloudEmbedding(text) {
+  if (!hasCloudEmbedding()) return null;
+  try {
+    const resp = await fetch(SILICONFLOW_EMBED_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + Core.config.siliconFlowKey
+      },
+      body: JSON.stringify({
+        model: SILICONFLOW_EMBED_MODEL,
+        input: text.substring(0, 8000),
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    if (data.data && data.data[0] && Array.isArray(data.data[0].embedding)) {
+      return data.data[0].embedding;
+    }
+    throw new Error('返回数据中无有效向量');
+  } catch (err) {
+    console.warn('⚠️ [知识库] 云端嵌入失败:', err.message.split('\n')[0]);
+    return null;
+  }
+}
+
 // ===== 嵌入模型可用性缓存 =====
 let embeddingAvailable = null; // null = 未检测, true = 可用, false = 不可用
 let activeEmbeddingModel = null; // 实际使用的嵌入模型名（检测后缓存）
@@ -223,9 +260,12 @@ function chunkDocument(text) {
   return chunks.filter(c => c.length >= 10);
 }
 
-// ===== 生成文本向量（调用 Ollama 嵌入模型）=====
+// ===== 生成文本向量（Ollama 本地优先 → SiliconFlow 云端兜底 → BM25 降级）=====
 async function getEmbedding(text) {
-  if (embeddingAvailable === false) return null;
+  // Ollama 不可用时，尝试云端嵌入兜底（S9）
+  if (embeddingAvailable === false) {
+    return getCloudEmbedding(text);
+  }
 
   try {
     const model = getEmbeddingModel();
@@ -246,10 +286,23 @@ async function getEmbedding(text) {
     }
     return data.embedding;
   } catch (err) {
+    // Ollama 失败 → 尝试云端兜底
+    const cloudResult = await getCloudEmbedding(text);
+    if (cloudResult) {
+      // 云端成功：标记本地不可用但整体嵌入仍可用
+      if (embeddingAvailable !== false) {
+        console.log('💡 [知识库] Ollama 不可用，已切换 SiliconFlow 云端嵌入（BAAI/bge-m3）');
+      }
+      embeddingAvailable = false; // 本地 Ollama 不可用
+      return cloudResult;
+    }
     // 只打印一次友好提示，避免刷屏
     if (embeddingAvailable !== false) {
       console.warn('⚠️ 获取向量失败:', err.message.split('\n')[0]);
       console.warn('💡 如需语义检索，请确保 Ollama 已启动且模型已安装：ollama pull ' + getPreferredEmbeddingModel());
+      if (!hasCloudEmbedding()) {
+        console.warn('💡 或配置 SiliconFlow API Key 启用云端嵌入兜底');
+      }
       console.warn('📂 当前已自动降级为 BM25 文本检索，知识库功能仍可用');
     }
     // 标记为不可用，避免后续重复请求

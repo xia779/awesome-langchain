@@ -902,7 +902,7 @@ app.whenReady().then(async () => {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: ws: wss: http: https:; " +
-          "font-src 'self' https://fonts.gstatic.com data: file:; " +
+          "font-src 'self' data: file:; " +
           "img-src 'self' data: blob: http: https:; " +
           "connect-src 'self' ws: wss: http: https:; " +
           "media-src 'self' blob: http: https:;"

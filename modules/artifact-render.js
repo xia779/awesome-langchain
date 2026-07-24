@@ -8,6 +8,26 @@ var observer = null;
 // 已处理过的代码块集合（防止重复处理）
 var processedBlocks = new WeakSet();
 
+// 🔒 S1 离线化：React/Babel JS 本地缓存（首次渲染时从 node_modules 读取，后续复用）
+var _jsxLibsCache = null;
+function getJsxLibs() {
+  if (_jsxLibsCache) return _jsxLibsCache;
+  var fs = (window.nodeBridge && window.nodeBridge.fs) || null;
+  var path = (window.nodeBridge && window.nodeBridge.path) || null;
+  if (!fs || !path) return null;
+  try {
+    var base = path.join(path.dirname(window.location.pathname.replace(/^\//, '').replace(/\//g, '\\')), 'node_modules');
+    var react = fs.readFileSync(path.join(base, 'react', 'umd', 'react.production.min.js'), 'utf8');
+    var reactDom = fs.readFileSync(path.join(base, 'react-dom', 'umd', 'react-dom.production.min.js'), 'utf8');
+    var babel = fs.readFileSync(path.join(base, '@babel', 'standalone', 'babel.min.js'), 'utf8');
+    if (react && !react.error && reactDom && !reactDom.error && babel && !babel.error) {
+      _jsxLibsCache = { react: react, reactDom: reactDom, babel: babel };
+      return _jsxLibsCache;
+    }
+  } catch (e) { console.warn('[artifact-render] 本地 React/Babel 读取失败:', e.message); }
+  return null;
+}
+
 // ═══════════════════════════════════════════
 // Artifact 类型检测
 // ═══════════════════════════════════════════
@@ -113,13 +133,23 @@ function renderHtml(code, iframe) {
 
 /**
  * 渲染 JSX/React Artifact — 转换为 HTML 预览
- * 将 JSX 代码包装在一个带 React + Babel CDN 的 iframe 中执行
+ * 将 JSX 代码包装在一个带 React + Babel 的 iframe 中执行（本地离线优先）
  */
 function renderJsx(code, iframe) {
+  var libs = getJsxLibs();
+  var scriptsHtml;
+  if (libs) {
+    scriptsHtml = '<script>' + libs.react + '<\/script>' +
+      '<script>' + libs.reactDom + '<\/script>' +
+      '<script>' + libs.babel + '<\/script>';
+  } else {
+    // 降级：本地读取失败时回退 CDN
+    scriptsHtml = '<script src="https://unpkg.com/react@18/umd/react.production.min.js"><\/script>' +
+      '<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"><\/script>' +
+      '<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>';
+  }
   var jsxHtml = '<!DOCTYPE html>\n<html><head><meta charset="UTF-8">' +
-    '<script src="https://unpkg.com/react@18/umd/react.production.min.js"><\/script>' +
-    '<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"><\/script>' +
-    '<script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>' +
+    scriptsHtml +
     '<style>body{margin:0;padding:12px;font-family:-apple-system,sans-serif;background:#1a1a2e;color:#e2e8f0;}' +
     '#root{min-height:100px;}</style></head><body>' +
     '<div id="root"></div>' +

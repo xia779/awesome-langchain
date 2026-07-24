@@ -137,9 +137,19 @@ function exportCurrentSessionAsHtml() {
     var content = msg.content || '';
     // 简单 HTML 转义
     content = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    // 代码块处理
+    // 代码块处理（使用 hljs 预渲染语法高亮，导出文件自包含无需外部 JS）
     content = content.replace(/```(\w*)\n([\s\S]*?)```/g, function(m, lang, code) {
-      return '<pre style="background:#1e293b;color:#e2e8f0;padding:12px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6;"><code>' + code.trim() + '</code></pre>';
+      var highlighted = code.trim();
+      if (window.hljs) {
+        try {
+          if (lang && window.hljs.getLanguage(lang)) {
+            highlighted = window.hljs.highlight(code.trim(), { language: lang }).value;
+          } else {
+            highlighted = window.hljs.highlightAuto(code.trim()).value;
+          }
+        } catch (e) { /* 高亮失败保留原文 */ }
+      }
+      return '<pre style="background:#1e293b;color:#e2e8f0;padding:12px 16px;border-radius:8px;overflow-x:auto;font-size:13px;line-height:1.6;"><code>' + highlighted + '</code></pre>';
     });
     // 行内代码
     content = content.replace(/`([^`]+)`/g, '<code style="background:#e2e8f0;padding:1px 4px;border-radius:3px;font-size:0.9em;">$1</code>');
@@ -161,14 +171,15 @@ function exportCurrentSessionAsHtml() {
   });
 
   var htmlContent = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>' + title + '</title>';
-  htmlContent += '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">';
-  htmlContent += '<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>';
+  // 🔒 S1 离线化：内联本地 highlight.js 主题 CSS（不再依赖 CDN）
+  var hljsCss = '';
+  try { hljsCss = fs.readFileSync(path.join(__dirname, '..', 'node_modules', 'highlight.js', 'styles', 'github-dark.min.css'), 'utf8'); } catch(e) { hljsCss = ''; }
+  if (hljsCss) { htmlContent += '<style>' + hljsCss + '</style>'; }
   htmlContent += '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;max-width:800px;margin:0 auto;padding:24px;background:#f8fafc;color:#1e293b;}h1{color:#1e293b;border-bottom:2px solid #e2e8f0;padding-bottom:12px;}.meta{color:#64748b;font-size:13px;margin-bottom:24px;}</style>';
   htmlContent += '</head><body>';
   htmlContent += '<h1>' + title + '</h1>';
   htmlContent += '<div class="meta">导出时间: ' + new Date().toLocaleString() + ' · 消息数: ' + session.messages.length + '</div>';
   htmlContent += msgHtml;
-  htmlContent += '<script>hljs.highlightAll();</script>';
   htmlContent += '</body></html>';
 
   var fileName = title.replace(/[\\/:*?"<>|]/g, '_') + '_' + timestamp + '.html';

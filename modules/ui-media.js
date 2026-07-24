@@ -186,9 +186,9 @@ function syncCodeHighlighter(isDark) {
   var hljsLink = document.getElementById('hljs-theme');
   if (!hljsLink) return;
   var newHref = isDark
-    ? 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css'
-    : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css';
-  if (hljsLink.href !== newHref) hljsLink.href = newHref;
+    ? './node_modules/highlight.js/styles/github-dark.min.css'
+    : './node_modules/highlight.js/styles/github.min.css';
+  if (hljsLink.getAttribute('href') !== newHref) hljsLink.setAttribute('href', newHref);
 }
 
 // ===== 方向B2：字体大小调节 =====
@@ -271,9 +271,9 @@ function initMermaidSupport() {
 function loadMermaidCDN() {
   if (typeof window.mermaid !== 'undefined') { initMermaidSupport(); return; }
   var script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
-  script.onload = function() { console.log('✅ Mermaid CDN 加载完成'); initMermaidSupport(); };
-  script.onerror = function() { console.warn('⚠️ Mermaid CDN 加载失败'); };
+  script.src = './node_modules/mermaid/dist/mermaid.min.js';
+  script.onload = function() { console.log('✅ Mermaid 本地加载完成'); initMermaidSupport(); };
+  script.onerror = function() { console.warn('⚠️ Mermaid 本地加载失败，图表渲染不可用'); };
   document.head.appendChild(script);
 }
 

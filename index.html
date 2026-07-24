@@ -7,12 +7,12 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- 🔧 #8: CSP 安全头 — 限制连接目标，阻止数据外泄到未授权端点 -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data: file:; img-src 'self' data: blob: http://127.0.0.1:*; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* https:; media-src 'self' blob: http://127.0.0.1:*;">
+  <!-- 🔧 #8: CSP 安全头 — 全部资源本地化后收紧策略（Phase 4 S1） -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: file:; img-src 'self' data: blob: http://127.0.0.1:*; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* https:; media-src 'self' blob: http://127.0.0.1:*;">
   <title>AI智能体</title>
   <link rel="stylesheet" href="./node_modules/highlight.js/styles/github-dark.min.css" id="hljs-theme">
   <link rel="stylesheet" href="./node_modules/katex/dist/katex.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <link rel="stylesheet" href="./assets/fonts.css">
 
 <link rel="stylesheet" href="styles.css?v=5">
 <base target="_blank">

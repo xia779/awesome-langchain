@@ -4,6 +4,8 @@ let Core = null;
 
 // ===== 动态解析后端服务端口（统一走 Core.getBackendBase()，core-v10.js 中定义）=====
 var _backendSearchHealthy = true;
+var _backendUnhealthySince = 0; // 🔒 S12: 记录后端不可用的时间戳，用于定期重试
+var _BACKEND_RETRY_MS = 3 * 60 * 1000; // 3 分钟后重新探测后端
 
 // 异步探测后端搜索服务是否可用
 async function _probeSearchBackend() {
@@ -14,8 +16,10 @@ async function _probeSearchBackend() {
     var resp = await fetch(base + '/health', { method: 'GET', signal: controller.signal });
     clearTimeout(timer);
     _backendSearchHealthy = resp.ok;
+    if (resp.ok) _backendUnhealthySince = 0;
   } catch (e) {
     _backendSearchHealthy = false;
+    if (!_backendUnhealthySince) _backendUnhealthySince = Date.now();
   }
   return _backendSearchHealthy;
 }
@@ -46,10 +50,18 @@ function getEffectiveEngine() {
 async function webSearch(query) {
   const engine = getEffectiveEngine();
 
-  // 如果之前已探测到后端不可用，直接降级，不再反复请求失败端口
+  // 🔒 S12: 后端不可用时，超过 3 分钟自动重新探测（允许中途恢复）
   if (!_backendSearchHealthy) {
-    console.log('🔄 本地搜索服务不可用，直接使用前端搜索引擎');
-    return await webSearchDirect(query, engine);
+    if (_backendUnhealthySince && (Date.now() - _backendUnhealthySince > _BACKEND_RETRY_MS)) {
+      console.log('🔄 重新探测本地搜索服务...');
+      var recovered = await _probeSearchBackend();
+      if (!recovered) {
+        return await webSearchDirect(query, engine);
+      }
+      // 恢复成功，继续走后端代理
+    } else {
+      return await webSearchDirect(query, engine);
+    }
   }
 
   try {
@@ -89,6 +101,7 @@ async function webSearch(query) {
     // 连接拒绝时标记后端不可用，避免 webSearchDirect 再次请求同一失败端口
     if (err && err.message && (err.message.includes('ECONNREFUSED') || err.message.includes('Failed to fetch'))) {
       _backendSearchHealthy = false;
+      if (!_backendUnhealthySince) _backendUnhealthySince = Date.now();
     }
     let result = await webSearchDirect(query, engine);
     if ((result.includes('未找到有效') || result.includes('搜索失败') || result.includes('请填写')) && engine === 'bocha' && Core.config.tavilyApiKey) {
