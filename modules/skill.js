@@ -50,8 +50,7 @@ let allSkills = {};
 // ===== 文件技能扫描 =====
 function getSkillsDir() {
   if (!Core) return null;
-  var base = Core._globalDataRoot || Core.DATA_ROOT || 'E:\\my-ai-data';
-  return path.join(base, 'skills');
+  return Core.pathService.global('skills');
 }
 
 function ensureSkillsDir() {

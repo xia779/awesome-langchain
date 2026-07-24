@@ -594,7 +594,7 @@ module.exports = {
     }
 
     // 数据目录：跟随 Core 数据根，支持 AI_AGENT_DATA_ROOT 环境变量覆盖
-    var dataRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
+    var dataRoot = Core.pathService.global();
     MANGA_DIR = path.join(dataRoot, 'manga_pipeline');
 
     // 初始化图片目录

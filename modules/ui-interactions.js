@@ -130,7 +130,7 @@ function saveDocAttachment(file, showPreview) {
     else if (ext === '.md' || ext === '.txt') icon = '📝';
 
     // 保存到临时目录
-    var tmpDir = path.join(Core.DATA_ROOT || Core._globalDataRoot || '.', 'tmp');
+    var tmpDir = Core.pathService.perUser('tmp');
     if (!fs.existsSync(tmpDir)) { try { fs.mkdirSync(tmpDir, { recursive: true }); } catch(e) { console.warn('[UI] Failed to create tmp dir:', e.message); } }
     var tmpPath = path.join(tmpDir, file.name);
 

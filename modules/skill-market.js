@@ -106,7 +106,7 @@ async function _installFromUrl(url, opts) {
     // 如果是 Markdown（prompt 文件）
     if (url.endsWith('.md')) {
       var skillId = path.basename(url, '.md').replace(/[^a-z0-9-]/gi, '-').toLowerCase();
-      var skillDir = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'skills', skillId);
+      var skillDir = Core.pathService.perUser(path.join('skills', skillId));
       if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
       fs.writeFileSync(path.join(skillDir, 'prompt.md'), content, 'utf8');
       fs.writeFileSync(path.join(skillDir, 'skill.json'), JSON.stringify({
@@ -129,9 +129,9 @@ function _installFromData(skillData) {
     // 阻止路径遍历：只允许字母、数字、横线
     if (!/^[a-z0-9-]+$/i.test(skillId)) return { success: false, error: '技能 ID 含非法字符' };
 
-    var skillDir = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'skills', skillId);
+    var skillDir = Core.pathService.perUser(path.join('skills', skillId));
     // 二次验证：确保目标路径在 skills 目录内
-    var skillsRoot = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'skills');
+    var skillsRoot = Core.pathService.perUser('skills');
     if (!skillDir.startsWith(skillsRoot)) return { success: false, error: '路径越界' };
 
     if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
@@ -164,7 +164,7 @@ function _installFromData(skillData) {
 // ===== 发布技能（上传到本地注册表）=====
 function publishLocal(skillId) {
   try {
-    var skillDir = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'skills', skillId);
+    var skillDir = Core.pathService.perUser(path.join('skills', skillId));
     if (!fs.existsSync(skillDir)) return { success: false, error: '技能不存在: ' + skillId };
 
     var skillJson = JSON.parse(fs.readFileSync(path.join(skillDir, 'skill.json'), 'utf8'));
@@ -174,7 +174,7 @@ function publishLocal(skillId) {
     _localRegistry.push(Object.assign({}, skillJson, { prompt: promptMd, publishedAt: Date.now() }));
 
     // 保存到本地注册表文件
-    var regFile = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'skill-registry-local.json');
+    var regFile = Core.pathService.perUser('skill-registry-local.json');
     fs.writeFileSync(regFile, JSON.stringify(_localRegistry, null, 2), 'utf8');
 
     return { success: true, skillId: skillId };
@@ -185,7 +185,7 @@ function publishLocal(skillId) {
 
 // ===== 已安装列表 =====
 function listInstalled() {
-  var skillsDir = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'skills');
+  var skillsDir = Core.pathService.perUser('skills');
   var installed = [];
   try {
     if (fs.existsSync(skillsDir)) {
@@ -242,7 +242,7 @@ module.exports = {
 
     // 加载本地注册表
     try {
-      var regFile = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'skill-registry-local.json');
+      var regFile = Core.pathService.perUser('skill-registry-local.json');
       if (fs.existsSync(regFile)) _localRegistry = JSON.parse(fs.readFileSync(regFile, 'utf8'));
     } catch (e) {}
 

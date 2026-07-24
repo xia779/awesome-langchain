@@ -7,7 +7,7 @@ var Core = null;
 
 // ===== Checkpoint 存储目录 =====
 function getCheckpointDir(sessionId) {
-  var base = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || 'E:\my-ai-data';
+  var base = (Core && Core.pathService) ? Core.pathService.global() : 'E:\\my-ai-data';
   var dir = path.join(base, '.checkpoints', sessionId || 'default');
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
@@ -202,7 +202,7 @@ function listCheckpoints(sessionId) {
 function cleanupCheckpoints(keepSessions) {
   keepSessions = keepSessions || 10;
   try {
-    var base = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || 'E:\my-ai-data';
+    var base = (Core && Core.pathService) ? Core.pathService.global() : 'E:\\my-ai-data';
     var cpRoot = path.join(base, '.checkpoints');
     if (!fs.existsSync(cpRoot)) return;
 

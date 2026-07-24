@@ -48,7 +48,7 @@ function resolvePython() {
   // 候选路径：① 当前用户目录下 pytdx-env ② 全局数据根目录下 pytdx-env（多用户共享，推荐）
   var candidates = [
     path.join(Core.DATA_ROOT, 'pytdx-env', pyExe),
-    path.join(Core._globalDataRoot || Core.DATA_ROOT, 'pytdx-env', pyExe)
+    path.join(Core.pathService.global(), 'pytdx-env', pyExe)
   ];
   for (var i = 0; i < candidates.length; i++) {
     if (fs.existsSync(candidates[i])) return candidates[i];

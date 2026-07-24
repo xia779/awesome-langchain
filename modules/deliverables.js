@@ -78,7 +78,7 @@ function getStats() {
 
 function init(_Core) {
   Core = _Core;
-  baseDir = path.join(Core.DATA_ROOT || 'E:\my-ai-data', 'deliverables');
+  baseDir = Core.pathService.perUser('deliverables');
   indexPath = path.join(baseDir, 'index.json');
   ensureDir(baseDir);
   TYPES.forEach(t => ensureDir(path.join(baseDir, TYPE_DIRS[t])));

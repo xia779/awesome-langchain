@@ -302,7 +302,7 @@ module.exports = {
   dependencies: [],
   init: function(_Core) {
     Core = _Core;
-    _statsFile = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'observability.json');
+    _statsFile = Core.pathService.perUser('observability.json');
     _load();
 
     Core.observability = {

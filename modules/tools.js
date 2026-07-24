@@ -20,7 +20,7 @@ function getAllowedDirs() {
     if (Core.DATA_ROOT) dirs.push(Core.DATA_ROOT);
     if (Core.USERS_ROOT) dirs.push(Core.USERS_ROOT);
   }
-  dirs.push((Core && (Core._globalDataRoot || Core.DATA_ROOT)) || path.join(__dirname, '..'));
+  dirs.push(Core.pathService.global());
   // 添加应用根目录（基于模块位置，非硬编码路径）
   var appRoot = path.resolve(__dirname, '..');
   if (dirs.indexOf(appRoot) === -1) dirs.push(appRoot);
@@ -376,7 +376,7 @@ const tools = {
         if (!check.allowed) return '⛔ ' + check.reason;
       }
       // 写入临时文件执行（避免命令行注入）
-      const dataRoot = (Core && Core._globalDataRoot) || getAllowedDirs()[0] || process.cwd();
+      const dataRoot = Core.pathService.global();
       const tmpDir = path.join(dataRoot, 'python_tmp');
       if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
       const tmpFile = path.join(tmpDir, 'script_' + Date.now() + '.py');

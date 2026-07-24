@@ -20,7 +20,7 @@ var OLLAMA_MODEL = 'llama3.2:3b';  // 剧本生成用模型（已验证可生成
 
 // ffmpeg 可执行文件目录：跟随数据根，支持 AI_AGENT_DATA_ROOT 环境变量覆盖
 function getFfmpegBinDir() {
-  var dataRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
+  var dataRoot = Core.pathService.global();
   return path.join(dataRoot, 'ffmpeg', 'ffmpeg-master-latest-win64-gpl', 'bin');
 }
 
@@ -1154,7 +1154,7 @@ module.exports = {
     }
 
     // 数据目录：跟随 Core 数据根，支持 AI_AGENT_DATA_ROOT 环境变量覆盖
-    var dataRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
+    var dataRoot = Core.pathService.global();
     MANGA_DIR = path.join(dataRoot, 'manga_pipeline');
 
     // 挂载到 Core

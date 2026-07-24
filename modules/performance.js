@@ -412,7 +412,7 @@ function saveDraft() {
       recoveryData.generationText = getLastPartialReply();
     }
 
-    var recoveryPath = path.join(Core.DATA_ROOT || '', PERF_CONFIG.crashRecoveryFile);
+    var recoveryPath = Core.pathService.perUser(PERF_CONFIG.crashRecoveryFile);
     fs.writeFile(recoveryPath, JSON.stringify(recoveryData, null, 2), function() {});
     stats.draftsSaved++;
   } catch (e) {
@@ -449,7 +449,7 @@ function saveGenerationState() {
       partialText: getLastPartialReply(),
       timestamp: Date.now(),
     };
-    var statePath = path.join(Core.DATA_ROOT || '', 'generation-state.json');
+    var statePath = Core.pathService.perUser('generation-state.json');
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
   } catch (e) {
     console.warn('[Performance] Failed to save generation state:', e.message);
@@ -472,7 +472,7 @@ function getLastPartialReply() {
 
 function checkCrashRecovery() {
   try {
-    var recoveryPath = path.join(Core.DATA_ROOT || '', PERF_CONFIG.crashRecoveryFile);
+    var recoveryPath = Core.pathService.perUser(PERF_CONFIG.crashRecoveryFile);
     if (!fs.existsSync(recoveryPath)) return;
 
     var data = JSON.parse(fs.readFileSync(recoveryPath, 'utf8'));
@@ -523,7 +523,7 @@ function checkCrashRecovery() {
 
 function checkGenerationRecovery() {
   try {
-    var statePath = path.join(Core.DATA_ROOT || '', 'generation-state.json');
+    var statePath = Core.pathService.perUser('generation-state.json');
     if (!fs.existsSync(statePath)) return;
 
     var state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
@@ -548,7 +548,7 @@ function checkGenerationRecovery() {
 
 function getCrashRecovery() {
   try {
-    var recoveryPath = path.join(Core.DATA_ROOT || '', PERF_CONFIG.crashRecoveryFile);
+    var recoveryPath = Core.pathService.perUser(PERF_CONFIG.crashRecoveryFile);
     if (!fs.existsSync(recoveryPath)) return null;
     return JSON.parse(fs.readFileSync(recoveryPath, 'utf8'));
   } catch (e) {
@@ -558,9 +558,9 @@ function getCrashRecovery() {
 
 function clearCrashRecovery() {
   try {
-    var recoveryPath = path.join(Core.DATA_ROOT || '', PERF_CONFIG.crashRecoveryFile);
+    var recoveryPath = Core.pathService.perUser(PERF_CONFIG.crashRecoveryFile);
     if (fs.existsSync(recoveryPath)) fs.unlinkSync(recoveryPath);
-    var statePath = path.join(Core.DATA_ROOT || '', 'generation-state.json');
+    var statePath = Core.pathService.perUser('generation-state.json');
     if (fs.existsSync(statePath)) fs.unlinkSync(statePath);
   } catch (e) {}
 }
@@ -685,7 +685,7 @@ function cleanupOldMessages(sessionId, keepCount) {
     var oldMessages = session.messages.slice(0, -keepCount);
     session.messages = session.messages.slice(-keepCount);
 
-    var archivePath = path.join(Core.DATA_ROOT || '', 'archives', sessionId + '_' + Date.now() + '.json');
+    var archivePath = Core.pathService.perUser(path.join('archives', sessionId + '_' + Date.now() + '.json'));
     try {
       fs.mkdirSync(path.dirname(archivePath), { recursive: true });
       fs.writeFileSync(archivePath, JSON.stringify(oldMessages, null, 2));
@@ -714,7 +714,7 @@ function archiveOldSessions(maxAge) {
       var session = sessions[id];
       var lastActive = session.timestamp || session.createdAt || now;
       if (now - lastActive > maxAge && !session.pinned) {
-        var archivePath = path.join(Core.DATA_ROOT || '', 'archives', 'session_' + id + '_' + Date.now() + '.json');
+        var archivePath = Core.pathService.perUser(path.join('archives', 'session_' + id + '_' + Date.now() + '.json'));
         try {
           fs.mkdirSync(path.dirname(archivePath), { recursive: true });
           fs.writeFileSync(archivePath, JSON.stringify(session, null, 2));

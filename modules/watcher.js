@@ -261,7 +261,7 @@ module.exports = {
   dependencies: ['stock-quote'],
   init: function(_Core) {
     Core = _Core;
-    _watchFile = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'watchers.json');
+    _watchFile = Core.pathService.perUser('watchers.json');
     _loadWatchers();
 
     Core.watcher = {

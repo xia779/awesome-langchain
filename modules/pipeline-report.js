@@ -14,7 +14,7 @@ function getOutputDir() {
   if (Core.deliverables && typeof Core.deliverables.getOutputDir === 'function') {
     return Core.deliverables.getOutputDir('report');
   }
-  const dir = path.join(Core.DATA_ROOT || 'E:\my-ai-data', 'deliverables', 'reports');
+  const dir = Core.pathService.perUser(path.join('deliverables', 'reports'));
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

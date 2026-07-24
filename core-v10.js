@@ -160,14 +160,20 @@ function _createDatabaseShim() {
     if (result && result.error) throw new Error(result.error);
     this._dbId = result.dbId !== undefined ? result.dbId : result;
   }
-  DatabaseShim.prototype.pragma = function(sql) { return dbBridge.pragma(this._dbId, sql); };
-  DatabaseShim.prototype.exec = function(sql) { return dbBridge.exec(this._dbId, sql); };
+  // 🔒 Phase 2: 桥接错误检查——better-sqlite3 原生 API 在错误时抛异常，shim 必须匹配。
+  //    桥接返回 {error: message} 时转为 throw，而非把 {error} 对象静默传给调用方。
+  function _throwIfError(result, context) {
+    if (result && result.error) throw new Error('[' + context + '] ' + result.error);
+    return result;
+  }
+  DatabaseShim.prototype.pragma = function(sql) { return _throwIfError(dbBridge.pragma(this._dbId, sql), 'pragma'); };
+  DatabaseShim.prototype.exec = function(sql) { return _throwIfError(dbBridge.exec(this._dbId, sql), 'exec'); };
   DatabaseShim.prototype.prepare = function(sql) {
     var dbId = this._dbId;
     return {
-      run: function() { var params = Array.prototype.slice.call(arguments); return dbBridge.run(dbId, sql, params); },
-      get: function() { var params = Array.prototype.slice.call(arguments); return dbBridge.get(dbId, sql, params); },
-      all: function() { var params = Array.prototype.slice.call(arguments); return dbBridge.query(dbId, sql, params); }
+      run: function() { var params = Array.prototype.slice.call(arguments); return _throwIfError(dbBridge.run(dbId, sql, params), 'run'); },
+      get: function() { var params = Array.prototype.slice.call(arguments); return _throwIfError(dbBridge.get(dbId, sql, params), 'get'); },
+      all: function() { var params = Array.prototype.slice.call(arguments); return _throwIfError(dbBridge.query(dbId, sql, params), 'all'); }
     };
   };
   DatabaseShim.prototype.transaction = function(fn) {
@@ -204,8 +210,8 @@ function _createDatabaseShim() {
     wrapper.exclusive = function() { return runTxn('BEGIN EXCLUSIVE', Array.prototype.slice.call(arguments)); };
     return wrapper;
   };
-  DatabaseShim.prototype.close = function() { return dbBridge.close(this._dbId); };
-  DatabaseShim.prototype.backup = function(dest) { return dbBridge.backup(this._dbId, dest); };
+  DatabaseShim.prototype.close = function() { return _throwIfError(dbBridge.close(this._dbId), 'close'); };
+  DatabaseShim.prototype.backup = function(dest) { return _throwIfError(dbBridge.backup(this._dbId, dest), 'backup'); };
   DatabaseShim.prototype.open = true;
   return DatabaseShim;
 }
@@ -366,6 +372,49 @@ const USERS_ROOT = path.join(DATA_ROOT, 'users');
 if (!fs.existsSync(DATA_ROOT)) fs.mkdirSync(DATA_ROOT, { recursive: true });
 if (!fs.existsSync(USERS_ROOT)) fs.mkdirSync(USERS_ROOT, { recursive: true });
 
+// ===== PathService：路径单一真相源（Phase 2）=====
+// 消灭散落的 Core._globalDataRoot || Core.DATA_ROOT || 'E:\my-ai-data' 和二义性。
+// 全局根启动时确定、不可变；每用户路径由当前用户上下文计算；显式 API 取代偷改全局。
+const PathService = {
+  _globalRoot: DATA_ROOT,
+  _usersRoot: USERS_ROOT,
+  _currentUser: null,
+
+  // 设置当前用户（由 Core.setCurrentUser 调用）
+  setCurrentUser: function(username) {
+    this._currentUser = username;
+    return this;
+  },
+
+  // 全局路径（不受用户切换影响）
+  // PathService.global()             → E:\my-ai-data
+  // PathService.global('pytdx-env')  → E:\my-ai-data\pytdx-env
+  global: function(sub) {
+    return sub ? path.join(this._globalRoot, sub) : this._globalRoot;
+  },
+
+  // 每用户路径（依赖当前用户上下文）
+  // PathService.perUser()            → E:\my-ai-data\users\admin
+  // PathService.perUser('sessions')  → E:\my-ai-data\users\admin\sessions
+  perUser: function(sub) {
+    var user = this._currentUser || 'admin';
+    var base = path.join(this._usersRoot, user);
+    return sub ? path.join(base, sub) : base;
+  },
+
+  // 指定用户的路径（显式传递 userId，不依赖全局状态）
+  userRoot: function(userId, sub) {
+    var base = path.join(this._usersRoot, userId || 'admin');
+    return sub ? path.join(base, sub) : base;
+  },
+
+  // 当前生效的数据根（向后兼容 Core.DATA_ROOT 语义）
+  // 有用户 → 每用户路径；无用户 → 全局路径
+  effectiveRoot: function() {
+    return this._currentUser ? this.perUser() : this._globalRoot;
+  }
+};
+
 // ===== 工具函数：安全写入文件（自动处理EISDIR）=====
 function safeWriteFile(filePath, content) {
   // 如果目标是一个目录（之前的错误），删除它
@@ -464,9 +513,12 @@ const Core = {
   config: {},
   currentService: 'ollama',
   _currentUser: null,
-  DATA_ROOT,
-  USERS_ROOT,
-  _globalDataRoot: DATA_ROOT,  // 🔧 全局数据根目录（不受 setCurrentUser 影响）
+  // 🔒 Phase 2: DATA_ROOT / _globalDataRoot 改为 getter，委托给 PathService（单一真相源）
+  //    读取 Core.DATA_ROOT 自动获得当前用户的每用户路径（setCurrentUser 后）或全局路径（之前）
+  get DATA_ROOT() { return PathService.effectiveRoot(); },
+  get USERS_ROOT() { return PathService._usersRoot; },
+  get _globalDataRoot() { return PathService.global(); },
+  pathService: PathService,
   HAS_NODE_FS,
 
   // 🔧 S6: 持久化日志（electron-log → 文件）
@@ -510,12 +562,13 @@ const Core = {
 
   setCurrentUser(username) {
     this._currentUser = username;
-    const userDir = path.join(USERS_ROOT, username);
-    this.DATA_ROOT = userDir;
-    this.CONFIG_FILE = path.join(userDir, 'config.json');
-    this.SESSIONS_DIR = path.join(userDir, 'sessions');
-    this.KNOWLEDGE_DIR = path.join(userDir, 'knowledge');
-    this.PLUGINS_DIR = path.join(userDir, 'plugins');
+    // 🔒 Phase 2: 通过 PathService 切换用户上下文，不再直接改写 DATA_ROOT
+    PathService.setCurrentUser(username);
+    const userDir = PathService.perUser();
+    this.CONFIG_FILE = PathService.perUser('config.json');
+    this.SESSIONS_DIR = PathService.perUser('sessions');
+    this.KNOWLEDGE_DIR = PathService.perUser('knowledge');
+    this.PLUGINS_DIR = PathService.perUser('plugins');
     // 🔧 关键修复：只创建目录，不要把 CONFIG_FILE（文件路径）也mkdir
     [this.SESSIONS_DIR, this.KNOWLEDGE_DIR, this.PLUGINS_DIR].forEach(p => {
       try { if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true }); } catch(e) { console.warn('⚠️ [core] 创建用户目录失败:', p, e.message); }
@@ -2679,7 +2732,7 @@ Core.renderMarkdown = function(text) {
             return;
           }
           // 创建临时文件供 importSession 读取
-          var tmpPath = path.join((Core._globalDataRoot || Core.DATA_ROOT || 'E:\\my-ai-data'), 'imports', '_temp_import_' + Date.now() + '.json');
+          var tmpPath = path.join(PathService.global('imports'), '_temp_import_' + Date.now() + '.json');
           if (!fs.existsSync(path.dirname(tmpPath))) fs.mkdirSync(path.dirname(tmpPath), { recursive: true });
           fs.writeFileSync(tmpPath, JSON.stringify(data), 'utf8');
           if (Core.export && Core.export.importSession) {
@@ -2737,7 +2790,7 @@ Core.renderMarkdown = function(text) {
               showToast('❌ 无效的文件格式', 'error');
               return;
             }
-            var tmpPath = path.join((Core._globalDataRoot || Core.DATA_ROOT || 'E:\\my-ai-data'), 'imports', '_temp_import_' + Date.now() + '.json');
+            var tmpPath = path.join(PathService.global('imports'), '_temp_import_' + Date.now() + '.json');
             if (!fs.existsSync(path.dirname(tmpPath))) fs.mkdirSync(path.dirname(tmpPath), { recursive: true });
             fs.writeFileSync(tmpPath, JSON.stringify(data), 'utf8');
             if (Core.export && Core.export.importSession) {

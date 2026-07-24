@@ -212,7 +212,7 @@ function _buildPromptMd(skill, systemPrompt) {
 
 function _installSkill(skill, systemPrompt, promptMd) {
   try {
-    var skillsDir = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'skills');
+    var skillsDir = Core.pathService.perUser('skills');
     var skillDir = path.join(skillsDir, skill.id);
 
     if (!fs.existsSync(skillDir)) {

@@ -12,9 +12,7 @@ var currentMemoId = null;
 var memoDir = '';
 
   function getMemoDir() {
-    var userId = (Core._currentUser) || 'admin';
-    var dataRoot = (Core.DATA_ROOT) || 'E:\\my-ai-data';
-    return path.join(dataRoot, 'users', userId, 'memos');
+    return Core.pathService.perUser('memos');
   }
 
   function ensureDir(dir) {

@@ -80,7 +80,7 @@ module.exports = {
   init(_Core) {
     Core = _Core;
     // 自动初始化，使用 DATA_ROOT
-    init(Core.DATA_ROOT || 'E:\\my-ai-data');
+    init(Core.pathService.perUser());
     
     Core.logger = {
       debug, info, warn, error,

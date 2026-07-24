@@ -13,7 +13,7 @@ let externalServers = {}; // serverId -> { process, tools, status, config }
 let _rpcId = 0;
 
 function getServersConfigPath() {
-  var base = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || 'E:\\my-ai-data';
+  var base = Core.pathService.global();
   return path.join(base, 'mcp-servers.json');
 }
 
@@ -250,7 +250,7 @@ function getAllowedDirs() {
     if (Core.DATA_ROOT) dirs.push(Core.DATA_ROOT);
     if (Core.USERS_ROOT) dirs.push(Core.USERS_ROOT);
   }
-  dirs.push((Core && (Core._globalDataRoot || Core.DATA_ROOT)) || 'E:\\my-ai-data');
+  dirs.push(Core.pathService.global());
   dirs.push('E:\\my-ai-desktop');
   try { dirs.push(path.join(os.homedir(), 'Desktop')); } catch (e) {}
   try { dirs.push(os.tmpdir()); } catch (e) {}
@@ -280,7 +280,7 @@ function initMcp(_Core) {
   // 如果没有 mcp-servers.json，创建默认配置（filesystem 限定 DATA_ROOT）
   var configPath = getServersConfigPath();
   if (!fs.existsSync(configPath)) {
-    var dataRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || 'E:\\my-ai-data';
+    var dataRoot = Core.pathService.global();
     var defaultConfig = {
       servers: [
         {

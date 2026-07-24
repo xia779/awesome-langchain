@@ -22,7 +22,7 @@ function runMigration() {
 
   var results = { sessions: 0, config: false, errors: [] };
   var userId = Core._currentUser || 'admin';
-  var dataRoot = Core.DATA_ROOT || path.join('E:\\my-ai-data', 'users', userId);
+  var dataRoot = Core.pathService.userRoot(userId);
 
   // 1. 迁移残留 JSON 会话
   try {

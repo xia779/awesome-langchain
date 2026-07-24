@@ -17,7 +17,7 @@ function getDataRoot() {
   if (process.env.AI_AGENT_DATA_ROOT) {
     return process.env.AI_AGENT_DATA_ROOT;
   }
-  var defaultPath = 'E:\my-ai-data';
+  var defaultPath = 'E:\\my-ai-data';
   if (fs.existsSync(defaultPath)) {
     return defaultPath;
   }

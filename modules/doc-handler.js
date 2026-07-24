@@ -7,8 +7,7 @@ var Core = null;
 // ===== 输出目录 =====
 function getOutputDir() {
   if (!Core) return null;
-  var base = Core.DATA_ROOT || Core._globalDataRoot || 'E:\\my-ai-data';
-  var dir = path.join(base, 'documents');
+  var dir = Core.pathService.perUser('documents');
   if (!fs.existsSync(dir)) {
     try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { console.warn('[DocHandler] Failed to create documents dir:', e.message); }
   }

@@ -29,8 +29,7 @@ function runPython(code) {
     }
 
     var pythonCmd = await detectPythonCmd();
-    var os = require('os');
-    var baseDir = (Core && Core._globalDataRoot) || path.join(os.tmpdir(), 'ai-agent-data');
+    var baseDir = Core.pathService.global();
     var tempDir = path.join(baseDir, 'temp');
     if (!fs.existsSync(tempDir)) {
       try { fs.mkdirSync(tempDir, { recursive: true }); } catch (e) { console.warn('[Python] Failed to create temp dir:', e.message); }

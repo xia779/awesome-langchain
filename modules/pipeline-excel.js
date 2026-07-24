@@ -9,7 +9,7 @@ function getOutputDir() {
   if (Core.deliverables && Core.deliverables.getOutputDir) {
     return Core.deliverables.getOutputDir('excel');
   }
-  const dir = path.join(Core.DATA_ROOT || 'E:\my-ai-data', 'deliverables', 'excel');
+  const dir = Core.pathService.perUser(path.join('deliverables', 'excel'));
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

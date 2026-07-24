@@ -201,14 +201,25 @@ module.exports = {
   init: function(_Core) {
     Core = _Core;
     var impl;
+    var degraded = false;
     try {
       impl = Database ? createSqlImpl() : createMemImpl();
+      if (!Database) degraded = true;
     } catch (e) {
       // better-sqlite3 原生 ABI 不匹配（如 node:test 环境）→ 内存后端兜底
       console.warn('market-db: sqlite 不可用，回退内存后端 -', e.message);
       impl = createMemImpl();
+      degraded = true;
     }
     Core.marketDb = impl;
     console.log('market-db 模块已加载（后端：' + impl._backend + '，9 张表）');
+    // 🔒 Phase 2 S8: 降级可见性——内存后端重启后数据丢失，必须明确告知用户
+    if (degraded && impl._backend === 'memory') {
+      setTimeout(function() {
+        if (Core.showToast) {
+          Core.showToast('⚠️ 行情数据库降级：SQLite 不可用，当前使用内存存储（重启后数据丢失）。建议执行 npm rebuild better-sqlite3', 'warning', 8000);
+        }
+      }, 3000);
+    }
   },
 };

@@ -12,7 +12,7 @@ let _dockerAvailable = null;
 
 function getSandboxDir() {
   if (!_sandboxDir) {
-    _sandboxDir = path.join(Core.DATA_ROOT || 'E:\\my-ai-data', 'sandbox');
+    _sandboxDir = Core.pathService.perUser('sandbox');
     if (!fs.existsSync(_sandboxDir)) fs.mkdirSync(_sandboxDir, { recursive: true });
   }
   return _sandboxDir;

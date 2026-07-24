@@ -27,10 +27,30 @@ function createMockCore() {
   ensureTestData();
   var config = {};
   var commands = {};
+  // 🔒 Phase 2: mock pathService（与生产 Core.pathService API 一致）
+  var mockPathService = {
+    _globalRoot: TEST_DATA_ROOT,
+    _usersRoot: path.join(TEST_DATA_ROOT, 'users'),
+    _currentUser: null,
+    setCurrentUser: function(u) { this._currentUser = u; return this; },
+    global: function(sub) { return sub ? path.join(this._globalRoot, sub) : this._globalRoot; },
+    perUser: function(sub) {
+      var base = path.join(this._usersRoot, this._currentUser || 'admin');
+      return sub ? path.join(base, sub) : base;
+    },
+    userRoot: function(userId, sub) {
+      var base = path.join(this._usersRoot, userId || 'admin');
+      return sub ? path.join(base, sub) : base;
+    },
+    effectiveRoot: function() {
+      return this._currentUser ? this.perUser() : this._globalRoot;
+    }
+  };
   var Core = {
     DATA_ROOT: TEST_DATA_ROOT,
     config: config,
     _currentUser: 'admin',
+    pathService: mockPathService,
     saveConfig: function(patch) { Object.assign(config, patch); },
     showNotification: function() {},
     custom: {

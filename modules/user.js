@@ -7,14 +7,7 @@ let currentUser = null;
 
 // 🔧 统一从 Core 获取数据路径（动态化，不再硬编码）
 function getUsersRoot() {
-  var base = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT;
-  if (!base) {
-    // 最终回退：检查默认路径
-    var defaultPath = 'E:\\my-ai-data';
-    if (require('fs').existsSync(defaultPath)) return defaultPath + '\\users';
-    return require('path').join(require('os').homedir(), '.ai-agent-data', 'users');
-  }
-  return require('path').join(base, 'users');
+  return Core.pathService.global('users');
 }
 function getUsersDir() { return getUsersRoot(); }
 
@@ -99,19 +92,8 @@ function loginUser(username) {
   }
   currentUser = username;
   // 🔧 同步设置 Core._currentUser（下游代码依赖此值）
-  if (Core) Core._currentUser = username;
-  
-  // 🔧 使用动态路径，防止硬编码嵌套
-  var base = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || 'E:\\my-ai-data';
-  const correctDir = path.join(base, 'users', username);
-  if (Core.DATA_ROOT !== correctDir) {
-    Core.DATA_ROOT = correctDir;
-  }
-  
-  Core.CONFIG_FILE = path.join(correctDir, 'config.json');
-  Core.SESSIONS_DIR = path.join(correctDir, 'sessions');
-  Core.KNOWLEDGE_DIR = path.join(correctDir, 'knowledge');
-  Core.PLUGINS_DIR = path.join(correctDir, 'plugins');
+  // 🔒 Phase 2: 通过 PathService 切换用户上下文，不再直接改写 DATA_ROOT
+  Core.setCurrentUser(username);
   Core.loadConfig();
   // 🔧 切换用户后重新应用配置到 UI（主题/颜色/模型/温度等）
   if (Core.reapplyConfig) Core.reapplyConfig();
@@ -155,12 +137,7 @@ function logoutUser() {
 
 function migrateOldData(username) {
   // 🔧 动态获取数据根目录
-  var base = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT;
-  if (!base) {
-    var defaultPath = 'E:\\my-ai-data';
-    if (fs.existsSync(defaultPath)) base = defaultPath;
-    else base = path.join(require('os').homedir(), '.ai-agent-data');
-  }
+  var base = Core.pathService.global();
   const oldDataRoot = base;
   const newUserDir = getUserDir(username);
   const oldFiles = ['config.json', 'sessions', 'knowledge', 'plugins', 'history', 'temp'];

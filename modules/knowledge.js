@@ -12,9 +12,8 @@ function getKnowledgeDir() {
   // 🔧 优先使用全局数据根目录下的知识库，回退到动态路径
   if (Core && Core._globalDataRoot) return path.join(Core._globalDataRoot, 'knowledge');
   if (Core && Core.DATA_ROOT) return path.join(Core.DATA_ROOT, 'knowledge');
-  // 最终兜底：使用环境变量或默认路径
-  var root = (Core && (Core._globalDataRoot || Core.DATA_ROOT)) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
-  return path.join(root, 'knowledge');
+  // 最终兜底：使用 PathService
+  return Core.pathService.global('knowledge');
 }
 
 const CHUNK_SIZE = 500;   // 每个文档块的最大字符数

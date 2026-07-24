@@ -8,7 +8,7 @@ function getOutputDir() {
   if (Core.deliverables && Core.deliverables.getOutputDir) {
     return Core.deliverables.getOutputDir('webapp');
   }
-  const dir = path.join(Core.DATA_ROOT || 'E:\my-ai-data', 'deliverables', 'webapps');
+  const dir = Core.pathService.perUser(path.join('deliverables', 'webapps'));
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

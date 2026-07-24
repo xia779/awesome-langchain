@@ -11,8 +11,7 @@ var _escapeHtml = _htmlUtils.escapeHtml;
 
 // 🔧 获取会话目录：使用动态路径（修复硬编码问题）
 function getSessionsDir() {
-  var base = (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
-  var dir = path.join(base, 'sessions');
+  var dir = Core.pathService.perUser('sessions');
   ensureDir(dir);
   return dir;
 }
@@ -148,7 +147,7 @@ function loadSessions() {
   }
   
   // 🔧 检查所有可能的旧目录并迁移（动态计算，消除硬编码）
-  var globalRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
+  var globalRoot = Core.pathService.global();
   var possibleDirs = [
     path.join(globalRoot, 'sessions'),
     path.join(globalRoot, 'users', 'admin', 'sessions')
@@ -589,7 +588,7 @@ function deleteSessionWithChildren(id) {
     
     // 🔧 从所有可能的目录删除 JSON 文件（动态计算路径）
     var deleted = false;
-    var globalRoot = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data';
+    var globalRoot = Core.pathService.global();
     var possibleDirs = [
       getSessionsDir(),
       path.join(globalRoot, 'sessions'),
@@ -718,7 +717,7 @@ function init(core) {
 
   // 🔧 #13: 一次性迁移旧版 provider 分散目录到统一 sessions/
   (function migrateLegacySessionDirs() {
-    var base = (Core && Core.DATA_ROOT) || 'E:\\my-ai-data';
+    var base = Core.pathService.perUser();
     var legacyDirs = ['sessions_deepseek', 'sessions_ollama', 'sessions_qwen'];
     legacyDirs.forEach(function(dirName) {
       var legacyPath = path.join(base, dirName);

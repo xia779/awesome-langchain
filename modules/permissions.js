@@ -11,7 +11,7 @@ var MAX_AUDIT_ENTRIES = 1000;
 
 function getAuditLogPath() {
   if (!Core) return null;
-  var base = Core._globalDataRoot || Core.DATA_ROOT || 'E:\\my-ai-data';
+  var base = Core.pathService.global();
   return path.join(base, 'audit-log.json');
 }
 
@@ -63,7 +63,7 @@ function getDefaultAllowedDirs() {
     if (Core.USERS_ROOT) dirs.push(Core.USERS_ROOT);
   }
   // 兼容默认安装路径
-  dirs.push((Core && (Core._globalDataRoot || Core.DATA_ROOT)) || 'E:\\my-ai-data');
+  dirs.push(Core.pathService.global());
   dirs.push('E:\\my-ai-desktop');
   // 用户桌面
   try {

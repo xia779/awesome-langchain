@@ -275,7 +275,7 @@ function createSkillFromSuggestion(suggestion) {
 
   // 直接写文件
   try {
-    var base = Core._globalDataRoot || Core.DATA_ROOT || 'E:\\my-ai-data';
+    var base = Core.pathService.global();
     var skillDir = path.join(base, 'skills', template.id);
     if (!fs.existsSync(skillDir)) fs.mkdirSync(skillDir, { recursive: true });
 
@@ -307,7 +307,7 @@ function createSkillFromSuggestion(suggestion) {
 // ===== 持久化 =====
 
 function getStatsFilePath() {
-  var base = (Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || 'E:\\my-ai-data';
+  var base = Core.pathService.global();
   return path.join(base, 'skill-suggest-stats.json');
 }
 
