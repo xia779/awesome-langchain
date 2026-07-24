@@ -1405,6 +1405,278 @@ const NPM_WHITELIST = [
 ];
 const _npmCache = {};
 
+// ===== Object registry: keeps class instances in preload, exposes handles =====
+const objRegistry = new Map();
+let objIdCounter = 1;
+
+function registerObj(obj) {
+  if (obj === null || obj === undefined) return obj;
+  const id = objIdCounter++;
+  objRegistry.set(id, obj);
+  return id;
+}
+
+function resolveArg(value) {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== 'object') return value;
+  if (value.__objId !== undefined) return objRegistry.get(value.__objId);
+  if (value._isBufferProxy) return unwrapBuffer(value);
+  if (Array.isArray(value)) return value.map(resolveArg);
+  if (value instanceof Date) return value;
+  const resolved = {};
+  for (const key of Object.keys(value)) {
+    resolved[key] = resolveArg(value[key]);
+  }
+  return resolved;
+}
+
+function wrapResult(value) {
+  if (value === null || value === undefined) return value;
+  if (Buffer.isBuffer(value)) return createBufferProxy(value);
+  if (value instanceof Uint8Array) return createBufferProxy(Buffer.from(value));
+  if (typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map(wrapResult);
+  if (value instanceof Date) return value;
+  // Plain objects cross fine; class instances need registration
+  const proto = Object.getPrototypeOf(value);
+  if (proto && proto !== Object.prototype && proto !== null) {
+    return makeHandle(registerObj(value));
+  }
+  return value;
+}
+
+// Create a handle object with method-call stub for registered objects
+function makeHandle(objId) {
+  return { __objId: objId };
+}
+
+// Generic bridge for calling methods on registered objects
+const objBridge = {
+  call: function(objId, method, args) {
+    const obj = objRegistry.get(objId);
+    if (!obj) return { error: 'Object not found: ' + objId };
+    try {
+      const resolvedArgs = (args || []).map(resolveArg);
+      const result = obj[method](...resolvedArgs);
+      if (result && typeof result.then === 'function') {
+        return result.then(wrapResult);
+      }
+      return wrapResult(result);
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+  callAsync: function(objId, method, args) {
+    const obj = objRegistry.get(objId);
+    if (!obj) return Promise.resolve({ error: 'Object not found: ' + objId });
+    try {
+      const resolvedArgs = (args || []).map(resolveArg);
+      const result = obj[method](...resolvedArgs);
+      return Promise.resolve(result).then(wrapResult);
+    } catch (e) {
+      return Promise.resolve({ error: e.message });
+    }
+  },
+  get: function(objId, prop) {
+    const obj = objRegistry.get(objId);
+    if (!obj) return undefined;
+    return wrapResult(obj[prop]);
+  },
+  set: function(objId, prop, value) {
+    const obj = objRegistry.get(objId);
+    if (!obj) return { error: 'Object not found: ' + objId };
+    obj[prop] = resolveArg(value);
+    return true;
+  },
+  release: function(objId) {
+    objRegistry.delete(objId);
+    return true;
+  }
+};
+
+// ===== Package-specific wrappers =====
+function wrapDocx(mod) {
+  function createInstance(Ctor, args) {
+    const resolvedArgs = args.map(resolveArg);
+    const obj = new Ctor(...resolvedArgs);
+    const id = registerObj(obj);
+    return makeHandle(id);
+  }
+  return {
+    Document: function(opts) { return createInstance(mod.Document, [opts || {}]); },
+    Paragraph: function(opts) { return createInstance(mod.Paragraph, [opts || {}]); },
+    TextRun: function(opts) { return createInstance(mod.TextRun, [typeof opts === 'string' ? { text: opts } : (opts || {})]); },
+    Table: function(opts) { return createInstance(mod.Table, [opts || {}]); },
+    TableRow: function(opts) { return createInstance(mod.TableRow, [opts || {}]); },
+    TableCell: function(opts) { return createInstance(mod.TableCell, [opts || {}]); },
+    ImageRun: function(opts) { return createInstance(mod.ImageRun, [opts || {}]); },
+    Packer: {
+      toBuffer: function(docHandle) {
+        const doc = objRegistry.get(docHandle && docHandle.__objId);
+        if (!doc) return Promise.resolve({ error: 'Document not found' });
+        return mod.Packer.toBuffer(doc).then(function(buf) { return createBufferProxy(buf); });
+      }
+    },
+    HeadingLevel: mod.HeadingLevel || {},
+    AlignmentType: mod.AlignmentType || {},
+    BorderStyle: mod.BorderStyle || {},
+    WidthType: mod.WidthType || {},
+    ShadingType: mod.ShadingType || {},
+    PageBreak: mod.PageBreak,
+    ExternalHyperlink: mod.ExternalHyperlink,
+    Tab: mod.Tab,
+    PageNumber: mod.PageNumber
+  };
+}
+
+function wrapPdfLib(mod) {
+  const pageMethods = ['drawText', 'drawLine', 'drawRectangle', 'drawCircle', 'drawImage',
+    'drawEllipse', 'drawPolygon', 'drawSvgPath', 'getWidth', 'getHeight',
+    'setSize', 'setRotation', 'moveUp', 'moveDown', 'moveLeft', 'moveRight'];
+  const fontMethods = ['widthOfTextAtSize', 'heightAtSize', 'sizeOfFontAtHeight', 'encodeText'];
+
+  function makePageHandle(obj) {
+    const id = registerObj(obj);
+    const handle = { __objId: id };
+    pageMethods.forEach(function(m) {
+      handle[m] = function() {
+        var args = Array.prototype.slice.call(arguments);
+        var resolved = args.map(resolveArg);
+        var result = obj[m](...resolved);
+        if (result && typeof result.then === 'function') return result.then(wrapResult);
+        return wrapResult(result);
+      };
+    });
+    return handle;
+  }
+
+  function makeFontHandle(obj) {
+    const id = registerObj(obj);
+    const handle = { __objId: id };
+    fontMethods.forEach(function(m) {
+      handle[m] = function() {
+        var args = Array.prototype.slice.call(arguments);
+        var resolved = args.map(resolveArg);
+        return obj[m](...resolved);
+      };
+    });
+    return handle;
+  }
+
+  function makeDocHandle(doc) {
+    const id = registerObj(doc);
+    const handle = { __objId: id };
+    // Metadata setters (return void/this)
+    ['setTitle', 'setAuthor', 'setSubject', 'setCreationDate', 'setModificationDate', 'setProducer', 'setCreator'].forEach(function(m) {
+      handle[m] = function() { var args = Array.prototype.slice.call(arguments); doc[m](...args.map(resolveArg)); return handle; };
+    });
+    // Page methods (return page handle)
+    ['addPage', 'insertPage', 'getPage'].forEach(function(m) {
+      handle[m] = function() {
+        var args = Array.prototype.slice.call(arguments);
+        var result = doc[m](...args.map(resolveArg));
+        return makePageHandle(result);
+      };
+    });
+    handle.removePage = function(idx) { doc.removePage(idx); return handle; };
+    handle.getPageCount = function() { return doc.getPageCount(); };
+    // Font embedding (async, returns font handle)
+    ['embedFont', 'embedStandardFont'].forEach(function(m) {
+      handle[m] = function() {
+        var args = Array.prototype.slice.call(arguments);
+        var result = doc[m](...args.map(resolveArg));
+        if (result && typeof result.then === 'function') return result.then(makeFontHandle);
+        return makeFontHandle(result);
+      };
+    });
+    // Image embedding (async, returns image handle)
+    ['embedPng', 'embedJpg', 'embedImage'].forEach(function(m) {
+      handle[m] = function() {
+        var args = Array.prototype.slice.call(arguments);
+        var resolved = args.map(resolveArg);
+        var result = doc[m](...resolved);
+        if (result && typeof result.then === 'function') return result.then(wrapResult);
+        return wrapResult(result);
+      };
+    });
+    // save (async, returns bytes)
+    handle.save = function(opts) {
+      return doc.save(opts).then(function(bytes) { return createBufferProxy(Buffer.from(bytes)); });
+    };
+    handle.registerFontkit = function(fk) { doc.registerFontkit(resolveArg(fk)); return handle; };
+    return handle;
+  }
+
+  return {
+    PDFDocument: {
+      create: function() {
+        return mod.PDFDocument.create().then(makeDocHandle);
+      },
+      load: function(bytes, opts) {
+        var data = resolveArg(bytes);
+        return mod.PDFDocument.load(data, opts).then(makeDocHandle);
+      }
+    },
+    StandardFonts: mod.StandardFonts,
+    rgb: function(r, g, b) { return mod.rgb(r, g, b); },
+    degrees: function(deg) { return mod.degrees(deg); },
+    radians: function(rad) { return mod.radians(rad); }
+  };
+}
+
+function wrapPptxgen(mod) {
+  const pptxMethods = ['addSlide', 'writeFile', 'write', 'stream', 'getSlides', 'defineLayout',
+    'defineSlideMaster', 'addNewSlide'];
+  const slideMethods = ['addText', 'addShape', 'addImage', 'addTable', 'addChart',
+    'addMedia', 'addNotes', 'addHyperlink', 'getSlideNumber', 'bkgd'];
+
+  function makeSlideHandle(slide) {
+    const id = registerObj(slide);
+    const handle = { __objId: id };
+    slideMethods.forEach(function(m) {
+      handle[m] = function() {
+        var args = Array.prototype.slice.call(arguments);
+        var resolved = args.map(resolveArg);
+        var result = slide[m](...resolved);
+        if (result && typeof result.then === 'function') return result.then(wrapResult);
+        return wrapResult(result);
+      };
+    });
+    // Property accessors for background
+    Object.defineProperty(handle, 'background', {
+      get: function() { return slide.background; },
+      set: function(v) { slide.background = v; }
+    });
+    return handle;
+  }
+
+  function PptxShim() {
+    var pptx = new (mod.default || mod)();
+    var id = registerObj(pptx);
+    var handle = { __objId: id, ShapeType: (mod.default || mod).ShapeType || pptx.ShapeType || {} };
+    pptxMethods.forEach(function(m) {
+      handle[m] = function() {
+        var args = Array.prototype.slice.call(arguments);
+        var resolved = args.map(resolveArg);
+        var result = pptx[m](...resolved);
+        if (result && typeof result.then === 'function') return result.then(wrapResult);
+        if (m === 'addSlide') return makeSlideHandle(result);
+        return wrapResult(result);
+      };
+    });
+    // Property setters
+    ['title', 'author', 'subject', 'company', 'layout'].forEach(function(prop) {
+      Object.defineProperty(handle, prop, {
+        get: function() { return pptx[prop]; },
+        set: function(v) { pptx[prop] = v; },
+        enumerable: true
+      });
+    });
+    return handle;
+  }
+  return PptxShim;
+}
+
 function requireNpm(name) {
   if (!NPM_WHITELIST.includes(name)) {
     return { error: 'npm package not whitelisted: ' + name };
@@ -1412,8 +1684,51 @@ function requireNpm(name) {
   if (_npmCache[name]) return _npmCache[name];
   try {
     const mod = require(name);
-    _npmCache[name] = mod;
-    return mod;
+    let wrapped;
+    switch (name) {
+      case 'docx':
+        wrapped = wrapDocx(mod);
+        break;
+      case 'pdf-lib':
+        wrapped = wrapPdfLib(mod);
+        break;
+      case 'pptxgenjs':
+        wrapped = wrapPptxgen(mod);
+        break;
+      case 'pdf-parse':
+        // Wrap to auto-unwrap BufferProxy input
+        wrapped = function(data, opts) {
+          var buf = resolveArg(data);
+          return mod(buf, opts);
+        };
+        break;
+      case 'iconv-lite':
+        wrapped = {
+          decode: function(buf, encoding) { return mod.decode(resolveArg(buf), encoding); },
+          encode: function(str, encoding) { return createBufferProxy(mod.encode(str, encoding)); },
+          encodingExists: function(enc) { return mod.encodingExists(enc); }
+        };
+        break;
+      case 'mammoth':
+        // mammoth uses {path} or {buffer} — wrap buffer case
+        wrapped = {
+          convertToHtml: function(input, opts) {
+            var resolved = input && input.buffer ? { buffer: resolveArg(input.buffer) } : input;
+            return mod.convertToHtml(resolved, opts);
+          },
+          extractRawText: function(input, opts) {
+            var resolved = input && input.buffer ? { buffer: resolveArg(input.buffer) } : input;
+            return mod.extractRawText(resolved, opts);
+          }
+        };
+        break;
+      default:
+        // xlsx, marked, highlight.js, mermaid, @pdf-lib/fontkit — plain objects/functions, pass through
+        wrapped = mod;
+        break;
+    }
+    _npmCache[name] = wrapped;
+    return wrapped;
   } catch (e) {
     return { error: 'npm package not available: ' + name + ' (' + e.message + ')' };
   }
@@ -1440,6 +1755,7 @@ const nodeBridge = {
   dompurify: dompurifyBridge,
   nativeRequire: nativeRequire,
   requireNpm: requireNpm,
+  objBridge: objBridge,
   projectInfo: projectInfoBridge,
   ipcRenderer: ipcBridge
 };

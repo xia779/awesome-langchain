@@ -92,7 +92,36 @@ function _bridgeRequire(name) {
   // npm 包（pdf-parse, mammoth, xlsx 等）→ 通过桥接层的 requireNpm 加载
   if (_bridge.requireNpm) {
     var npmMod = _bridge.requireNpm(name);
-    if (npmMod && !npmMod.error) return npmMod;
+    if (npmMod && !npmMod.error) {
+      // 🔧 类实例包需要本地构造函数包装（contextBridge 代理函数不能 new）
+      if (name === 'docx') {
+        return {
+          Document: function(opts) { return npmMod.Document(opts); },
+          Paragraph: function(opts) { return npmMod.Paragraph(opts); },
+          TextRun: function(opts) { return npmMod.TextRun(opts); },
+          Table: function(opts) { return npmMod.Table(opts); },
+          TableRow: function(opts) { return npmMod.TableRow(opts); },
+          TableCell: function(opts) { return npmMod.TableCell(opts); },
+          ImageRun: function(opts) { return npmMod.ImageRun(opts); },
+          Packer: npmMod.Packer,
+          HeadingLevel: npmMod.HeadingLevel,
+          AlignmentType: npmMod.AlignmentType,
+          BorderStyle: npmMod.BorderStyle,
+          WidthType: npmMod.WidthType,
+          ShadingType: npmMod.ShadingType,
+          PageBreak: npmMod.PageBreak,
+          ExternalHyperlink: npmMod.ExternalHyperlink,
+          Tab: npmMod.Tab,
+          PageNumber: npmMod.PageNumber
+        };
+      }
+      if (name === 'pptxgenjs') {
+        // npmMod 本身是 PptxShim 工厂函数（从 preload 代理过来的）
+        var PptxLocal = function() { return npmMod(); };
+        return PptxLocal;
+      }
+      return npmMod;
+    }
   }
 
   console.warn('[core] require 被阻止:', name);
