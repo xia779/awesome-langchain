@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
+const express = require('express');
 
 const cryptoUtils = require('./modules/crypto-utils');
 const ENC_PREFIX = cryptoUtils.ENC_PREFIX;

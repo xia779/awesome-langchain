@@ -1,63 +1,249 @@
-// core.js - 核心注册表（完整修复版）
+// core.js - 核心注册表（contextIsolation 迁移版）
+// 🔒 安全架构: nodeIntegration=false, contextIsolation=true
+// 所有 Node.js API 通过 preload 桥接层 (window.nodeBridge) 访问
 
-// 🔧 修复 module.paths，确保能找到项目目录的 node_modules
-// Electron renderer 中 require 的 module.paths 可能不包含项目目录，需要手动修复
-try {
-  const _path = require('path');
-  const projectNodeModules = _path.join(__dirname, 'node_modules');
-  if (typeof module !== 'undefined' && module.paths && !module.paths.includes(projectNodeModules)) {
-    module.paths.unshift(projectNodeModules);
-  }
-} catch (e) { console.warn('⚠️ [core] 修复 module.paths 失败:', e.message); }
+// ===== 桥接层访问 =====
+var _bridge = window.nodeBridge;
+if (!_bridge) {
+  console.error('🚨 [core] nodeBridge 不可用！请确保 preload.js 正确加载且 contextIsolation=true');
+}
 
-// ===== 全局保险：确保 Node API 可用 =====
-if (typeof require !== 'undefined' && typeof window !== 'undefined') {
-  try {
-    if (typeof window.fs === 'undefined') window.fs = require('fs');
-    if (typeof window.path === 'undefined') window.path = require('path');
-  } catch (e) { console.warn('⚠️ [core] 暴露 fs/path 到 window 失败:', e.message); }
+// ===== 全局 Node API（通过桥接层）=====
+var fs = _bridge ? _bridge.fs : {};
+var path = _bridge ? _bridge.path : {};
+
+// 暴露到 window 供兼容代码使用
+if (typeof window !== 'undefined') {
+  window.fs = fs;
+  window.path = path;
 }
 
 // ===== 🔧 #10: 全局异常兜底（防止渲染进程静默崩溃）=====
-if (typeof process !== 'undefined' && process.on) {
-  process.on('uncaughtException', function(err) {
-    console.error('🚨 [uncaughtException]', err && err.stack || err);
-    try {
-      if (window.Core && Core.showToast) {
-        Core.showToast('应用内部错误: ' + (err.message || '未知异常'), 'error', 8000);
-      }
-    } catch (_) {}
-  });
-  process.on('unhandledRejection', function(reason) {
-    console.error('🚨 [unhandledRejection]', reason && reason.stack || reason);
-    try {
-      if (window.Core && Core.showToast) {
-        Core.showToast('异步操作异常: ' + (reason && reason.message || '未知'), 'error', 6000);
-      }
-    } catch (_) {}
-  });
-}
-
-// 使用 var 避免重复声明
-var fs = (typeof require !== 'undefined') ? require('fs') : (window.fs || {});
-var path = (typeof require !== 'undefined') ? require('path') : (window.path || {});
+window.addEventListener('error', function(e) {
+  console.error('🚨 [uncaughtException]', e.error && e.error.stack || e.message);
+  try {
+    if (window.Core && Core.showToast) {
+      Core.showToast('应用内部错误: ' + (e.message || '未知异常'), 'error', 8000);
+    }
+  } catch (_) {}
+});
+window.addEventListener('unhandledrejection', function(e) {
+  console.error('🚨 [unhandledRejection]', e.reason && e.reason.stack || e.reason);
+  try {
+    if (window.Core && Core.showToast) {
+      Core.showToast('异步操作异常: ' + (e.reason && e.reason.message || '未知'), 'error', 6000);
+    }
+  } catch (_) {}
+});
 
 // ===== 兼容性检测 =====
-const HAS_NODE_FS = typeof fs !== 'undefined' && fs.readFileSync;
+const HAS_NODE_FS = !!(fs && fs.readFileSync);
 
-// ===== 🔒 加密工具（从 crypto-utils.js 加载）=====
+// ===== 🔒 加密工具（通过桥接层加载）=====
 var _cryptoModule = null;
-try { _cryptoModule = require('./modules/crypto-utils'); } catch (e) { console.warn('⚠️ [core] crypto-utils 加载失败:', e.message); }
+try {
+  var _cryptoSrc = _bridge.loadFileSource('modules/crypto-utils.js');
+  if (_cryptoSrc && !_cryptoSrc.error) {
+    var _cm = { exports: {} };
+    new Function('module', 'exports', 'require', '__dirname', '__filename', _cryptoSrc)(
+      _cm, _cm.exports, _bridgeRequire, _bridge.projectInfo.modulesDir, _bridge.projectInfo.modulesDir + '/crypto-utils.js'
+    );
+    _cryptoModule = _cm.exports;
+  }
+} catch (e) { console.warn('⚠️ [core] crypto-utils 加载失败:', e.message); }
 
-// ===== 🔧 #11: DOMPurify 本地加载（不再依赖 CDN，断网也有 XSS 防护）=====
-if (typeof window !== 'undefined' && !window.DOMPurify) {
-  try {
-    var _dpFactory = require('dompurify');
-    window.DOMPurify = (typeof _dpFactory === 'function' && !_dpFactory.sanitize) ? _dpFactory(window) : _dpFactory;
-  } catch (e) { console.warn('⚠️ [core] DOMPurify 本地加载失败:', e.message); }
+// ===== 🔧 #11: DOMPurify（通过桥接层）=====
+if (typeof window !== 'undefined' && !window.DOMPurify && _bridge && _bridge.dompurify && _bridge.dompurify.available) {
+  window.DOMPurify = { sanitize: function(html, opts) { return _bridge.dompurify.sanitize(html, opts); } };
 }
 var encryptValue = _cryptoModule ? _cryptoModule.encryptValue : function(v) { return v; };
 var decryptValue = _cryptoModule ? _cryptoModule.decryptValue : function(v) { return v; };
+
+// ===== 🔧 模块 require 垫片（供 eval 加载的模块使用）=====
+var _moduleCache = {};
+function _bridgeRequire(name) {
+  // Node.js 内置模块 → 返回桥接版本
+  var builtin = _bridge.nativeRequire(name);
+  if (builtin && !builtin.error) return builtin;
+
+  // electron → 返回桥接的 ipcRenderer 等
+  if (name === 'electron') return _bridge.electronAPI;
+
+  // better-sqlite3 → 返回构造函数 shim（通过 database 桥接）
+  if (name === 'better-sqlite3') return _createDatabaseShim();
+
+  // ws → 返回 WebSocket Server shim（通过 wsServer 桥接）
+  if (name === 'ws') return _createWsShim();
+
+  // 相对路径模块（./xxx 或 ../xxx）→ 递归 eval 加载
+  if (name.charAt(0) === '.') {
+    var resolved = name;
+    if (!resolved.endsWith('.js')) resolved += '.js';
+    // 相对于 modules/ 目录解析
+    var relPath = 'modules/' + resolved.replace(/^\.\//, '').replace(/^\.\.\//, '');
+    return _loadProjectModule(relPath);
+  }
+
+  // 项目内绝对路径
+  if (name.indexOf('modules/') === 0 || name.indexOf('modules\\') === 0) {
+    return _loadProjectModule(name);
+  }
+
+  // npm 包（pdf-parse, mammoth, xlsx 等）→ 通过桥接层的 requireNpm 加载
+  if (_bridge.requireNpm) {
+    var npmMod = _bridge.requireNpm(name);
+    if (npmMod && !npmMod.error) return npmMod;
+  }
+
+  console.warn('[core] require 被阻止:', name);
+  return {};
+}
+
+// better-sqlite3 构造函数 shim（同步调用 preload 层的原生 DB）
+function _createDatabaseShim() {
+  var dbBridge = _bridge.database;
+  function DatabaseShim(dbPath, opts) {
+    var result = dbBridge.open(dbPath, opts);
+    if (result && result.error) throw new Error(result.error);
+    this._dbId = result.dbId !== undefined ? result.dbId : result;
+  }
+  DatabaseShim.prototype.pragma = function(sql) { return dbBridge.pragma(this._dbId, sql); };
+  DatabaseShim.prototype.exec = function(sql) { return dbBridge.exec(this._dbId, sql); };
+  DatabaseShim.prototype.prepare = function(sql) {
+    var dbId = this._dbId;
+    return {
+      run: function() { var params = Array.prototype.slice.call(arguments); return dbBridge.run(dbId, sql, params); },
+      get: function() { var params = Array.prototype.slice.call(arguments); return dbBridge.get(dbId, sql, params); },
+      all: function() { var params = Array.prototype.slice.call(arguments); return dbBridge.query(dbId, sql, params); }
+    };
+  };
+  DatabaseShim.prototype.transaction = function(fn) {
+    var dbId = this._dbId;
+    return function() {
+      // 简化实现：直接执行 fn（真正的 transaction 需要 preload 支持）
+      return fn.apply(null, arguments);
+    };
+  };
+  DatabaseShim.prototype.close = function() { return dbBridge.close(this._dbId); };
+  DatabaseShim.prototype.backup = function(dest) { return dbBridge.backup(this._dbId, dest); };
+  DatabaseShim.prototype.open = true;
+  return DatabaseShim;
+}
+
+// ws (WebSocket) Server shim（通过 wsServer 桥接）
+function _createWsShim() {
+  var wsBridge = _bridge.wsServer;
+  function WebSocketShim() {}
+  WebSocketShim.Server = function WsServerShim(opts) {
+    var self = this;
+    var handlers = {
+      onConnect: function(clientId, ip) {
+        if (self._onConnection) {
+          var clientWs = _createClientWsShim(wsBridge, self._serverId, clientId);
+          self._onConnection(clientWs, { socket: { remoteAddress: ip } });
+        }
+      },
+      onMessage: function(clientId, data) {
+        if (self._onMessageMap && self._onMessageMap[clientId]) {
+          self._onMessageMap[clientId](data);
+        }
+      },
+      onClose: function(clientId) {
+        if (self._onCloseMap && self._onCloseMap[clientId]) {
+          self._onCloseMap[clientId]();
+        }
+      },
+      onPong: function(clientId) {
+        if (self._onPongMap && self._onPongMap[clientId]) {
+          self._onPongMap[clientId]();
+        }
+      }
+    };
+    var result = wsBridge.createGateway(opts.port, opts.host, handlers);
+    if (result && result.error) {
+      // 异步触发 error 事件
+      setTimeout(function() { if (self._onError) self._onError(new Error(result.error)); }, 0);
+      return;
+    }
+    self._serverId = result.serverId;
+    self._gateway = result;
+    self._onMessageMap = {};
+    self._onCloseMap = {};
+    self._onPongMap = {};
+    _serverShims[result.serverId] = self; // 注册以支持消息路由
+    // 异步触发 listening 事件
+    setTimeout(function() { if (self._onListening) self._onListening(); }, 0);
+  };
+  WsServerShim.prototype.on = function(event, cb) {
+    if (event === 'connection') this._onConnection = cb;
+    else if (event === 'error') this._onError = cb;
+    else if (event === 'listening') this._onListening = cb;
+    return this;
+  };
+  WsServerShim.prototype.close = function(cb) {
+    if (this._gateway) this._gateway.closeServer();
+    if (cb) setTimeout(cb, 0);
+  };
+  return WebSocketShim;
+}
+
+function _createClientWsShim(wsBridge, serverId, clientId) {
+  var ws = {
+    readyState: 1, // OPEN
+    send: function(data) { wsBridge.send(serverId, clientId, data); },
+    close: function() { wsBridge.close(serverId, clientId); ws.readyState = 3; },
+    ping: function() { wsBridge.ping(serverId, clientId); },
+    on: function(event, cb) {
+      var gw = wsBridge;
+      if (event === 'message') {
+        // 注册到 server 的 message map
+        var server = _findServerShim(serverId);
+        if (server) server._onMessageMap[clientId] = cb;
+      } else if (event === 'close') {
+        var server2 = _findServerShim(serverId);
+        if (server2) server2._onCloseMap[clientId] = cb;
+      } else if (event === 'pong') {
+        var server3 = _findServerShim(serverId);
+        if (server3) server3._onPongMap[clientId] = cb;
+      } else if (event === 'error') {
+        // 错误处理
+      }
+      return ws;
+    }
+  };
+  return ws;
+}
+
+var _serverShims = {};
+function _findServerShim(serverId) { return _serverShims[serverId] || null; }
+
+// 项目模块 eval 加载器（带缓存）
+function _loadProjectModule(relativePath) {
+  var cacheKey = relativePath;
+  if (_moduleCache[cacheKey]) return _moduleCache[cacheKey].exports;
+
+  var source = _bridge.loadFileSource(relativePath);
+  if (!source || source.error) {
+    console.error('[core] 模块源码加载失败:', relativePath, source && source.error);
+    return {};
+  }
+
+  var mod = { exports: {} };
+  _moduleCache[cacheKey] = mod; // 先缓存（防循环依赖）
+
+  var dirname = _bridge.path.dirname(_bridge.path.join(_bridge.projectInfo.rootDir, relativePath));
+  var filename = _bridge.path.join(_bridge.projectInfo.rootDir, relativePath);
+
+  try {
+    var wrapper = new Function('module', 'exports', 'require', '__dirname', '__filename', 'process', 'Buffer', 'window', source);
+    wrapper(mod, mod.exports, _bridgeRequire, dirname, filename, _bridge.processInfo, _bridge.buffer, window);
+  } catch (e) {
+    console.error('[core] 模块执行失败:', relativePath, e.message);
+    delete _moduleCache[cacheKey];
+    return {};
+  }
+  return mod.exports;
+}
 var encryptSensitiveFields = _cryptoModule ? _cryptoModule.encryptSensitiveFields : function(c) { return c; };
 var decryptSensitiveFields = _cryptoModule ? _cryptoModule.decryptSensitiveFields : function(c) { return c; };
 var SENSITIVE_KEY_FIELDS = _cryptoModule ? _cryptoModule.SENSITIVE_KEY_FIELDS : [];
@@ -66,8 +252,7 @@ var ENC_PREFIX = _cryptoModule ? _cryptoModule.ENC_PREFIX : 'enc:v1:';
 // ===== 动态获取数据路径 =====
 var app = null;
 try {
-  const electron = require('electron');
-  app = electron.app;
+  app = _bridge.electronAPI.app || null;
 } catch (e) {
   console.warn('⚠️ electron app 模块不可用，使用回退路径');
 }
@@ -484,22 +669,11 @@ const Core = {
   },
 
   loadModules() {
-    const modulesDir = path.join(__dirname, 'modules');
-    if (!fs.existsSync(modulesDir)) {
-      console.warn('⚠️ modules 目录不存在:', modulesDir);
+    // 🔒 contextIsolation 模式：通过桥接层加载模块源码，eval 执行
+    var allFiles = _bridge.listModules();
+    if (!allFiles || allFiles.error || !Array.isArray(allFiles) || allFiles.length === 0) {
+      console.warn('⚠️ modules 目录不可用或为空');
       return;
-    }
-    const allFiles = fs.readdirSync(modulesDir).filter(f => f.endsWith('.js'));
-
-    // 🔧 双重缓存清除（仅限项目自身模块，避免误清第三方包）
-    var clearedCount = 0;
-    var allKeys = Object.keys(require.cache);
-    var _projectModulesPath = path.join(__dirname, 'modules');
-    for (var k = 0; k < allKeys.length; k++) {
-      if (allKeys[k].indexOf(_projectModulesPath) >= 0) {
-        delete require.cache[allKeys[k]];
-        clearedCount++;
-      }
     }
 
     // ===== Phase 1: 加载所有模块，收集依赖元数据 =====
@@ -507,8 +681,7 @@ const Core = {
     for (var i = 0; i < allFiles.length; i++) {
       var file = allFiles[i];
       try {
-        var modulePath = path.join(modulesDir, file);
-        var mod = require(modulePath);
+        var mod = _loadProjectModule('modules/' + file);
         var baseName = file.replace('.js', '');
         loadedModules[file] = {
           module: mod,
@@ -598,8 +771,8 @@ const Core = {
       try {
         if (file2 === 'plugins.js') {
           try {
-            if (fs && fs.readFileSync) window.__nodeFs = fs;
-            if (path && path.join) window.__nodePath = path;
+            window.__nodeFs = fs;
+            window.__nodePath = path;
           } catch (e) { console.warn('⚠️ [core] 暴露 Node API 到 window 失败:', e.message); }
         }
         entry.module.init(this);
@@ -652,7 +825,7 @@ window.Core = Core;
   var _lastResolveTime = 0;
   function _resolvePort() {
     try {
-      var ipc = require('electron').ipcRenderer;
+      var ipc = _bridge.ipcRenderer;
       var p = ipc.sendSync('get-server-port');
       // 🔧 main 进程返回 0 表示服务器尚未启动成功，不要缓存为默认值 8080
       if (p && typeof p === 'number' && p > 0) {
@@ -701,7 +874,7 @@ window.Core = Core;
   function _getToken() {
     if (_authToken === null) {
       try {
-        var ipc = require('electron').ipcRenderer;
+        var ipc = _bridge.ipcRenderer;
         _authToken = ipc.sendSync('get-auth-token') || '';
       } catch (e) { _authToken = ''; }
     }
@@ -1156,7 +1329,7 @@ Core.renderMarkdown = function(text) {
 
   // 🔒 #42 修复：优雅关闭序列 — 监听主进程 app:shutdown 事件，清理渲染进程资源
   try {
-    var _shutdownIpc = require('electron').ipcRenderer;
+    var _shutdownIpc = _bridge.ipcRenderer;
     _shutdownIpc.on('app:shutdown', function() {
       console.log('🔄 [renderer-shutdown] 收到关闭信号，开始清理...');
       try {

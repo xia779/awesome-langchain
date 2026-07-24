@@ -12,14 +12,13 @@ const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, Notification, dial
 
 // 🔧 禁用 HTTP 缓存，确保 renderer 进程代码始终最新（无需手动清除缓存）
 app.commandLine.appendSwitch('disable-http-cache');
-// 🔒 安全说明（#27 修复）
-// 此应用 104 个核心模块和 core-v10.js/app.js 直接依赖 renderer 进程的 require/process/module/__dirname。
-// 强行启用 contextIsolation:true 会导致渲染进程全局 API 全部不可用，应用白屏/登录界面无法加载。
-// 因此暂时保持 contextIsolation:false + nodeIntegration:true，待后续将模块系统迁移到 preload 桥接后再开启隔离。
-// 其他安全警告（如 CSP、insecure content）保持开启，及时发现安全问题。
+// 🔒 安全说明（#11 contextIsolation 迁移完成）
+// 渲染进程已启用 contextIsolation:true + nodeIntegration:false。
+// 所有 Node.js API 通过 preload.js 的 contextBridge 桥接层安全暴露。
+// 模块代码在渲染进程中通过 eval 执行，require() 被替换为桥接垫片函数。
+// 原生模块（better-sqlite3, ws）保留在 preload 层，通过函数包装暴露。
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
-console.log('🔒 [安全] nodeIntegration=true（本地桌面应用功能所需）');
-console.log('🔒 [安全] 渲染进程 contextIsolation=false（兼容现有 104 个 Node 依赖模块，后续需迁移到 preload 桥接）');
+console.log('🔒 [安全] contextIsolation=true, nodeIntegration=false（preload 桥接层提供 Node API）');
 
 const express = require('express');
 const cors = require('cors');
@@ -199,12 +198,12 @@ function createWindow() {
       height: 44
     },
     webPreferences: {
-      nodeIntegration: true,         // 104 个模块依赖 Node 全局 require（后续需迁移到 preload 桥接）
-      contextIsolation: false,       // #27: 兼容现有代码，否则 core-v10.js / app.js 中 require/process/Core 全不可用
-      sandbox: false,                // sandbox 与 nodeIntegration 不兼容
+      nodeIntegration: false,        // 🔒 #11: 已迁移到 preload 桥接，渲染进程不再直接访问 Node.js
+      contextIsolation: true,        // 🔒 #11: 启用上下文隔离，防止 XSS 获取 Node.js 权限
+      sandbox: false,                // preload 需要 Node.js 访问以提供桥接层
       allowRunningInsecureContent: false,
       webSecurity: true,
-      preload: path.join(__dirname, 'preload.js')  // 预加载安全桥接层（渐进迁移基础设施）
+      preload: path.join(__dirname, 'preload.js')  // 安全桥接层（所有 Node API 通过 contextBridge 暴露）
     },
   });
 
