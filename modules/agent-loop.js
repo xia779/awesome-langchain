@@ -169,6 +169,7 @@ var ACTION_ZH_MAP = {
   'web_search': '联网搜索',
   'read_file': '读取文件',
   'write_file': '写入文件',
+  'edit_file': '编辑文件',
   'list_dir': '列出目录',
   'search_files': '搜索文件',
   'run_command': '执行命令',
@@ -180,10 +181,26 @@ var ACTION_ZH_MAP = {
   'memory_search': '记忆检索',
   'knowledge_search': '知识检索',
   'stock_quote': '行情查询',
-  'deep_research': '深度研究'
+  'deep_research': '深度研究',
+  // MCP 本地工具
+  'list_directory': '列出目录',
+  'execute_command': '执行命令',
+  'get_system_info': '系统信息',
+  'open_browser': '打开浏览器',
+  'handoff_to_agent': '委派代理',
 };
 function translateAction(action) {
-  return ACTION_ZH_MAP[action] || action;
+  if (ACTION_ZH_MAP[action]) return ACTION_ZH_MAP[action];
+  // 动态查询 MCP 工具描述作为步骤名
+  if (Core && Core.mcp && Core.mcp.enabled && Core.mcp.enabled()) {
+    try {
+      var tools = Core.mcp.getAllTools();
+      for (var i = 0; i < tools.length; i++) {
+        if (tools[i].name === action) return tools[i].description || action;
+      }
+    } catch (e) { /* ignore */ }
+  }
+  return action;
 }
 
 // ===== 最终回答清理（合并 5 个冗余清理块）=====
@@ -569,6 +586,24 @@ async function sendToAgent(task, isDeepThink) {
         if (lessons && lessons.length > 0) {
           agentPrompt += Core.knowledgeDistill.formatLessonsForPrompt(lessons);
         }
+      }
+      // 🔌 动态注入 MCP 外部工具：让 Agent 知道可以调用哪些 MCP 注册的工具
+      if (Core.mcp && Core.mcp.enabled && Core.mcp.enabled()) {
+        try {
+          var mcpTools = Core.mcp.getAllTools();
+          // 过滤掉已在静态提示词中列出的内置工具，只注入额外的 MCP 工具
+          var builtinNames = ['web_search','read_url','read_file','write_file','edit_file','list_dir','search_files','file_info','run_command','run_python','browser_navigate','browser_click','browser_type','browser_extract','browser_screenshot','browser_wait','github_pr','github_issue','github_repo','github_release','image_search','image_download','stock_quote','ask_user','parallel_execute','handoff_to_agent','deep_research','complete'];
+          var extraTools = mcpTools.filter(function(t) { return builtinNames.indexOf(t.name) < 0; });
+          if (extraTools.length > 0) {
+            agentPrompt += '\n\n【MCP 扩展工具】以下是通过 MCP 协议注册的额外工具，调用方式与内置工具相同：\n';
+            extraTools.forEach(function(t) {
+              agentPrompt += '- ' + t.name + ': ' + (t.description || '无描述') + '\n';
+              if (t.schema && t.schema.properties) {
+                agentPrompt += '  参数: ' + JSON.stringify(t.schema.properties) + '\n';
+              }
+            });
+          }
+        } catch (e) { console.warn('[agent-loop] MCP 工具列表注入失败:', e.message); }
       }
       // 🔧 使用用户当前选择的模型/提供商，而非硬编码 ollama
       var agentProvider = 'ollama';
