@@ -172,10 +172,37 @@ function _createDatabaseShim() {
   };
   DatabaseShim.prototype.transaction = function(fn) {
     var dbId = this._dbId;
-    return function() {
-      // 简化实现：直接执行 fn（真正的 transaction 需要 preload 支持）
-      return fn.apply(null, arguments);
+    // 🔒 真实事务（修复此前的"假事务"——旧实现直接调 fn，每条桥接语句各自自动提交，
+    //    中途异常会留下半截写入，毫无原子性）。
+    //    better-sqlite3 的事务函数会在事务内交错执行读/写并依赖中间结果分支（如 saveSession
+    //    先读消息数再决定全量/增量写入），而 JS 函数无法跨 contextBridge 传递，故采用
+    //    BEGIN → 同步执行 fn → COMMIT/ROLLBACK 方案：桥接调用是同步的，fn 内的
+    //    prepare().run/get/all 都在同一事务内即时执行（保留读-写-分支交错语义），
+    //    同时获得真正的原子性（任一异常 → ROLLBACK 整体回滚）。
+    function runTxn(beginSql, args) {
+      var beginRes = dbBridge.exec(dbId, beginSql);
+      if (beginRes && beginRes.error) {
+        // 已在事务中（嵌套）或无法开启时退化为直接执行，保持可用
+        return fn.apply(null, args);
+      }
+      try {
+        var result = fn.apply(null, args);
+        var commitRes = dbBridge.exec(dbId, 'COMMIT');
+        if (commitRes && commitRes.error) throw new Error('COMMIT 失败: ' + commitRes.error);
+        return result;
+      } catch (e) {
+        try { dbBridge.exec(dbId, 'ROLLBACK'); } catch (_) {}
+        throw e;
+      }
+    }
+    var wrapper = function() {
+      return runTxn('BEGIN IMMEDIATE', Array.prototype.slice.call(arguments));
     };
+    // better-sqlite3 兼容：transaction().deferred / .immediate / .exclusive
+    wrapper.deferred = function() { return runTxn('BEGIN DEFERRED', Array.prototype.slice.call(arguments)); };
+    wrapper.immediate = function() { return runTxn('BEGIN IMMEDIATE', Array.prototype.slice.call(arguments)); };
+    wrapper.exclusive = function() { return runTxn('BEGIN EXCLUSIVE', Array.prototype.slice.call(arguments)); };
+    return wrapper;
   };
   DatabaseShim.prototype.close = function() { return dbBridge.close(this._dbId); };
   DatabaseShim.prototype.backup = function(dest) { return dbBridge.backup(this._dbId, dest); };
