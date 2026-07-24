@@ -149,7 +149,7 @@ module.exports = {
   name: 'query-rewriter',
   dependencies: [],
   init: function(ctx) {
-    Core = ctx.Core;
+    Core = ctx;
 
     Core.queryRewriter = {
       rewrite: rewrite,

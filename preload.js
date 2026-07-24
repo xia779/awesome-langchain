@@ -575,7 +575,19 @@ const childProcessBridge = {
         },
         end: () => {
           try { child.stdin.end(); return true; } catch (e) { return { error: e.message }; }
-        }
+        },
+        // 🔧 兼容标准 Node.js ChildProcess .on() API（python.js 等模块使用）
+        on: (event, cb) => {
+          if (event === 'close') child.on('close', (code, signal) => cb(code, signal));
+          else if (event === 'exit') child.on('exit', (code, signal) => cb(code, signal));
+          else if (event === 'error') child.on('error', (err) => cb(err));
+          else if (event === 'data') child.stdout.on('data', (d) => cb(Buffer.isBuffer(d) ? d.toString('utf8') : d));
+          else child.on(event, cb);
+          return wrapper;
+        },
+        stdout: { on: (ev, cb) => { child.stdout.on(ev, (d) => cb(Buffer.isBuffer(d) ? d.toString('utf8') : d)); return wrapper; } },
+        stderr: { on: (ev, cb) => { child.stderr.on(ev, (d) => cb(Buffer.isBuffer(d) ? d.toString('utf8') : d)); return wrapper; } },
+        stdin: { write: (d) => { try { child.stdin.write(d); return true; } catch (e) { return false; } }, end: () => { try { child.stdin.end(); return true; } catch (e) { return false; } } }
       };
       return wrapper;
     } catch (e) {
@@ -1294,8 +1306,8 @@ function nativeRequire(moduleName) {
       case 'child_process': return childProcessBridge;
       case 'buffer': return bufferBridge;
       case 'process': return processInfoBridge;
-      case 'http': return { request: httpNodeRequest, get: httpNodeGet, post: httpBridge.post, httpRequest: httpRequest, Agent: function(){} };
-      case 'https': return { request: httpNodeRequest, get: httpNodeGet, post: httpBridge.post, httpRequest: httpRequest, Agent: function(){} };
+      case 'http': return { request: httpNodeRequest, get: httpNodeGet, post: httpBridge.post, httpRequest: httpRequest, Agent: function(){}, createServer: mod.createServer, Server: mod.Server };
+      case 'https': return { request: httpNodeRequest, get: httpNodeGet, post: httpBridge.post, httpRequest: httpRequest, Agent: function(){}, createServer: mod.createServer, Server: mod.Server };
       case 'url': return {
         URL: URL,
         parse: (u) => {

@@ -45,8 +45,8 @@ try {
   var _cryptoSrc = _bridge.loadFileSource('modules/crypto-utils.js');
   if (_cryptoSrc && !_cryptoSrc.error) {
     var _cm = { exports: {} };
-    new Function('module', 'exports', 'require', '__dirname', '__filename', _cryptoSrc)(
-      _cm, _cm.exports, _bridgeRequire, _bridge.projectInfo.modulesDir, _bridge.projectInfo.modulesDir + '/crypto-utils.js'
+    new Function('module', 'exports', 'require', '__dirname', '__filename', 'process', 'Buffer', _cryptoSrc)(
+      _cm, _cm.exports, _bridgeRequire, _bridge.projectInfo.modulesDir, _bridge.projectInfo.modulesDir + '/crypto-utils.js', _bridge.processInfo, _bridge.buffer
     );
     _cryptoModule = _cm.exports;
   }
@@ -91,6 +91,17 @@ function _bridgeRequire(name) {
   // 相对路径模块（./xxx 或 ../xxx）→ 递归 eval 加载
   if (name.charAt(0) === '.') {
     var resolved = name;
+    // 🔧 JSON 文件：直接加载解析（如 require('../package.json')）
+    if (resolved.endsWith('.json')) {
+      var jsonPath = resolved.replace(/^\.\//, '').replace(/^\.\.\//, '');
+      // ../package.json → 项目根目录；./xxx.json → modules/ 目录
+      var jsonRel = (resolved.indexOf('../') === 0) ? jsonPath : ('modules/' + jsonPath);
+      try {
+        var jsonSrc = _bridge.loadFileSource(jsonRel);
+        if (jsonSrc && !jsonSrc.error) return JSON.parse(jsonSrc);
+      } catch (e) { console.warn('[core] JSON 加载失败:', jsonRel, e.message); }
+      return {};
+    }
     if (!resolved.endsWith('.js')) resolved += '.js';
     // 相对于 modules/ 目录解析
     var relPath = 'modules/' + resolved.replace(/^\.\//, '').replace(/^\.\.\//, '');
