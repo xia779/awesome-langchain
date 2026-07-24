@@ -1123,6 +1123,66 @@ const tools = {
     },
   },
 
+  // ===== 确定性工具（本地获取，无需网络，杜绝幻觉）=====
+  get_current_time: {
+    description: '获取当前系统日期和时间（精确到秒）。当用户询问现在几点、今天日期、星期几、当前时间等时间相关问题时，必须使用本工具获取准确时间，禁止通过 web_search 猜测或从网页文本中推断时间。',
+    parameters: {
+      type: 'object',
+      properties: {
+        timezone: { type: 'string', description: '时区（可选，默认 Asia/Shanghai）。如 Asia/Shanghai、UTC、America/New_York' }
+      },
+      required: []
+    },
+    handler: async function (params) {
+      try {
+        var tz = params.timezone || 'Asia/Shanghai';
+        var now = new Date();
+        var options = { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, weekday: 'long' };
+        var formatted = now.toLocaleString('zh-CN', options);
+        var iso = now.toISOString();
+        var weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+        // 用目标时区计算星期
+        var tzDate = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+        var weekDay = '星期' + weekDays[tzDate.getDay()];
+        return '✅ 当前时间（' + tz + '）：' + formatted + '（' + weekDay + '）\nISO格式：' + iso + '\n时间戳：' + now.getTime();
+      } catch (e) {
+        // 时区无效时回退到本地时间
+        var now = new Date();
+        return '✅ 当前本地时间：' + now.toLocaleString('zh-CN') + '\nISO格式：' + now.toISOString() + '\n时间戳：' + now.getTime();
+      }
+    },
+  },
+
+  calculate: {
+    description: '精确计算数学表达式。支持加减乘除、幂运算、取模、括号嵌套等。当用户需要数学计算时优先使用本工具，确保结果精确，禁止心算或编造结果。',
+    parameters: {
+      type: 'object',
+      properties: {
+        expression: { type: 'string', description: '数学表达式，如 (3+5)*2、2**10、123/7、Math.sqrt(144)' }
+      },
+      required: ['expression']
+    },
+    handler: async function (params) {
+      try {
+        var expr = String(params.expression || '').trim();
+        if (!expr) return '❌ 请提供数学表达式';
+        // 安全检查：只允许数字、运算符、括号、Math方法
+        var sanitized = expr.replace(/Math\.(sqrt|pow|abs|floor|ceil|round|log|log2|log10|sin|cos|tan|PI|E|min|max|exp|sign|trunc|cbrt|hypot)/g, '');
+        if (/[^0-9+\-*/%.()eE\s,]/.test(sanitized)) {
+          return '❌ 表达式包含不允许的字符，仅支持数字和运算符（+ - * / % ** 括号）及Math方法';
+        }
+        // 使用 Function 构造器安全计算（已过滤非法字符）
+        var fn = new Function('Math', '"use strict"; return (' + expr + ')');
+        var result = fn(Math);
+        if (typeof result !== 'number' || isNaN(result)) return '❌ 计算结果无效（NaN），请检查表达式';
+        if (!isFinite(result)) return '❌ 计算结果为无穷大，请检查表达式（如除以零）';
+        return '✅ ' + expr + ' = ' + result;
+      } catch (e) {
+        return '❌ 计算失败：' + e.message + '。请检查表达式语法。';
+      }
+    },
+  },
+
   // ===== A股行情查询（腾讯行情数据源，返回确定数字）=====
   stock_quote: {
     description: '查询A股实时行情（指数/个股）：现价、涨跌幅、今开、昨收、最高最低、成交量额、行情时间。数据来自腾讯行情接口，数字准确权威。查询股指点位、开盘收盘、涨跌幅等行情数据时必须优先使用本工具，不要用 web_search 猜测或编造数字。',

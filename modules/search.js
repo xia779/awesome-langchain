@@ -340,8 +340,24 @@ async function webSearchDirect(query, engine) {
   if (engine === 'duckduckgo' || engine === 'bing' || engine === 'searxng') {
     await _probeSearchBackend();
     if (!_backendSearchHealthy) {
-      console.warn('⚠️ [' + engine + '] 依赖后端搜索代理（非直连），代理未启动');
-      return `联网搜索暂时不可用：${engine} 引擎依赖本地搜索代理（端口 ${_searchBackendBase().split(':').pop()} 无响应）。\n该引擎不支持真正的客户端直连，请检查应用是否已完成启动。\n如需无代理搜索，请在设置 → 搜索引擎中切换到博查或 Tavily（需 API Key）。`;
+      console.warn('⚠️ [' + engine + '] 依赖后端搜索代理（非直连），代理未启动，尝试付费引擎降级');
+      // 自动降级到付费引擎（如果配置了 Key）
+      if (Core.config.bochaApiKey) {
+        console.log('🔄 自动降级到博查搜索');
+        try {
+          var bochaResult = await searchBochaDirect(query);
+          if (bochaResult && bochaResult.length > 20 && !bochaResult.includes('未找到有效')) return bochaResult;
+        } catch (e) { console.warn('⚠️ 博查降级失败:', e.message); }
+      }
+      if (Core.config.tavilyApiKey) {
+        console.log('🔄 自动降级到 Tavily 搜索');
+        try {
+          var tavilyResult = await searchTavilyDirect(query);
+          if (tavilyResult && tavilyResult.length > 20 && !tavilyResult.includes('未找到有效')) return tavilyResult;
+        } catch (e) { console.warn('⚠️ Tavily降级失败:', e.message); }
+      }
+      // 所有引擎都不可用
+      return `联网搜索暂时不可用：${engine} 引擎依赖本地搜索代理（端口 ${_searchBackendBase().split(':').pop()} 无响应），且未配置可用的付费搜索 Key。\n请在设置 → 搜索引擎中配置博查或 Tavily API Key 以实现无代理搜索，或等待应用完全启动后重试。`;
     }
   }
 

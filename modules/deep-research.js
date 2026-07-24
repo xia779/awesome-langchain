@@ -284,7 +284,7 @@ async function _deepRead(sources, opts, onProgress) {
         readResults.push({
           url: src.url,
           title: src.title,
-          content: content.substring(0, 6000),
+          content: content.substring(0, 20000),
           query: src.query
         });
       }
@@ -302,7 +302,7 @@ async function _deepRead(sources, opts, onProgress) {
     readResults.push({
       url: s.url,
       title: s.title,
-      content: s.fullText.substring(0, 6000),
+      content: s.fullText.substring(0, 20000),
       query: s.query,
       isLocal: true
     });
@@ -312,15 +312,30 @@ async function _deepRead(sources, opts, onProgress) {
 }
 
 async function _fetchPage(url, opts) {
+  // 优先使用 Playwright 渲染抓取（支持 SPA/动态页面）
+  if (Core.browserPro && typeof Core.browserPro.navigate === 'function') {
+    try {
+      var navResult = await Core.browserPro.navigate(url, { page: 'research', timeout: 20000, waitUntil: 'domcontentloaded' });
+      if (navResult && navResult.success) {
+        var extractResult = await Core.browserPro.extract({ page: 'research', maxLength: 15000 });
+        if (extractResult && extractResult.success && extractResult.text && extractResult.text.length > 100) {
+          return extractResult.text;
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ [deep-research] Playwright抓取失败，回退read_url:', e.message || e);
+    }
+  }
+  // 回退：基础 HTTP 抓取（无 JS 渲染）
   if (Core.toolsRegistry && Core.toolsRegistry.executeTool) {
     try {
-      var result = await Core.toolsRegistry.executeTool('read_url', { url: url, max_length: 8000 });
+      var result = await Core.toolsRegistry.executeTool('read_url', { url: url, max_length: 15000 });
       if (result && result.indexOf('\u274c') === -1) {
         // 去掉前缀 "🌐 网页内容: url\n\n"
         var text = result.replace(/^\ud83c\udf10 网页内容: [^\n]+\n\n/, '');
         return text;
       }
-    } catch (e) { console.warn('⚠️ [deep-research] 操作失败:', e.message || e); }
+    } catch (e) { console.warn('⚠️ [deep-research] read_url抓取失败:', e.message || e); }
   }
   return null;
 }
@@ -334,12 +349,12 @@ async function _synthesizeReport(topic, plan, searchResults, readResults, opts) 
 
   // 构建深度阅读内容
   var readContent = readResults.map(function(r, i) {
-    return '--- 来源 ' + (i + 1) + ': ' + r.title + ' (' + r.url + ') ---\n' + r.content.substring(0, 3000);
+    return '--- 来源 ' + (i + 1) + ': ' + r.title + ' (' + r.url + ') ---\n' + r.content.substring(0, 12000);
   }).join('\n\n');
 
   // 截断避免超长
-  if (readContent.length > 20000) readContent = readContent.substring(0, 20000) + '\n...(内容截断)';
-  if (sourceSummary.length > 5000) sourceSummary = sourceSummary.substring(0, 5000);
+  if (readContent.length > 60000) readContent = readContent.substring(0, 60000) + '\n...(内容截断)';
+  if (sourceSummary.length > 8000) sourceSummary = sourceSummary.substring(0, 8000);
 
   var systemMsg = '你是一个资深研究分析师。根据提供的检索结果和深度阅读内容，撰写一份结构化的深度研究报告。\n\n' +
     '【报告要求】\n' +

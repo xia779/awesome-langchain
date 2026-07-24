@@ -35,8 +35,15 @@ const AGENT_SYSTEM_PROMPT = `你是一个中文AI智能体助手，可以自主�
 8. 如果连续两次工具失败，考虑用 run_python 编写脚本来完成任务，或向用户 ask_user 确认参数
 9. web_search 可能不可用（返回"未启用"），此时应优先使用本地工具（run_command、run_python、read_file等）完成任务，不要反复尝试搜索
 10. 【严禁编造数据】如果搜索结果中没有确切的数字（如股指点位、股价、开盘价、收盘价、涨跌幅、成交量等），绝对不允许编造一个"看起来合理"的数字，必须明确说明"未找到确切数据"。宁可承认不知道，也绝不给出虚假数字。引用数据时尽量注明来源和时间。
+11. 【证据不足必须拒绝】如果搜索结果与用户问题无直接关联（如搜"现在几点"返回的是新闻文章），必须回复"未找到可靠信息"或"搜索结果与问题无关"，严禁从无关内容中推测、拼凑或"合理推断"出答案。
+12. 【确定性数据用专用工具】时间/日期→get_current_time，数学计算→calculate，股票行情→stock_quote。这些数据有确定性来源，绝对不允许通过web_search获取或从网页文本中推断。
+13. 【搜索结果相关性判断】使用搜索结果前，先判断结果是否与问题直接相关。如果搜索返回的内容只是"提到了相关关键词"但并未直接回答问题，不要将其作为答案依据，应换用更精确的关键词重新搜索或使用read_url抓取原文验证。
 
 你可以使用以下工具（action名称）：
+- get_current_time: 获取当前系统日期和时间（精确到秒）。【用户问时间、日期、星期几时必须用本工具，禁止用web_search】
+  参数: {"timezone": "可选时区，默认Asia/Shanghai"}
+- calculate: 精确计算数学表达式（加减乘除、幂、取模、Math方法）。【数学计算必须用本工具，禁止心算】
+  参数: {"expression": "数学表达式，如(3+5)*2、Math.sqrt(144)"}
 - web_search: 联网搜索，获取最新信息、实时数据、新闻
   参数: {"query": "搜索关键词"}
 - read_url: 抓取网页内容，读取指定URL的网页正文
@@ -162,6 +169,8 @@ function extractJSONFromText(text) {
 
 // ===== Agent 步骤名称中文翻译 =====
 var ACTION_ZH_MAP = {
+  'get_current_time': '获取时间',
+  'calculate': '数学计算',
   'web_search': '联网搜索',
   'read_file': '读取文件',
   'write_file': '写入文件',
@@ -311,7 +320,8 @@ async function _executeAgentActionRaw(action, params) {
          'run_command',
          'browser_navigate', 'browser_screenshot', 'browser_click', 'browser_type', 'browser_extract', 'browser_wait',
          'github_pr', 'github_issue', 'github_repo', 'github_release',
-         'image_search', 'image_download', 'stock_quote', 'deep_research'].includes(action)) {
+         'image_search', 'image_download', 'stock_quote', 'deep_research',
+         'get_current_time', 'calculate'].includes(action)) {
       try {
         const result = await Core.toolsRegistry.executeTool(action, mappedParams);
         return result;
