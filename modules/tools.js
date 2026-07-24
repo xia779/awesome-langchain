@@ -132,21 +132,35 @@ const tools = {
         // 确保目录存在
         const dir = path.dirname(file_path);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        // Checkpoint 快照 + diff 预览
+        // 🔍 Pre-write diff 预览：先生成 diff，让用户确认后再写入
         var diffInfo = null;
-        if (fs.existsSync(file_path) && Core && Core.fileCheckpoint) {
+        var fileExists = fs.existsSync(file_path);
+        if (fileExists && Core && Core.fileCheckpoint) {
+          diffInfo = Core.fileCheckpoint.generateDiff(file_path, content);
+          // 有实质变更时弹出 diff 确认（ask 模式或变更行数 > 5）
+          if (diffInfo.changeCount > 0 && typeof confirm === 'function') {
+            var permMode = (Core.permissions && Core.permissions.getMode) ? Core.permissions.getMode() : 'allow';
+            if (permMode === 'ask' || diffInfo.changeCount > 20) {
+              var preview = diffInfo.diff.substring(0, 600);
+              if (diffInfo.diff.length > 600) preview += '\n... (已截断)';
+              var confirmMsg = '📝 文件修改预览：' + path.basename(file_path) + '\n'
+                + '变更: ' + diffInfo.changeCount + ' 行\n\n' + preview + '\n\n是否确认写入？';
+              if (!confirm(confirmMsg)) {
+                return '⛔ 用户取消了写入操作（diff 预览后拒绝）';
+              }
+            }
+          }
+          // 确认后创建 checkpoint 快照
           var sessionId = (Core.currentSession && Core.currentSession.id) || 'default';
           Core.fileCheckpoint.createCheckpoint(file_path, sessionId);
-          diffInfo = Core.fileCheckpoint.generateDiff(file_path, content);
         }
         fs.writeFileSync(file_path, content, 'utf8');
         var msg = `✅ 文件写入成功：${file_path}`;
         if (diffInfo && diffInfo.changeCount > 0) {
           msg += `\n📝 变更: ${diffInfo.changeCount} 行 (共 ${diffInfo.totalLines} 行)`;
-          // 输出 diff 预览（截断避免过长）
-          var preview = diffInfo.diff.substring(0, 800);
-          if (diffInfo.diff.length > 800) preview += '\n... (diff 已截断)';
-          msg += '\n```\n' + preview + '\n```';
+          var postPreview = diffInfo.diff.substring(0, 800);
+          if (diffInfo.diff.length > 800) postPreview += '\n... (diff 已截断)';
+          msg += '\n```\n' + postPreview + '\n```';
         }
         return msg;
       } catch (err) {
@@ -547,20 +561,33 @@ const tools = {
         if (count === 0) {
           return '❌ 未找到匹配的文本:\n"' + old_text.substring(0, 100) + '"';
         }
-        // Checkpoint 快照 + diff 预览
+        // 🔍 Pre-write diff 预览：先生成 diff，让用户确认后再写入
         var diffInfo = null;
         if (Core && Core.fileCheckpoint) {
+          diffInfo = Core.fileCheckpoint.generateDiff(file_path, newContent);
+          if (diffInfo.changeCount > 0 && typeof confirm === 'function') {
+            var permMode = (Core.permissions && Core.permissions.getMode) ? Core.permissions.getMode() : 'allow';
+            if (permMode === 'ask' || diffInfo.changeCount > 20) {
+              var preview = diffInfo.diff.substring(0, 600);
+              if (diffInfo.diff.length > 600) preview += '\n... (已截断)';
+              var confirmMsg = '📝 文件编辑预览：' + path.basename(file_path) + '\n'
+                + '替换 ' + count + ' 处，变更 ' + diffInfo.changeCount + ' 行\n\n' + preview + '\n\n是否确认修改？';
+              if (!confirm(confirmMsg)) {
+                return '⛔ 用户取消了编辑操作（diff 预览后拒绝）';
+              }
+            }
+          }
+          // 确认后创建 checkpoint 快照
           var sessionId = (Core.currentSession && Core.currentSession.id) || 'default';
           Core.fileCheckpoint.createCheckpoint(file_path, sessionId);
-          diffInfo = Core.fileCheckpoint.generateDiff(file_path, newContent);
         }
         fs.writeFileSync(file_path, newContent, 'utf8');
         var msg = '✅ 编辑成功：替换了 ' + count + ' 处匹配文本\n文件：' + file_path;
         if (diffInfo && diffInfo.changeCount > 0) {
           msg += '\n📝 变更: ' + diffInfo.changeCount + ' 行';
-          var preview = diffInfo.diff.substring(0, 800);
-          if (diffInfo.diff.length > 800) preview += '\n... (diff 已截断)';
-          msg += '\n```\n' + preview + '\n```';
+          var postPreview = diffInfo.diff.substring(0, 800);
+          if (diffInfo.diff.length > 800) postPreview += '\n... (diff 已截断)';
+          msg += '\n```\n' + postPreview + '\n```';
         }
         return msg;
       } catch (err) {
