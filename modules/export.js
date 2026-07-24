@@ -16,7 +16,7 @@ function exportCurrentSession(format) {
 
   const title = session.title || '未命名会话';
   const timestamp = new Date().toISOString().slice(0, 10);
-  const exportDir = path.join((Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data', 'exports');
+  const exportDir = path.join((Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || null || 'E:\\my-ai-data', 'exports');
   if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
 
   if (format === 'json') {
@@ -124,7 +124,7 @@ function exportCurrentSessionAsHtml() {
 
   const title = session.title || '未命名会话';
   const timestamp = new Date().toISOString().slice(0, 10);
-  const exportDir = path.join((Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data', 'exports');
+  const exportDir = path.join((Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || null || 'E:\\my-ai-data', 'exports');
   if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
 
   var msgHtml = '';
@@ -203,7 +203,7 @@ function exportSessionTree(format) {
     return;
   }
 
-  const exportDir = path.join((Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || process.env.AI_AGENT_DATA_ROOT || 'E:\\my-ai-data', 'exports');
+  const exportDir = path.join((Core && Core._globalDataRoot) || (Core && Core.DATA_ROOT) || null || 'E:\\my-ai-data', 'exports');
   if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
   const timestamp = new Date().toISOString().slice(0, 10);
   const masterTitle = (sessions[id].title || '未命名').replace(/[\\/:*?"<>|]/g, '_');

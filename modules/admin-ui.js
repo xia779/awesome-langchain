@@ -5,6 +5,12 @@
 
 var Core = null;
 var http = null;
+// 🔧 contextIsolation 兼容：通过桥接层访问 process 信息
+function _proc() {
+  if (typeof window !== "undefined" && window.nodeBridge && window.nodeBridge.processInfo) return window.nodeBridge.processInfo;
+  if (typeof process !== "undefined") return process;
+  return { platform: "win32", arch: "x64", pid: 0, versions: {}, uptime: function(){return 0;}, memoryUsage: function(){return {rss:0,heapTotal:0,heapUsed:0};}, cwd: function(){return "";} };
+}
 
 var ADMIN_PORT = 18791;
 var adminServer = null;
@@ -29,8 +35,8 @@ function apiOverview() {
     activeSkills: activeSkills.map(function(s) { return s.name; }),
     sessionCount: sessions.length,
     currentModel: model || (Core.config ? Core.config.ollamaModel : ''),
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
+    uptime: _proc().uptime(),
+    memory: _proc().memoryUsage(),
     time: Date.now()
   };
 }
@@ -145,14 +151,14 @@ function apiSystem() {
     modules = files.filter(function(f) { return f.endsWith('.js'); }).map(function(f) { return f.replace('.js', ''); });
   } catch (e) { console.warn('⚠️ [admin-ui] 读取模块目录失败:', e.message); }
   return {
-    platform: process.platform,
-    arch: process.arch,
-    nodeVersion: process.version,
-    electronVersion: process.versions.electron || '',
-    pid: process.pid,
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    cwd: process.cwd(),
+    platform: _proc().platform,
+    arch: _proc().arch,
+    nodeVersion: _proc().versions.node,
+    electronVersion: _proc().versions.electron || '',
+    pid: _proc().pid,
+    uptime: _proc().uptime(),
+    memory: _proc().memoryUsage(),
+    cwd: _proc().cwd(),
     moduleCount: modules.length,
     modules: modules.slice(0, 60)
   };
@@ -755,7 +761,7 @@ function startAdminServer() {
 
   adminServer = http.createServer(handleRequest);
 // 🔒 默认仅监听本地，通过 AI_AGENT_BIND_HOST 环境变量可覆盖
-  var bindHost = process.env.AI_AGENT_BIND_HOST || '127.0.0.1';
+  var bindHost = (_proc().env && _proc().env.AI_AGENT_BIND_HOST) || '127.0.0.1';
 
   adminServer.listen(ADMIN_PORT, bindHost, function() {
     console.log('\u{1f5a5}\ufe0f [admin-ui] Gateway \u7ba1\u7406\u540e\u53f0: http://' + bindHost + ':' + ADMIN_PORT + '/admin');

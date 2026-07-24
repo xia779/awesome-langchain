@@ -1347,9 +1347,14 @@ function nativeRequire(moduleName) {
 let logBridge = { available: false, info: () => {}, warn: () => {}, error: () => {}, debug: () => {} };
 try {
   const log = require('electron-log');
-  log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB rotation
-  log.transports.file.level = 'info';
-  log.transports.console.level = 'debug';
+  // transports.file 在 preload 上下文可能未初始化，需守卫
+  if (log.transports && log.transports.file) {
+    log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB rotation
+    log.transports.file.level = 'info';
+  }
+  if (log.transports && log.transports.console) {
+    log.transports.console.level = 'debug';
+  }
   logBridge = {
     available: true,
     info: (...args) => log.info(...args),

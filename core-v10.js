@@ -301,9 +301,12 @@ try {
 
 function getDataRoot() {
   // 🔧 动态路径：环境变量 > 已存在的默认路径 > app userData 回退
-  if (process.env.AI_AGENT_DATA_ROOT) {
-    return process.env.AI_AGENT_DATA_ROOT;
-  }
+  try {
+    var env = (_bridge && _bridge.processInfo) ? _bridge.processInfo.env : {};
+    if (env.AI_AGENT_DATA_ROOT) {
+      return env.AI_AGENT_DATA_ROOT;
+    }
+  } catch (e) { /* process.env 不可用时跳过 */ }
   var defaultPath = 'E:\\my-ai-data';
   if (fs.existsSync(defaultPath)) {
     return defaultPath;

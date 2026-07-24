@@ -310,8 +310,9 @@ function collectPerformanceInfo() {
   var result = {};
 
   // 内存使用
-  if (typeof process !== 'undefined' && process.memoryUsage) {
-    var mem = process.memoryUsage();
+  var _pBridge = (typeof window !== 'undefined' && window.nodeBridge && window.nodeBridge.processInfo) ? window.nodeBridge.processInfo : null;
+  if (_pBridge && _pBridge.memoryUsage) {
+    var mem = _pBridge.memoryUsage();
     result.heapUsed = Math.round(mem.heapUsed / 1024 / 1024);
     result.heapTotal = Math.round(mem.heapTotal / 1024 / 1024);
     result.rss = Math.round(mem.rss / 1024 / 1024);
