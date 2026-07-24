@@ -26,6 +26,7 @@
     "cors": "^2.8.6",
     "docx": "^9.7.1",
     "dompurify": "^3.4.12",
+    "electron-log": "^5.4.4",
     "express": "^4.22.2",
     "highlight.js": "^11.11.1",
     "mammoth": "^1.12.0",

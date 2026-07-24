@@ -20,6 +20,12 @@ app.commandLine.appendSwitch('disable-http-cache');
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
 console.log('🔒 [安全] contextIsolation=true, nodeIntegration=false（preload 桥接层提供 Node API）');
 
+// 🔧 S6: 日志持久化 — 初始化 electron-log 主进程（注册 IPC handler）
+const log = require('electron-log/main');
+log.initialize();
+log.transports.file.maxSize = 5 * 1024 * 1024;
+log.info('[main] 应用启动');
+
 const express = require('express');
 const cors = require('cors');
 const { createServer } = require('http');

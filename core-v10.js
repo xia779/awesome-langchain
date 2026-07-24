@@ -63,6 +63,12 @@ if (typeof window !== 'undefined' && !window.hljs && _bridge && _bridge.requireN
     if (_hljs && !_hljs.error && _hljs.highlight) { window.hljs = _hljs; }
   } catch (e) { console.warn('[core] highlight.js 桥接加载失败:', e.message); }
 }
+// ===== 🔧 S6: console.warn/error → 持久化日志 =====
+if (_bridge.log && _bridge.log.available) {
+  var _origWarn = console.warn, _origError = console.error;
+  console.warn = function() { _bridge.log.warn.apply(null, arguments); _origWarn.apply(console, arguments); };
+  console.error = function() { _bridge.log.error.apply(null, arguments); _origError.apply(console, arguments); };
+}
 var encryptValue = _cryptoModule ? _cryptoModule.encryptValue : function(v) { return v; };
 var decryptValue = _cryptoModule ? _cryptoModule.decryptValue : function(v) { return v; };
 
@@ -421,6 +427,15 @@ const Core = {
   USERS_ROOT,
   _globalDataRoot: DATA_ROOT,  // 🔧 全局数据根目录（不受 setCurrentUser 影响）
   HAS_NODE_FS,
+
+  // 🔧 S6: 持久化日志（electron-log → 文件）
+  log: _bridge.log && _bridge.log.available ? {
+    info: function() { _bridge.log.info.apply(null, arguments); },
+    warn: function() { _bridge.log.warn.apply(null, arguments); },
+    error: function() { _bridge.log.error.apply(null, arguments); },
+    debug: function() { _bridge.log.debug.apply(null, arguments); }
+  } : { info: function(){}, warn: function(){}, error: function(){}, debug: function(){} },
+  get logPath() { return _bridge.log && _bridge.log.getFilePath ? _bridge.log.getFilePath() : ''; },
 
   dom: {},
   pluginManager: null,

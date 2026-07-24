@@ -1342,7 +1342,29 @@ function nativeRequire(moduleName) {
 }
 
 // ============================================================
-// 15. projectInfo bridge
+// 15. log bridge (electron-log — 日志持久化到文件)
+// ============================================================
+let logBridge = { available: false, info: () => {}, warn: () => {}, error: () => {}, debug: () => {} };
+try {
+  const log = require('electron-log');
+  log.transports.file.maxSize = 5 * 1024 * 1024; // 5MB rotation
+  log.transports.file.level = 'info';
+  log.transports.console.level = 'debug';
+  logBridge = {
+    available: true,
+    info: (...args) => log.info(...args),
+    warn: (...args) => log.warn(...args),
+    error: (...args) => log.error(...args),
+    debug: (...args) => log.debug(...args),
+    verbose: (...args) => log.verbose(...args),
+    getFilePath: () => { try { return log.transports.file.getFile().path; } catch (e) { return ''; } }
+  };
+} catch (e) {
+  console.warn('[preload] electron-log not available:', e.message);
+}
+
+// ============================================================
+// 16. projectInfo bridge
 // ============================================================
 const projectInfoBridge = {
   rootDir: ROOT_DIR,
@@ -1756,6 +1778,7 @@ const nodeBridge = {
   nativeRequire: nativeRequire,
   requireNpm: requireNpm,
   objBridge: objBridge,
+  log: logBridge,
   projectInfo: projectInfoBridge,
   ipcRenderer: ipcBridge
 };
