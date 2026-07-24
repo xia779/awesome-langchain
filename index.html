@@ -8,12 +8,12 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <!-- 🔧 #8: CSP 安全头 — 限制连接目标，阻止数据外泄到未授权端点 -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: http://127.0.0.1:*; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* https:; media-src 'self' blob: http://127.0.0.1:*;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data: file:; img-src 'self' data: blob: http://127.0.0.1:*; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* https:; media-src 'self' blob: http://127.0.0.1:*;">
   <title>AI智能体</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" id="hljs-theme">
+  <link rel="stylesheet" href="./node_modules/highlight.js/styles/github-dark.min.css" id="hljs-theme">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
 
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=5">
 <base target="_blank">
 </head>
 <body>
@@ -105,6 +105,7 @@
 
 <!-- ===== 主区域 ===== -->
 <div id="main-container">
+  <div id="chatMainArea">
   <div id="chatContainer">
 </div>
 
@@ -229,7 +230,92 @@
       <button id="send" title="发送" onclick="if(window.Core&&Core.api&&Core.api.sendMessage)Core.api.sendMessage()"><span class="material-icons-outlined" style="font-size:20px;vertical-align:middle;">arrow_upward</span></button>
     </div>
     <div id="status"><span class="material-icons-outlined" style="font-size:14px;vertical-align:-2px;color:#22c55e;">check_circle</span> 已就绪</div>
-  </div>
+  </div><!-- /#status -->
+</div><!-- /#chatMainArea -->
+
+  <!-- ===== 右侧可折叠任务栏（WorkBuddy 风格：任务监控）===== -->
+  <aside id="rightSidebar" class="right-sidebar">
+    <div class="right-sidebar-header">
+      <button id="rightSidebarToggle" class="right-sidebar-toggle" title="收起/展开">
+        <span class="material-icons-outlined">chevron_right</span>
+      </button>
+      <span class="material-icons-outlined" style="font-size:18px;color:var(--text-secondary);">monitoring</span>
+      <span class="right-sidebar-title">任务监控</span>
+    </div>
+
+    <div class="right-sidebar-body">
+      <!-- 待办 -->
+      <div class="rs-section" data-section="todo">
+        <button class="rs-section-title">
+          <span class="material-icons-outlined">task_alt</span>
+          <span>待办</span>
+          <span class="material-icons-outlined rs-chevron">expand_less</span>
+        </button>
+        <div class="rs-section-content">
+          <div id="rsTaskList" class="rs-list">
+            <div class="rs-empty">暂无待办任务</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 产物 -->
+      <div class="rs-section" data-section="outputs">
+        <button class="rs-section-title">
+          <span class="material-icons-outlined">inventory_2</span>
+          <span>产物</span>
+          <span class="material-icons-outlined rs-chevron">expand_less</span>
+        </button>
+        <div class="rs-section-content">
+          <div id="rsOutputList" class="rs-list">
+            <div class="rs-empty">暂无产物文件</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 工作文件 -->
+      <div class="rs-section" data-section="files">
+        <button class="rs-section-title">
+          <span class="material-icons-outlined">folder_open</span>
+          <span>工作文件</span>
+          <span class="material-icons-outlined rs-chevron">expand_less</span>
+        </button>
+        <div class="rs-section-content">
+          <div id="rsFileList" class="rs-list">
+            <div class="rs-empty">暂无工作文件</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 快捷操作 -->
+      <div class="rs-section" data-section="actions">
+        <button class="rs-section-title">
+          <span class="material-icons-outlined">bolt</span>
+          <span>快捷操作</span>
+          <span class="material-icons-outlined rs-chevron">expand_less</span>
+        </button>
+        <div class="rs-section-content">
+          <div class="rs-action-grid">
+            <button class="rs-action-btn" data-action="new-chat">
+              <span class="material-icons-outlined">add_comment</span>
+              <span>新对话</span>
+            </button>
+            <button class="rs-action-btn" data-action="clear-chat">
+              <span class="material-icons-outlined">mop</span>
+              <span>清空</span>
+            </button>
+            <button class="rs-action-btn" data-action="export-md">
+              <span class="material-icons-outlined">description</span>
+              <span>导出MD</span>
+            </button>
+            <button class="rs-action-btn" data-action="settings">
+              <span class="material-icons-outlined">settings</span>
+              <span>设置</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
 
   <!-- 应用与插件菜单 -->
   <div class="apps-menu-panel" id="appsMenuPanel">
@@ -263,9 +349,9 @@
         <span>导出全部</span>
       </div>
     </div>
-  </div>
+  </div><!-- /#appsMenuPanel -->
 
-</div>
+</div><!-- /#main-container -->
 
 <!-- ===== P2: 提示词面板 ===== -->
 <div class="prompt-panel" id="promptPanel">
@@ -845,14 +931,13 @@
   <div class="menu-item" role="menuitem" tabindex="-1" data-action="export-pptx"><span class="material-icons-outlined ctx-ico">slideshow</span>导出 PPT</div>
 </div>
 
-<!-- ===== 引入外部库 ===== -->
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+<!-- ===== 引入外部库（本地化，离线可用） ===== -->
+<script src="./node_modules/marked/marked.min.js"></script>
+<!-- highlight.js 通过 preload 桥接加载（window.hljs 在 core-v10.js 中初始化） -->
 <!-- 方向C2：Mermaid图表 -->
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="./node_modules/mermaid/dist/mermaid.min.js"></script>
 
-<!-- XSS 防护：sanitize marked output -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js"></script>
+<!-- DOMPurify 由 preload 桥接层提供（window.DOMPurify 在 core-v10.js 中初始化） -->
 
 <!-- ===== 核心引擎（v10，最终修复版） ===== -->
 
@@ -895,7 +980,7 @@
 </div>
 
 <!-- ===== App JS (extracted from inline scripts) ===== -->
-<script src="app.js"></script>
+<script src="app.js?v=5"></script>
 
 
 <!-- Ctrl+K 聚焦输入框 / Ctrl+N 新建会话 已由 core-v10.js initShortcuts 统一处理 -->

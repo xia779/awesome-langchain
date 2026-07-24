@@ -56,6 +56,13 @@ try {
 if (typeof window !== 'undefined' && !window.DOMPurify && _bridge && _bridge.dompurify && _bridge.dompurify.available) {
   window.DOMPurify = { sanitize: function(html, opts) { return _bridge.dompurify.sanitize(html, opts); } };
 }
+// ===== 🔧 S1: highlight.js（通过桥接层，离线可用）=====
+if (typeof window !== 'undefined' && !window.hljs && _bridge && _bridge.requireNpm) {
+  try {
+    var _hljs = _bridge.requireNpm('highlight.js');
+    if (_hljs && !_hljs.error && _hljs.highlight) { window.hljs = _hljs; }
+  } catch (e) { console.warn('[core] highlight.js 桥接加载失败:', e.message); }
+}
 var encryptValue = _cryptoModule ? _cryptoModule.encryptValue : function(v) { return v; };
 var decryptValue = _cryptoModule ? _cryptoModule.decryptValue : function(v) { return v; };
 
