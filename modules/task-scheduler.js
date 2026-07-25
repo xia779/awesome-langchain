@@ -468,9 +468,83 @@ function notifyMasterSession(kind, task) {
         ).catch(function (e) { console.warn('[task-scheduler] 知识库保存失败:', e.message); });
       } catch (e) { console.warn('[task-scheduler] 知识库自动记忆出错:', e.message); }
     }
+
+    // 文件弹窗：结果含 write_file 成功标记 → 弹出生成文件卡片（最多 3 张）
+    if (kind === 'done' && task.result) {
+      try {
+        var _fps = extractFilePaths(task.result);
+        for (var _fi = 0; _fi < Math.min(_fps.length, 3); _fi++) showFilePopup(_fps[_fi]);
+      } catch (e) { /* noop */ }
+    }
   } catch (e) {
     console.warn('[task-scheduler] master 会话聚合失败:', e.message);
   }
+}
+
+// ═══════════════════════════════════════════
+// Wave 10：文件类消息弹窗
+//   任务结果里含 write_file 工具的成功标记（"✅ 文件写入成功：<path>"）时，
+//   提取文件路径并在主窗口右上角弹出文件卡片，可一键打开（DS"文件类消息弹窗"）。
+// ═══════════════════════════════════════════
+function extractFilePaths(resultText) {
+  var paths = [];
+  var re = /文件写入成功：\s*([^\r\n]+)/g;
+  var m;
+  var text = String(resultText || '');
+  while ((m = re.exec(text)) !== null) {
+    var p = (m[1] || '').trim();
+    if (p && paths.indexOf(p) < 0) paths.push(p);
+  }
+  return paths;
+}
+
+function showFilePopup(filePath) {
+  if (typeof document === 'undefined' || !filePath) return;
+  var bridge = (typeof window !== 'undefined' && window.nodeBridge) ? window.nodeBridge : null;
+  var name = String(filePath).split(/[\\/]/).pop();
+
+  var card = document.createElement('div');
+  card.style.cssText = 'position:fixed;top:18px;right:18px;z-index:99999;min-width:280px;max-width:360px;'
+    + 'background:rgba(20,32,58,0.97);border:1px solid rgba(90,200,255,0.4);border-radius:12px;'
+    + 'padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,0.45);color:#eaf6ff;font-size:13px;'
+    + 'font-family:"Segoe UI","Microsoft YaHei",sans-serif;animation:fadeIn .25s ease;';
+
+  var head = document.createElement('div');
+  head.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;';
+  var icon = document.createElement('span');
+  icon.textContent = '📄';
+  var title = document.createElement('span');
+  title.textContent = '已生成文件';
+  title.style.cssText = 'font-weight:700;color:#7feeff;flex:1;';
+  var closeBtn = document.createElement('span');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'cursor:pointer;color:#9fc4e6;padding:0 4px;';
+  head.appendChild(icon); head.appendChild(title); head.appendChild(closeBtn);
+
+  var nameEl = document.createElement('div');
+  nameEl.textContent = name;
+  nameEl.style.cssText = 'font-weight:700;color:#fff;word-break:break-all;margin-bottom:4px;';
+  var pathEl = document.createElement('div');
+  pathEl.textContent = filePath;
+  pathEl.style.cssText = 'font-size:11px;color:#9fc4e6;word-break:break-all;opacity:.8;margin-bottom:10px;';
+
+  var openBtn = document.createElement('button');
+  openBtn.textContent = '打开文件';
+  openBtn.style.cssText = 'padding:6px 16px;border:none;border-radius:8px;cursor:pointer;font-size:12px;'
+    + 'background:linear-gradient(135deg,#38e1ff,#a86bff);color:#04121f;font-weight:700;';
+
+  card.appendChild(head); card.appendChild(nameEl); card.appendChild(pathEl); card.appendChild(openBtn);
+
+  function dismiss() { if (card.parentNode) card.parentNode.removeChild(card); }
+  closeBtn.addEventListener('click', dismiss);
+  openBtn.addEventListener('click', function () {
+    if (bridge && bridge.shell && typeof bridge.shell.openPath === 'function') {
+      try { bridge.shell.openPath(filePath); } catch (e) { /* noop */ }
+    }
+    dismiss();
+  });
+  document.body.appendChild(card);
+  setTimeout(dismiss, 12000);   // 12 秒自动消失
 }
 
 // ═══════════════════════════════════════════
