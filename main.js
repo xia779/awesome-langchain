@@ -1143,6 +1143,10 @@ ipcMain.on('hud-ready', () => {
   if (hudWindow && !hudWindow.isDestroyed()) {
     hudWindow.webContents.send('hud-state', { state: 'idle' });
   }
+  // 🖥️ Wave 9：通知主窗口渲染进程强制同步 master 会话聊天到 HUD（首次打开即可见历史）
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    mainWindow.webContents.send('hud-command', { action: 'sync-chat' });
+  }
 });
 // 主窗口渲染进程中继的 Agent 状态 → 转发到 HUD 视图
 ipcMain.on('hud-relay', (event, payload) => {

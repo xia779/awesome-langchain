@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI Agent Pro · HUD</title>
+<title>AI Agent Pro · HUD · 廿廿</title>
 <style>
   /* ============================================================
-     AI Agent Pro HUD — 动漫角色 + 赛博 HUD + 语音交互
-     状态系统: idle / thinking / speaking / executing
+     AI Agent Pro HUD —— master（廿廿）聊天界面（Wave 9）
+     布局：顶部栏（头像/状态/朗读/画布） + 中部消息流 + 底部输入栏
+     状态系统: idle / thinking / speaking / executing（顶部状态点）
      ============================================================ */
   :root {
     --cyan: #38e1ff;
@@ -15,13 +16,11 @@
     --purple: #a86bff;
     --purple-soft: #c79bff;
     --pink: #ff5fa2;
+    --green: #4ade80;
     --ink: #eaf6ff;
     --ink-dim: #9fc4e6;
-    --panel-bg: rgba(13, 24, 46, 0.52);
-    --panel-line: rgba(80, 200, 255, 0.32);
-    --glow: var(--cyan);
-    --stage-w: 760px;
-    --stage-h: 560px;
+    --panel-bg: rgba(13, 24, 46, 0.55);
+    --panel-line: rgba(80, 200, 255, 0.30);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -32,433 +31,206 @@
     overflow: hidden;
     font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
     color: var(--ink);
-    user-select: none;
     -webkit-font-smoothing: antialiased;
   }
 
   /* 整窗可拖动（Electron 无边框），交互元素单独 no-drag */
-  body { -webkit-app-region: drag; }
-  button, input, .fn-label, .no-drag, #chip-canvas { -webkit-app-region: no-drag; }
+  body { -webkit-app-region: drag; user-select: none; }
+  button, input, .no-drag, #chat-list, #chip-canvas { -webkit-app-region: no-drag; }
 
   /* 浏览器预览背景（Electron 中 body.electron 保持透明，实现桌面悬浮叠加） */
   body:not(.electron) {
-    background:
-      radial-gradient(ellipse 90% 70% at 50% 38%, #13213f 0%, #0a1122 55%, #05080f 100%);
+    background: radial-gradient(ellipse 90% 70% at 50% 38%, #13213f 0%, #0a1122 55%, #05080f 100%);
   }
 
-  .hud-stage {
+  .hud-shell {
     position: relative;
-    width: var(--stage-w);
-    height: var(--stage-h);
-    margin: 0 auto;
-  }
-
-  /* ---------- 背景网格 ---------- */
-  .bg-grid {
-    position: absolute; inset: 0;
-    background-image:
-      linear-gradient(rgba(56,225,255,0.05) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(56,225,255,0.05) 1px, transparent 1px);
-    background-size: 34px 34px;
-    -webkit-mask-image: radial-gradient(ellipse 70% 65% at 50% 46%, #000 30%, transparent 78%);
-    mask-image: radial-gradient(ellipse 70% 65% at 50% 46%, #000 30%, transparent 78%);
-    pointer-events: none;
-  }
-
-  /* ============================================================
-     中央角色区
-     ============================================================ */
-  .character-zone {
-    position: absolute;
-    left: 50%; top: 44%;
-    transform: translate(-50%, -50%);
-    width: 300px; height: 300px;
-    display: flex; align-items: center; justify-content: center;
-  }
-
-  /* 呼吸光晕 */
-  .glow {
-    position: absolute;
-    width: 340px; height: 340px;
-    border-radius: 50%;
-    background: radial-gradient(circle, var(--glow) 0%, transparent 62%);
-    opacity: 0.28;
-    filter: blur(6px);
-    animation: breathe 4.2s ease-in-out infinite;
-    transition: background 0.6s ease;
-  }
-  @keyframes breathe {
-    0%, 100% { transform: scale(0.92); opacity: 0.22; }
-    50%      { transform: scale(1.06); opacity: 0.40; }
-  }
-
-  /* 旋转同心环 */
-  .ring {
-    position: absolute;
-    border-radius: 50%;
-    border: 1px solid transparent;
-    pointer-events: none;
-  }
-  .ring.r1 {
-    width: 320px; height: 320px;
-    border-top-color: var(--cyan);
-    border-right-color: rgba(56,225,255,0.25);
-    animation: spin 14s linear infinite;
-  }
-  .ring.r2 {
-    width: 286px; height: 286px;
-    border-bottom-color: var(--purple);
-    border-left-color: rgba(168,107,255,0.2);
-    animation: spin 9s linear infinite reverse;
-  }
-  .ring.r3 {
-    width: 350px; height: 350px;
-    border-top-color: rgba(255,95,162,0.5);
-    animation: spin 22s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* 角色头像圆框 */
-  .portrait-frame {
-    position: relative;
-    width: 232px; height: 232px;
-    border-radius: 50%;
-    overflow: hidden;
-    border: 2px solid rgba(120,225,255,0.55);
-    box-shadow:
-      0 0 22px rgba(56,225,255,0.35),
-      inset 0 0 26px rgba(56,225,255,0.18);
-    background: radial-gradient(circle at 50% 30%, #1a2b4d, #0a1428);
-    z-index: 3;
-  }
-  .portrait-frame img {
     width: 100%; height: 100%;
-    object-fit: cover;
-    object-position: center 14%;
-    display: block;
-    filter: saturate(1.05) contrast(1.02);
-  }
-  /* 头像扫描线（思考时增强） */
-  .portrait-frame::after {
-    content: "";
-    position: absolute; left: 0; right: 0; top: -40%;
-    height: 38%;
-    background: linear-gradient(180deg, transparent, rgba(56,225,255,0.18), transparent);
-    opacity: 0;
-    transition: opacity 0.4s;
-  }
-
-  /* 数据流粒子画布 */
-  #particles {
-    position: absolute;
-    width: 360px; height: 360px;
-    pointer-events: none;
-    z-index: 2;
-    opacity: 0;
-    transition: opacity 0.5s;
-  }
-
-  /* 语音波形（说话时显示，环绕头像底部） */
-  .voice-wave {
-    position: absolute;
-    bottom: 6px; left: 50%;
-    transform: translateX(-50%);
-    display: flex; gap: 4px; align-items: flex-end;
-    height: 26px; z-index: 4;
-    opacity: 0; transition: opacity 0.35s;
-  }
-  .voice-wave span {
-    width: 3px; background: var(--cyan-soft);
-    border-radius: 2px; height: 6px;
-    box-shadow: 0 0 6px var(--cyan);
-  }
-
-  /* 执行进度环（包裹头像） */
-  .progress-ring {
-    position: absolute;
-    width: 256px; height: 256px;
-    z-index: 4; pointer-events: none;
-    opacity: 0; transition: opacity 0.4s;
-    transform: rotate(-90deg);
-  }
-  .progress-ring circle { fill: none; stroke-width: 3; }
-  .progress-ring .track { stroke: rgba(120,225,255,0.15); }
-  .progress-ring .bar {
-    stroke: var(--cyan);
-    stroke-linecap: round;
-    stroke-dasharray: 754;
-    stroke-dashoffset: 754;
-    filter: drop-shadow(0 0 5px var(--cyan));
-    transition: stroke-dashoffset 0.5s ease;
-  }
-
-  /* ---------- 悬浮功能标签 ---------- */
-  .fn-label {
-    position: absolute;
-    z-index: 5;
-    padding: 5px 12px;
-    font-size: 12px;
-    letter-spacing: 0.5px;
-    color: var(--ink-dim);
-    background: var(--panel-bg);
+    display: flex; flex-direction: column;
+    background: rgba(8, 15, 30, 0.42);
     border: 1px solid var(--panel-line);
-    border-radius: 16px;
-    backdrop-filter: blur(8px);
-    white-space: nowrap;
-    cursor: pointer;
-    opacity: 0.55;
-    transition: all 0.35s ease;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .fn-label .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--ink-dim);
-    transition: all 0.35s;
-  }
-  .fn-label:hover { opacity: 1; transform: translateY(-1px); border-color: var(--cyan); }
-  .fn-label.active {
-    opacity: 1;
-    color: #fff;
-    border-color: var(--cyan);
-    box-shadow: 0 0 14px rgba(56,225,255,0.4);
-  }
-  .fn-label.active .dot { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
-
-  /* 功能标签行（Wave 7 修复：底部横排，不再被左右面板遮挡） */
-  .fn-row {
-    position: absolute;
-    left: 50%; bottom: 84px;
-    transform: translateX(-50%);
-    display: flex; gap: 8px;
-    flex-wrap: wrap; justify-content: center;
-    max-width: 94%;
-    z-index: 7;
-  }
-
-  /* ============================================================
-     状态文字（角色下方）
-     ============================================================ */
-  .status-line {
-    position: absolute;
-    left: 50%; top: calc(44% + 155px);
-    transform: translateX(-50%);
-    text-align: center;
-    z-index: 6;
-  }
-  .status-text {
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: 1px;
-    color: #fff;
-    text-shadow: 0 0 12px var(--glow);
-    transition: text-shadow 0.5s;
-  }
-  .status-sub {
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--ink-dim);
-    letter-spacing: 0.5px;
-    min-height: 14px;
-  }
-  .typing::after {
-    content: "▍";
-    animation: blink 1s step-end infinite;
-    color: var(--cyan);
-  }
-  @keyframes blink { 50% { opacity: 0; } }
-
-  /* ============================================================
-     左侧：角色状态面板
-     ============================================================ */
-  .left-panel {
-    position: absolute;
-    left: 14px; top: 78px;
-    width: 168px;
-    padding: 14px 14px 12px;
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-line);
-    border-radius: 14px;
-    backdrop-filter: blur(12px);
-    z-index: 6;
-  }
-  .panel-title {
-    font-size: 12px;
-    color: var(--cyan-soft);
-    letter-spacing: 1px;
-    margin-bottom: 12px;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .panel-title::before {
-    content: ""; width: 3px; height: 12px;
-    background: var(--cyan); border-radius: 2px;
-    box-shadow: 0 0 6px var(--cyan);
-  }
-  .stat { margin-bottom: 11px; }
-  .stat:last-child { margin-bottom: 0; }
-  .stat-head {
-    display: flex; justify-content: space-between;
-    font-size: 11px; color: var(--ink-dim); margin-bottom: 4px;
-  }
-  .stat-head b { color: var(--ink); font-weight: 600; }
-  .stat-bar {
-    height: 5px; border-radius: 3px;
-    background: rgba(255,255,255,0.08);
+    border-radius: 18px;
     overflow: hidden;
+    backdrop-filter: blur(14px);
   }
-  .stat-fill {
-    height: 100%; border-radius: 3px;
-    transition: width 0.8s cubic-bezier(.4,0,.2,1);
-  }
-  .fill-mood   { background: linear-gradient(90deg, var(--pink), #ff9ec7); }
-  .fill-energy { background: linear-gradient(90deg, var(--cyan), var(--cyan-soft)); }
-  .fill-focus  { background: linear-gradient(90deg, var(--purple), var(--purple-soft)); }
-  .fill-stam   { background: linear-gradient(90deg, #4ade80, #a7f3d0); }
+  /* Electron 透明窗：主体半透明，保证桌面悬浮感 */
+  body.electron .hud-shell { background: rgba(8, 15, 30, 0.62); }
 
-  /* ============================================================
-     右侧：状态框 + 仪表
-     ============================================================ */
-  .right-panel {
-    position: absolute;
-    right: 14px; top: 78px;
-    width: 178px;
-    z-index: 6;
-    display: flex; flex-direction: column; gap: 10px;
+  /* ---------- 顶部栏 ---------- */
+  .top-bar {
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(80, 200, 255, 0.16);
+    background: rgba(13, 24, 46, 0.35);
   }
-  .status-box {
-    padding: 13px 14px;
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-line);
-    border-radius: 14px;
-    backdrop-filter: blur(12px);
-  }
-  .sb-row {
-    display: flex; justify-content: space-between; align-items: center;
-    font-size: 11.5px; margin-bottom: 9px;
-  }
-  .sb-row:last-child { margin-bottom: 0; }
-  .sb-row .k { color: var(--ink-dim); }
-  .sb-row .v { color: var(--ink); font-weight: 600; }
-  .v.exec { color: var(--cyan-soft); }
-  .conn-dot {
-    display: inline-block; width: 7px; height: 7px;
-    border-radius: 50%; background: #4ade80;
-    box-shadow: 0 0 7px #4ade80; margin-right: 5px;
-    vertical-align: middle;
-  }
-  .conn-dot.off { background: #f87171; box-shadow: 0 0 7px #f87171; }
-
-  /* 圆形仪表 */
-  .gauge-card {
-    padding: 12px;
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-line);
-    border-radius: 14px;
-    backdrop-filter: blur(12px);
-    display: flex; align-items: center; gap: 12px;
-  }
-  .gauge {
-    position: relative; width: 60px; height: 60px; flex-shrink: 0;
-  }
-  .gauge svg { transform: rotate(-90deg); }
-  .gauge circle { fill: none; stroke-width: 5; }
-  .gauge .gtrack { stroke: rgba(255,255,255,0.08); }
-  .gauge .gbar {
-    stroke: var(--purple);
-    stroke-linecap: round;
-    stroke-dasharray: 163;
-    transition: stroke-dashoffset 0.8s ease;
-    filter: drop-shadow(0 0 4px var(--purple));
-  }
-  .gauge .gpct {
-    position: absolute; inset: 0;
+  .avatar {
+    width: 38px; height: 38px; flex-shrink: 0;
+    border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 700; color: #fff;
+    background: linear-gradient(135deg, var(--cyan), var(--purple));
+    color: #04121f; font-weight: 800; font-size: 17px;
+    box-shadow: 0 0 12px rgba(56,225,255,0.45);
+    position: relative;
   }
-  .gauge-meta .gm-t { font-size: 12px; color: var(--ink); font-weight: 600; }
-  .gauge-meta .gm-s { font-size: 10.5px; color: var(--ink-dim); margin-top: 3px; }
+  .avatar .presence {
+    position: absolute; right: -1px; bottom: -1px;
+    width: 11px; height: 11px; border-radius: 50%;
+    background: var(--green); border: 2px solid #0a1428;
+    box-shadow: 0 0 6px var(--green);
+  }
+  .who { display: flex; flex-direction: column; line-height: 1.25; }
+  .who .name { font-size: 14px; font-weight: 700; color: #fff; letter-spacing: 0.5px; }
+  .who .role { font-size: 10.5px; color: var(--ink-dim); letter-spacing: 0.5px; }
 
-  /* ============================================================
-     顶部微型指示器
-     ============================================================ */
-  .top-indicators {
-    position: absolute;
-    top: 16px; left: 50%;
-    transform: translateX(-50%);
-    display: flex; gap: 10px; z-index: 7;
+  .status-chip {
+    display: flex; align-items: center; gap: 6px;
+    margin-left: 4px;
+    padding: 4px 11px;
+    font-size: 11px; color: var(--ink-dim);
+    background: rgba(56,225,255,0.08);
+    border: 1px solid var(--panel-line);
+    border-radius: 14px;
   }
-  .chip {
+  .status-chip .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--cyan); box-shadow: 0 0 6px var(--cyan);
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  body[data-state="thinking"] .status-chip .dot { background: var(--purple); box-shadow: 0 0 6px var(--purple); animation: blink 1s step-end infinite; }
+  body[data-state="executing"] .status-chip .dot { background: var(--pink); box-shadow: 0 0 6px var(--pink); animation: blink 0.8s step-end infinite; }
+  body[data-state="speaking"] .status-chip .dot { background: var(--cyan-soft); box-shadow: 0 0 6px var(--cyan-soft); }
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  .top-spacer { flex: 1; }
+
+  .icon-btn {
+    width: 32px; height: 32px; flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid var(--panel-line);
+    background: rgba(56,225,255,0.08);
+    color: var(--cyan-soft);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    transition: all 0.25s;
+  }
+  .icon-btn:hover { background: rgba(56,225,255,0.22); box-shadow: 0 0 10px rgba(56,225,255,0.35); }
+  .icon-btn.off { color: var(--ink-dim); opacity: 0.55; }
+
+  .chip-canvas {
     display: flex; align-items: center; gap: 6px;
     padding: 5px 11px;
-    font-size: 11px;
-    color: var(--ink-dim);
-    background: var(--panel-bg);
+    font-size: 11px; color: var(--ink-dim);
+    background: rgba(168,107,255,0.08);
     border: 1px solid var(--panel-line);
     border-radius: 14px;
-    backdrop-filter: blur(8px);
+    cursor: pointer;
+    transition: all 0.25s;
+    white-space: nowrap;
   }
-  .chip .led {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--cyan); box-shadow: 0 0 6px var(--cyan);
-  }
-  .chip .led.warn { background: #fbbf24; box-shadow: 0 0 6px #fbbf24; }
+  .chip-canvas:hover { border-color: var(--purple); color: var(--ink); }
+  .chip-canvas .led { width: 6px; height: 6px; border-radius: 50%; background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+  .chip-canvas .led.warn { background: #fbbf24; box-shadow: 0 0 6px #fbbf24; }
 
-  /* Wave 6d：可点击的画布入口 chip */
-  #chip-canvas { cursor: pointer; transition: border-color 0.3s, color 0.3s; }
-  #chip-canvas:hover { border-color: var(--purple); color: var(--ink); }
-  #chip-canvas .led { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
-  #chip-canvas .led.warn { background: #fbbf24; box-shadow: 0 0 6px #fbbf24; }
-
-  /* ============================================================
-     底部输入栏 + 操作横幅
-     ============================================================ */
-  .bottom-banner {
-    position: absolute;
-    left: 50%; bottom: 126px;
-    transform: translateX(-50%);
-    display: flex; align-items: center; gap: 9px;
-    padding: 8px 18px;
-    background: linear-gradient(90deg, rgba(56,225,255,0.16), rgba(168,107,255,0.16));
-    border: 1px solid var(--panel-line);
-    border-radius: 20px;
-    backdrop-filter: blur(10px);
-    font-size: 12.5px; color: var(--ink);
-    z-index: 7;
-    opacity: 0; transition: opacity 0.4s;
-    max-width: 80%;
-  }
-  .bottom-banner.show { opacity: 1; }
-  .bottom-banner .bb-icon {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--cyan); box-shadow: 0 0 8px var(--cyan);
-    animation: pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes pulse { 50% { opacity: 0.35; } }
-
-  .input-bar {
-    position: absolute;
-    left: 50%; bottom: 18px;
-    transform: translateX(-50%);
-    width: 560px; max-width: 92%;
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 10px 8px 16px;
-    background: var(--panel-bg);
-    border: 1px solid var(--panel-line);
-    border-radius: 26px;
-    backdrop-filter: blur(14px);
-    z-index: 8;
-  }
-  .input-bar input {
+  /* ---------- 消息流 ---------- */
+  #chat-list {
     flex: 1;
-    background: transparent; border: none; outline: none;
-    color: var(--ink); font-size: 13.5px;
-    font-family: inherit;
+    overflow-y: auto;
+    padding: 16px 16px 8px;
+    display: flex; flex-direction: column; gap: 10px;
+    user-select: text;
+    scroll-behavior: smooth;
   }
-  .input-bar input::placeholder { color: rgba(159,196,230,0.55); }
+  #chat-list::-webkit-scrollbar { width: 6px; }
+  #chat-list::-webkit-scrollbar-thumb { background: rgba(80,200,255,0.25); border-radius: 3px; }
+  #chat-list::-webkit-scrollbar-track { background: transparent; }
+
+  .msg { display: flex; max-width: 100%; }
+  .msg.user { justify-content: flex-end; }
+  .msg.ai { justify-content: flex-start; }
+
+  .bubble {
+    max-width: 78%;
+    padding: 9px 13px;
+    border-radius: 14px;
+    font-size: 13px;
+    line-height: 1.55;
+    word-break: break-word;
+    white-space: normal;
+  }
+  .msg.user .bubble {
+    background: linear-gradient(135deg, rgba(56,225,255,0.85), rgba(168,107,255,0.85));
+    color: #04121f;
+    font-weight: 600;
+    border-bottom-right-radius: 4px;
+    box-shadow: 0 2px 10px rgba(56,225,255,0.25);
+  }
+  .msg.ai .bubble {
+    background: rgba(20, 34, 62, 0.85);
+    border: 1px solid rgba(80, 200, 255, 0.22);
+    color: var(--ink);
+    border-bottom-left-radius: 4px;
+  }
+  /* 任务回执/聚合（📨/📋/🧩 开头）加一条强调边；失败红色 */
+  .msg.ai .bubble.notice { border-left: 3px solid var(--purple); }
+  .msg.ai .bubble.error { border-left: 3px solid #f87171; }
+
+  .bubble code {
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 12px;
+    background: rgba(56,225,255,0.14);
+    padding: 1px 5px; border-radius: 4px;
+    color: var(--cyan-soft);
+  }
+  .bubble pre.code {
+    display: block;
+    margin: 7px 0;
+    padding: 9px 11px;
+    background: rgba(4, 10, 22, 0.9);
+    border: 1px solid rgba(80,200,255,0.18);
+    border-radius: 8px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--cyan-soft);
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-x: auto;
+  }
+  .bubble strong { color: #fff; }
+
+  /* 空状态提示 */
+  .empty-hint {
+    margin: auto;
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: 12.5px;
+    line-height: 2;
+    opacity: 0.75;
+  }
+  .empty-hint .big { font-size: 30px; display: block; margin-bottom: 6px; }
+
+  /* 正在输入指示（流式占位，子步B启用） */
+  .msg.ai .bubble.streaming::after {
+    content: "▍";
+    color: var(--cyan);
+    animation: blink 1s step-end infinite;
+  }
+
+  /* ---------- 底部输入栏 ---------- */
+  .input-bar {
+    flex-shrink: 0;
+    display: flex; align-items: center; gap: 9px;
+    padding: 10px 14px 12px;
+    border-top: 1px solid rgba(80, 200, 255, 0.16);
+    background: rgba(13, 24, 46, 0.35);
+  }
   .voice-btn {
     width: 38px; height: 38px; flex-shrink: 0;
     border-radius: 50%;
     border: 1px solid var(--panel-line);
-    background: rgba(56,225,255,0.12);
+    background: rgba(56,225,255,0.10);
     color: var(--cyan-soft);
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
@@ -467,43 +239,34 @@
   .voice-btn:hover { background: rgba(56,225,255,0.24); box-shadow: 0 0 12px rgba(56,225,255,0.4); }
   .voice-btn.recording {
     background: rgba(255,95,162,0.2);
-    border-color: var(--pink);
-    color: var(--pink);
-    animation: pulse 1.1s ease-in-out infinite;
+    border-color: var(--pink); color: var(--pink);
+    animation: blink 1.1s ease-in-out infinite;
   }
+  #input {
+    flex: 1;
+    background: rgba(4, 10, 22, 0.6);
+    border: 1px solid var(--panel-line);
+    border-radius: 20px;
+    outline: none;
+    padding: 9px 16px;
+    color: var(--ink); font-size: 13.5px;
+    font-family: inherit;
+    transition: border-color 0.25s, box-shadow 0.25s;
+  }
+  #input:focus { border-color: var(--cyan); box-shadow: 0 0 10px rgba(56,225,255,0.25); }
+  #input::placeholder { color: rgba(159,196,230,0.5); }
   .send-btn {
     width: 38px; height: 38px; flex-shrink: 0;
-    border-radius: 50%;
-    border: none;
+    border-radius: 50%; border: none;
     background: linear-gradient(135deg, var(--cyan), var(--purple));
-    color: #04121f; font-weight: 700;
+    color: #04121f;
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: transform 0.2s, box-shadow 0.3s;
   }
   .send-btn:hover { transform: scale(1.06); box-shadow: 0 0 14px rgba(56,225,255,0.5); }
 
-  /* ============================================================
-     状态驱动（body[data-state]）
-     ============================================================ */
-  body[data-state="thinking"] { --glow: var(--purple); }
-  body[data-state="thinking"] #particles { opacity: 0.9; }
-  body[data-state="thinking"] .portrait-frame::after { opacity: 1; animation: scan 2.2s linear infinite; }
-  body[data-state="thinking"] .ring.r1 { animation-duration: 4s; }
-  body[data-state="thinking"] .ring.r2 { animation-duration: 3s; }
-  @keyframes scan { 0% { top: -40%; } 100% { top: 110%; } }
-
-  body[data-state="speaking"] { --glow: var(--cyan); }
-  body[data-state="speaking"] .voice-wave { opacity: 1; }
-  body[data-state="speaking"] .glow { animation-duration: 1.6s; }
-
-  body[data-state="executing"] { --glow: var(--pink); }
-  body[data-state="executing"] .progress-ring { opacity: 1; }
-  body[data-state="executing"] .ring.r3 { animation-duration: 6s; }
-
-  body[data-state="idle"] { --glow: var(--cyan); }
-
-  /* 演示控制条（仅浏览器预览，Electron 中隐藏） */
+  /* ---------- 演示控制条（仅浏览器预览） ---------- */
   .demo-bar {
     position: fixed; bottom: 0; left: 0; right: 0;
     display: flex; gap: 8px; justify-content: center;
@@ -519,105 +282,34 @@
 </style>
 </head>
 <body data-state="idle">
-  <div class="hud-stage">
-    <div class="bg-grid"></div>
-
-    <!-- 顶部微型指示器 -->
-    <div class="top-indicators">
-      <div class="chip"><span class="led" id="led-model"></span><span id="chip-model">模型 · 已连接</span></div>
-      <div class="chip"><span class="led" id="led-task"></span><span id="chip-task">任务 · 空闲</span></div>
-      <div class="chip"><span class="led warn" id="led-net"></span><span id="chip-net">搜索 · 就绪</span></div>
-      <div class="chip" id="chip-canvas" title="展开成画布"><span class="led" id="led-canvas"></span><span id="chip-canvas-text">画布 · default</span></div>
+  <div class="hud-shell">
+    <!-- 顶部栏 -->
+    <div class="top-bar">
+      <div class="avatar">廿<span class="presence"></span></div>
+      <div class="who">
+        <span class="name" id="who-name">廿廿</span>
+        <span class="role">指挥官 · master</span>
+      </div>
+      <div class="status-chip"><span class="dot"></span><span id="status-label">待命中</span></div>
+      <div class="top-spacer"></div>
+      <button class="icon-btn" id="tts-btn" title="朗读 AI 回复（开/关）">🔊</button>
+      <div class="chip-canvas" id="chip-canvas" title="展开成画布"><span class="led" id="led-canvas"></span><span id="chip-canvas-text">画布 · default</span></div>
     </div>
 
-    <!-- 左侧角色状态面板 -->
-    <div class="left-panel">
-      <div class="panel-title">角色状态</div>
-      <div class="stat">
-        <div class="stat-head"><span>情绪值</span><b id="v-mood">92</b></div>
-        <div class="stat-bar"><div class="stat-fill fill-mood" id="bar-mood" style="width:92%"></div></div>
-      </div>
-      <div class="stat">
-        <div class="stat-head"><span>能量值</span><b id="v-energy">78</b></div>
-        <div class="stat-bar"><div class="stat-fill fill-energy" id="bar-energy" style="width:78%"></div></div>
-      </div>
-      <div class="stat">
-        <div class="stat-head"><span>专注度</span><b id="v-focus">85</b></div>
-        <div class="stat-bar"><div class="stat-fill fill-focus" id="bar-focus" style="width:85%"></div></div>
-      </div>
-      <div class="stat">
-        <div class="stat-head"><span>体力值</span><b id="v-stam">64</b></div>
-        <div class="stat-bar"><div class="stat-fill fill-stam" id="bar-stam" style="width:64%"></div></div>
+    <!-- 消息流 -->
+    <div id="chat-list">
+      <div class="empty-hint" id="empty-hint">
+        <span class="big">🌙</span>
+        主人，还没有对话记录<br>直接输入，或点语音和我聊聊吧
       </div>
     </div>
 
-    <!-- 右侧状态框 + 仪表 -->
-    <div class="right-panel">
-      <div class="status-box">
-        <div class="sb-row"><span class="k">当前状态</span><span class="v exec" id="sb-state">待命中</span></div>
-        <div class="sb-row"><span class="k">任务进度</span><span class="v" id="sb-progress">—</span></div>
-        <div class="sb-row"><span class="k">模型</span><span class="v"><span class="conn-dot" id="sb-conn"></span><span id="sb-model">DeepSeek</span></span></div>
-        <div class="sb-row"><span class="k">队列</span><span class="v" id="sb-queue">0 个任务</span></div>
-      </div>
-      <div class="gauge-card">
-        <div class="gauge">
-          <svg width="60" height="60" viewBox="0 0 60 60">
-            <circle class="gtrack" cx="30" cy="30" r="26"></circle>
-            <circle class="gbar" id="gauge-bar" cx="30" cy="30" r="26" stroke-dashoffset="163"></circle>
-          </svg>
-          <div class="gpct" id="gauge-pct">0%</div>
-        </div>
-        <div class="gauge-meta">
-          <div class="gm-t" id="gauge-title">工作流</div>
-          <div class="gm-s" id="gauge-sub">等待指令</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 中央角色区 -->
-    <div class="character-zone">
-      <div class="glow"></div>
-      <div class="ring r3"></div>
-      <div class="ring r1"></div>
-      <div class="ring r2"></div>
-      <canvas id="particles" width="360" height="360"></canvas>
-      <svg class="progress-ring" viewBox="0 0 256 256">
-        <circle class="track" cx="128" cy="128" r="120"></circle>
-        <circle class="bar" id="exec-bar" cx="128" cy="128" r="120"></circle>
-      </svg>
-      <div class="portrait-frame">
-        <img src="character.png" alt="AI 助手" draggable="false" />
-      </div>
-      <div class="voice-wave" id="voice-wave"></div>
-    </div>
-
-    <!-- 悬浮功能标签（Wave 7 修复：改为底部横排，避免被左右面板遮挡） -->
-    <div class="fn-row">
-      <div class="fn-label" data-fn="search"><span class="dot"></span>联网搜索</div>
-      <div class="fn-label" data-fn="research"><span class="dot"></span>深度研究</div>
-      <div class="fn-label" data-fn="knowledge"><span class="dot"></span>知识库</div>
-      <div class="fn-label" data-fn="stock"><span class="dot"></span>行情分析</div>
-      <div class="fn-label" data-fn="crawl"><span class="dot"></span>网页爬取</div>
-      <div class="fn-label" data-fn="schedule"><span class="dot"></span>任务调度</div>
-    </div>
-
-    <!-- 状态文字 -->
-    <div class="status-line">
-      <div class="status-text" id="status-text">主人，我在待命中</div>
-      <div class="status-sub" id="status-sub">随时为你效劳</div>
-    </div>
-
-    <!-- 底部操作横幅 -->
-    <div class="bottom-banner" id="bottom-banner">
-      <span class="bb-icon"></span><span id="banner-text">正在执行任务…</span>
-    </div>
-
-    <!-- 输入栏 -->
+    <!-- 底部输入栏 -->
     <div class="input-bar">
       <button class="voice-btn" id="voice-btn" title="语音输入">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
       </button>
-      <input id="input" type="text" placeholder="输入问题或任务，/ 选择技能…" />
+      <input id="input" type="text" placeholder="和廿廿说话，任务会自动派发…（/ 选择技能）" />
       <button class="send-btn" id="send-btn" title="发送">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       </button>
@@ -638,262 +330,207 @@
   var bridge = window.nodeBridge || null;
   if (bridge) document.body.classList.add('electron');
 
-  var STATE_TEXT = {
-    idle:      { main: '主人，我在待命中',   sub: '随时为你效劳' },
-    thinking:  { main: '正在思考中…',        sub: '分析你的意图与上下文' },
-    speaking:  { main: '正在为你播报',       sub: '语音合成中，请下指令' },
-    executing: { main: '正在执行任务…',      sub: '调用工具链处理中' }
-  };
-
   var els = {
     body: document.body,
-    statusText: document.getElementById('status-text'),
-    statusSub: document.getElementById('status-sub'),
-    sbState: document.getElementById('sb-state'),
-    sbProgress: document.getElementById('sb-progress'),
-    sbQueue: document.getElementById('sb-queue'),
-    gaugeBar: document.getElementById('gauge-bar'),
-    gaugePct: document.getElementById('gauge-pct'),
-    gaugeTitle: document.getElementById('gauge-title'),
-    gaugeSub: document.getElementById('gauge-sub'),
-    execBar: document.getElementById('exec-bar'),
-    banner: document.getElementById('bottom-banner'),
-    bannerText: document.getElementById('banner-text'),
-    chipTask: document.getElementById('chip-task'),
-    ledTask: document.getElementById('led-task'),
+    statusLabel: document.getElementById('status-label'),
+    chatList: document.getElementById('chat-list'),
+    emptyHint: document.getElementById('empty-hint'),
+    input: document.getElementById('input'),
+    sendBtn: document.getElementById('send-btn'),
+    voiceBtn: document.getElementById('voice-btn'),
+    ttsBtn: document.getElementById('tts-btn'),
     chipCanvas: document.getElementById('chip-canvas'),
     chipCanvasText: document.getElementById('chip-canvas-text'),
-    ledCanvas: document.getElementById('led-canvas')
+    ledCanvas: document.getElementById('led-canvas'),
+    whoName: document.getElementById('who-name')
   };
 
-  var EXEC_CIRC = 754;
-  var GAUGE_CIRC = 163;
-
-  var wave = document.getElementById('voice-wave');
-  var waveBars = [];
-  for (var i = 0; i < 14; i++) {
-    var s = document.createElement('span');
-    wave.appendChild(s);
-    waveBars.push(s);
-  }
-  var waveTimer = null;
-  function startWave() {
-    stopWave();
-    waveTimer = setInterval(function () {
-      waveBars.forEach(function (b) { b.style.height = (5 + Math.random() * 20) + 'px'; });
-    }, 110);
-  }
-  function stopWave() {
-    if (waveTimer) { clearInterval(waveTimer); waveTimer = null; }
-    waveBars.forEach(function (b) { b.style.height = '6px'; });
-  }
-
-  var canvas = document.getElementById('particles');
-  var ctx = canvas.getContext('2d');
-  var parts = [];
-  var partTimer = null;
-  function initParts() {
-    parts = [];
-    for (var i = 0; i < 46; i++) {
-      var a = Math.random() * Math.PI * 2;
-      var r = 60 + Math.random() * 110;
-      parts.push({ a: a, r: r, speed: 0.004 + Math.random() * 0.012, size: 0.8 + Math.random() * 1.8, hue: Math.random() > 0.5 ? '56,225,255' : '168,107,255' });
-    }
-  }
-  function drawParts() {
-    ctx.clearRect(0, 0, 360, 360);
-    var cx = 180, cy = 180;
-    parts.forEach(function (p) {
-      p.a += p.speed;
-      var x = cx + Math.cos(p.a) * p.r;
-      var y = cy + Math.sin(p.a) * p.r;
-      ctx.beginPath();
-      ctx.arc(x, y, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(' + p.hue + ',0.85)';
-      ctx.shadowBlur = 6;
-      ctx.shadowColor = 'rgba(' + p.hue + ',0.9)';
-      ctx.fill();
-    });
-    partTimer = requestAnimationFrame(drawParts);
-  }
-  function startParts() { if (!partTimer) { initParts(); drawParts(); } }
-  function stopParts() {
-    if (partTimer) { cancelAnimationFrame(partTimer); partTimer = null; }
-    ctx.clearRect(0, 0, 360, 360);
-  }
-
+  // ---------- 状态（顶部状态点 + 文案） ----------
+  var STATE_LABEL = { idle: '待命中', thinking: '思考中', speaking: '播报中', executing: '执行中' };
   var currentState = 'idle';
-
-  // Wave 7 修复：思考状态保护 — 若后端静默失败、一直不回状态，
-  // 45 秒内无任何状态更新就自动复位，避免 HUD 永远卡在「正在思考中」。
   var _thinkGuard = null;
   function armThinkGuard() {
     clearThinkGuard();
+    // 45 秒无状态更新自动复位，避免永远卡在「思考中」
     _thinkGuard = setTimeout(function () {
-      if (currentState === 'thinking') {
-        setState('idle', { text: '响应超时', sub: '未收到模型回复，请检查模型与网络配置' });
-      }
+      if (currentState === 'thinking') setState('idle', { text: '响应超时' });
     }, 45000);
   }
-  function clearThinkGuard() {
-    if (_thinkGuard) { clearTimeout(_thinkGuard); _thinkGuard = null; }
-  }
+  function clearThinkGuard() { if (_thinkGuard) { clearTimeout(_thinkGuard); _thinkGuard = null; } }
 
   function setState(state, opts) {
     opts = opts || {};
-    if (!STATE_TEXT[state]) state = 'idle';
+    if (!STATE_LABEL[state]) state = 'idle';
     currentState = state;
     els.body.setAttribute('data-state', state);
+    if (state === 'thinking') armThinkGuard(); else clearThinkGuard();
+    els.statusLabel.textContent = (opts.text && state !== 'idle') ? opts.text : STATE_LABEL[state];
+  }
 
-    // 思考中 → 重启保护计时；离开思考 → 取消保护
-    if (state === 'thinking') { armThinkGuard(); } else { clearThinkGuard(); }
-
-    var txt = STATE_TEXT[state];
-    els.statusText.textContent = opts.text || txt.main;
-    els.statusText.classList.toggle('typing', state === 'thinking');
-    els.statusSub.textContent = opts.sub || txt.sub;
-
-    var stateName = { idle: '待命中', thinking: '思考中', speaking: '播报中', executing: '执行中' }[state];
-    els.sbState.textContent = stateName;
-
-    if (state === 'thinking') startParts(); else stopParts();
-    if (state === 'speaking') startWave(); else stopWave();
-
-    if (state === 'executing') {
-      setProgress(opts.progress != null ? opts.progress : 0);
-    } else {
-      els.execBar.style.strokeDashoffset = EXEC_CIRC;
-      els.sbProgress.textContent = '—';
+  // ---------- 文本格式化（轻量 Markdown：转义 + 代码块 + 行内代码 + 加粗 + 换行） ----------
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function fmt(s) {
+    s = esc(s);
+    var parts = s.split('```');
+    var out = '';
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) {
+        out += '<pre class="code">' + parts[i].replace(/^\n/, '') + '</pre>';
+      } else {
+        var t = parts[i];
+        t = t.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+        t = t.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+        t = t.replace(/\n/g, '<br>');
+        out += t;
+      }
     }
+    return out;
+  }
 
-    if (state === 'idle') {
-      els.chipTask.textContent = '任务 · 空闲';
-      els.ledTask.className = 'led';
-    } else {
-      els.chipTask.textContent = '任务 · 运行中';
-      els.ledTask.className = 'led warn';
+  // ---------- 聊天渲染 ----------
+  var _seenCount = -1;   // -1 = 首次同步（不朗读历史）
+  function noticeClass(content) {
+    if (/^⚠️/.test(content)) return ' error';
+    if (/^(📨|📋|🧩)/.test(content)) return ' notice';
+    return '';
+  }
+  function renderChat(chat) {
+    var msgs = (chat && chat.messages) || [];
+    if (chat && chat.title) els.whoName.textContent = chat.title;
+
+    // 是否贴近底部（贴近才自动滚动，避免打扰上滑阅读）
+    var nearBottom = (els.chatList.scrollHeight - els.chatList.scrollTop - els.chatList.clientHeight) < 90;
+
+    if (msgs.length === 0) {
+      els.chatList.innerHTML = '';
+      els.chatList.appendChild(els.emptyHint);
+      els.emptyHint.style.display = '';
+      _seenCount = 0;
+      return;
     }
+    els.emptyHint.style.display = 'none';
 
-    if (opts.banner) {
-      els.bannerText.textContent = opts.banner;
-      els.banner.classList.add('show');
-    } else if (state === 'idle') {
-      els.banner.classList.remove('show');
+    var html = '';
+    for (var i = 0; i < msgs.length; i++) {
+      var m = msgs[i];
+      var cls = m.role === 'user' ? 'user' : 'ai';
+      var extra = (m.role === 'user') ? '' : noticeClass(m.content);
+      html += '<div class="msg ' + cls + '"><div class="bubble' + extra + '">' + fmt(m.content) + '</div></div>';
     }
+    els.chatList.innerHTML = html;
+    if (nearBottom || _seenCount < 0) els.chatList.scrollTop = els.chatList.scrollHeight;
+
+    // 朗读新增的 AI 消息（首次同步不读历史）
+    if (_seenCount >= 0 && msgs.length > _seenCount) {
+      for (var j = _seenCount; j < msgs.length; j++) {
+        if (msgs[j].role === 'ai') speak(msgs[j].content);
+      }
+    }
+    _seenCount = msgs.length;
   }
 
-  function setProgress(pct) {
-    pct = Math.max(0, Math.min(100, pct));
-    els.execBar.style.strokeDashoffset = EXEC_CIRC * (1 - pct / 100);
-    els.sbProgress.textContent = Math.round(pct) + '%';
+  // ---------- TTS 朗读（Web Speech API，本地离线） ----------
+  var ttsEnabled = true;
+  var _zhVoice = null;
+  function pickVoice() {
+    try {
+      var vs = window.speechSynthesis.getVoices();
+      for (var i = 0; i < vs.length; i++) {
+        if (/zh|Chinese/i.test(vs[i].lang || vs[i].name)) { _zhVoice = vs[i]; return; }
+      }
+    } catch (e) { /* noop */ }
   }
-
-  function setGauge(pct, title, sub) {
-    pct = Math.max(0, Math.min(100, pct));
-    els.gaugeBar.style.strokeDashoffset = GAUGE_CIRC * (1 - pct / 100);
-    els.gaugePct.textContent = Math.round(pct) + '%';
-    if (title) els.gaugeTitle.textContent = title;
-    if (sub) els.gaugeSub.textContent = sub;
+  if (window.speechSynthesis) {
+    pickVoice();
+    window.speechSynthesis.onvoiceschanged = pickVoice;
   }
-
-  function setActiveFn(fn) {
-    document.querySelectorAll('.fn-label').forEach(function (el) {
-      el.classList.toggle('active', el.getAttribute('data-fn') === fn);
-    });
+  function ttsText(s) {
+    s = String(s);
+    s = s.replace(/```[\s\S]*?```/g, '。代码已省略。');
+    s = s.replace(/`/g, '').replace(/\*\*/g, '').replace(/#{1,6}\s*/g, '');
+    // 去掉常见 emoji，避免朗读怪音
+    s = s.replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, '');
+    s = s.replace(/\s+/g, ' ').trim();
+    if (s.length > 800) s = s.substring(0, 800) + '。内容较长，朗读已截取。';
+    return s;
   }
+  function speak(text) {
+    if (!ttsEnabled || !window.speechSynthesis) return;
+    var t = ttsText(text);
+    if (!t) return;
+    try {
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(t);
+      u.lang = 'zh-CN';
+      if (_zhVoice) u.voice = _zhVoice;
+      u.rate = 1.0; u.pitch = 1.05;
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* noop */ }
+  }
+  els.ttsBtn.addEventListener('click', function () {
+    ttsEnabled = !ttsEnabled;
+    els.ttsBtn.textContent = ttsEnabled ? '🔊' : '🔇';
+    els.ttsBtn.classList.toggle('off', !ttsEnabled);
+    if (!ttsEnabled && window.speechSynthesis) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+  });
 
-  // Wave 6d：画布摘要 → 顶部画布 chip
+  // ---------- 画布 chip（Wave 6d） ----------
   function updateCanvasChip(c) {
-    if (!c || !els.chipCanvasText) return;
+    if (!c) return;
     var label = '画布 · ' + (c.workspace || 'default');
     if (c.running) label += ' · ' + c.running + ' 运行';
     els.chipCanvasText.textContent = label;
-    if (els.ledCanvas) els.ledCanvas.className = c.running ? 'led warn' : 'led';
+    els.ledCanvas.className = c.running ? 'led warn' : 'led';
   }
+  els.chipCanvas.addEventListener('click', function () {
+    if (bridge && bridge.ipc && bridge.ipc.send) bridge.ipc.send('hud-input', { action: 'open-canvas' });
+  });
 
-  function setStat(key, val) {
-    val = Math.max(0, Math.min(100, val));
-    var bar = document.getElementById('bar-' + key);
-    var v = document.getElementById('v-' + key);
-    if (bar) bar.style.width = val + '%';
-    if (v) v.textContent = Math.round(val);
-  }
-  setInterval(function () {
-    var focus = currentState === 'idle' ? 78 + Math.random() * 12 : 88 + Math.random() * 10;
-    var energy = currentState === 'executing' ? 55 + Math.random() * 15 : 72 + Math.random() * 16;
-    setStat('focus', focus);
-    setStat('energy', energy);
-    setStat('mood', 88 + Math.random() * 10);
-  }, 2600);
-
+  // ---------- IPC：接收主进程中继 ----------
   if (bridge && bridge.ipc && bridge.ipc.on) {
     bridge.ipc.on('hud-state', function (payload) {
       payload = payload || {};
-      // Wave 6d：画布摘要更新（canvasOnly 仅刷新 chip，不打扰角色状态）
+      // Wave 9：master 会话聊天快照（chatOnly 仅渲染聊天，不打扰状态）
+      if (payload.chat) { renderChat(payload.chat); }
+      if (payload.chatOnly) return;
+      // Wave 6d：画布摘要
       if (payload.canvas) updateCanvasChip(payload.canvas);
       if (payload.canvasOnly) return;
-      if (payload.fn) setActiveFn(payload.fn);
-      if (payload.gauge != null) setGauge(payload.gauge, payload.gaugeTitle, payload.gaugeSub);
-      if (payload.queue != null) els.sbQueue.textContent = payload.queue + ' 个任务';
-      if (payload.model) document.getElementById('sb-model').textContent = payload.model;
-      setState(payload.state || 'idle', {
-        progress: payload.progress,
-        text: payload.text,
-        sub: payload.sub,
-        banner: payload.banner
-      });
+      setState(payload.state || 'idle', { text: payload.text });
     });
     if (bridge.ipc.send) bridge.ipc.send('hud-ready');
   }
 
-  var input = document.getElementById('input');
-  var sendBtn = document.getElementById('send-btn');
-  var voiceBtn = document.getElementById('voice-btn');
-
+  // ---------- 发送 ----------
   function submit() {
-    var text = input.value.trim();
+    var text = els.input.value.trim();
     if (!text) return;
     if (bridge && bridge.ipc && bridge.ipc.send) {
       bridge.ipc.send('hud-input', { text: text });
     }
-    setState('thinking', { banner: '正在处理：' + text });
-    input.value = '';
+    els.input.value = '';
+    els.input.focus();
   }
-  sendBtn.addEventListener('click', submit);
-  input.addEventListener('keydown', function (e) {
+  els.sendBtn.addEventListener('click', submit);
+  els.input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); submit(); }
   });
 
+  // ---------- 语音按钮（状态上报，STT 由主窗口语音模块处理） ----------
   var recording = false;
-  voiceBtn.addEventListener('click', function () {
+  els.voiceBtn.addEventListener('click', function () {
     recording = !recording;
-    voiceBtn.classList.toggle('recording', recording);
+    els.voiceBtn.classList.toggle('recording', recording);
     if (bridge && bridge.ipc && bridge.ipc.send) {
       bridge.ipc.send('hud-voice', { recording: recording });
     }
-    if (recording) setState('speaking', { text: '正在聆听…', sub: '请说出你的指令', banner: '语音输入中' });
+    if (recording) setState('speaking', { text: '正在聆听' });
     else setState('idle');
   });
 
-  document.querySelectorAll('.fn-label').forEach(function (el) {
-    el.addEventListener('click', function () {
-      var fn = el.getAttribute('data-fn');
-      setActiveFn(fn);
-      if (bridge && bridge.ipc && bridge.ipc.send) {
-        bridge.ipc.send('hud-input', { text: '/' + fn, fn: fn });
-      }
-    });
-  });
-
-  // Wave 6d：点击画布 chip → 展开成画布
-  if (els.chipCanvas) {
-    els.chipCanvas.addEventListener('click', function () {
-      if (bridge && bridge.ipc && bridge.ipc.send) {
-        bridge.ipc.send('hud-input', { action: 'open-canvas' });
-      }
-    });
-  }
-
+  // ---------- 浏览器预览演示 ----------
   var demoBar = document.getElementById('demo-bar');
   if (!bridge) {
     demoBar.addEventListener('click', function (e) {
@@ -901,35 +538,19 @@
       if (!btn) return;
       demoBar.querySelectorAll('button').forEach(function (b) { b.classList.remove('on'); });
       btn.classList.add('on');
-      var st = btn.getAttribute('data-demo');
-      var demoOpts = {
-        thinking: { banner: '正在检索相关资料…' },
-        speaking: { text: '正在为你播报结果', sub: '语音合成中' },
-        executing: { progress: 68, banner: '正在为你生成第 03 集分镜' }
-      }[st] || {};
-      setState(st, demoOpts);
-      if (st === 'executing') {
-        setGauge(68, '工作流', '生成第 03 集分镜');
-        setActiveFn('research');
-      } else if (st === 'thinking') {
-        setGauge(34, '检索资料', '联网搜索中');
-        setActiveFn('search');
-      } else {
-        setGauge(0, '工作流', '等待指令');
-        setActiveFn(null);
-      }
+      setState(btn.getAttribute('data-demo'));
     });
-    setTimeout(function () {
-      setState('executing', { progress: 68, banner: '正在为你生成第 03 集分镜' });
-      setGauge(68, '工作流', '生成第 03 集分镜');
-      setActiveFn('research');
-    }, 600);
+    // 演示：填充几条示例消息
+    renderChat({ title: '廿廿', messages: [
+      { role: 'ai', content: '主人，我在待命中，随时为你效劳。', ts: Date.now() - 3000 },
+      { role: 'user', content: '帮我写一段 Python 快速排序', ts: Date.now() - 2000 },
+      { role: 'ai', content: '📨 已收到，派发给 code_expert 后台执行（task_20260725_001）', ts: Date.now() - 1000 }
+    ]});
   } else {
     setState('idle');
-    setGauge(0, '工作流', '等待指令');
   }
 
-  window.HUD = { setState: setState, setProgress: setProgress, setGauge: setGauge, setActiveFn: setActiveFn };
+  window.HUD = { setState: setState, renderChat: renderChat, speak: speak };
 })();
 </script>
 </body>

@@ -78,6 +78,11 @@ function injectCommand(text) {
       try {
         var dispatch = Core.taskScheduler.submit(text, { callbackChannel: 'hud' });
         if (dispatch && dispatch.dispatched) {
+          // Wave 9：把用户消息 + 派发回执记入 master 会话，保证记录可溯（廿廿对话框可见）
+          recordToMaster('user', text);
+          recordToMaster('ai', (dispatch.count > 1)
+            ? ('🧩 已收到，拆解为 ' + dispatch.count + ' 个子任务后台执行（' + dispatch.taskId + '）')
+            : ('📨 已收到，派发给 ' + (dispatch.roleId || dispatch.intent) + ' 后台执行（' + dispatch.taskId + '）'));
           setState('idle', {
             text: '已收到',
             sub: (dispatch.count > 1)
@@ -91,6 +96,13 @@ function injectCommand(text) {
       }
     }
     // ---- 普通发送路径 ----
+    // Wave 9：HUD 是 master（廿廿）聊天界面——闲聊必须落在 master 会话。
+    // 若主窗口当前不在 master，先切过去（switchSession 会清空输入框，故之后再填文本）。
+    var masterId = findMasterId();
+    if (masterId && Core.session && typeof Core.session.getCurrentId === 'function' &&
+        Core.session.getCurrentId() !== masterId && typeof Core.session.switchSession === 'function') {
+      try { Core.session.switchSession(masterId); } catch (e) { console.warn('[hud] 切换 master 会话失败:', e.message); }
+    }
     // 真实发送路径：填入输入框 → 调用 Core.api.sendMessage()
     // （与主应用 Enter 键发送完全一致；sendMessage 无参，内部读取 Core.dom.input.value）
     if (Core.dom && Core.dom.input) Core.dom.input.value = text;
@@ -179,6 +191,78 @@ function openCanvas() {
   return false;
 }
 
+// ═══════════════════════════════════════════
+// Wave 9：HUD = master（廿廿）聊天界面 —— 会话中继
+//   HUD 是独立渲染进程，拿不到主窗口的 Core.session 数据，
+//   故由本模块（主窗口渲染进程）读取 master 会话消息，经 hud-relay
+//   以 { chatOnly:true, chat:{...} } 载荷推送，HUD 视图只渲染聊天、不打扰角色状态。
+// ═══════════════════════════════════════════
+var CHAT_LIMIT = 60;          // 推送给 HUD 的最近消息条数（轻量窗口）
+var CHAT_POLL_MS = 900;       // 轮询间隔：兜底捕获任意来源的 master 会话写入
+var _lastChatSig = '';        // 消息数:末条时间戳 —— 变化才推送，避免空转
+var _chatPollTimer = null;
+
+function findMasterId() {
+  if (!Core || !Core.session || !Core.session.sessions) return null;
+  var sessions = Core.session.sessions;
+  for (var id in sessions) {
+    if (sessions[id] && sessions[id].roleType === 'master') return id;
+  }
+  return null;
+}
+
+// 把消息内容压成适合 IPC 传输的纯文本（去附件大文件内容，保留显示文本）
+function _chatText(content) {
+  var s = String(content == null ? '' : content);
+  if (s.length > 2000) s = s.substring(0, 2000) + '\n…(内容过长已截断)';
+  return s;
+}
+
+function serializeMasterMessages() {
+  var masterId = findMasterId();
+  if (!masterId) return null;
+  var master = Core.session.sessions[masterId];
+  if (!master || !Array.isArray(master.messages)) return null;
+  var msgs = master.messages
+    .filter(function (m) { return m && (m.role === 'user' || m.role === 'ai' || m.role === 'assistant'); })
+    .slice(-CHAT_LIMIT)
+    .map(function (m) {
+      return { role: m.role === 'user' ? 'user' : 'ai', content: _chatText(m.content), ts: m.timestamp || 0 };
+    });
+  return { masterId: masterId, title: master.title || '廿廿', messages: msgs };
+}
+
+// 推送 master 会话快照到 HUD（force=true 无视签名强制推送，用于 HUD 刚打开时的首次同步）
+function relayMasterChat(force) {
+  var chat = serializeMasterMessages();
+  if (!chat) return;
+  var sig = chat.messages.length + ':' + (chat.messages.length ? chat.messages[chat.messages.length - 1].ts : 0);
+  if (!force && sig === _lastChatSig) return;
+  _lastChatSig = sig;
+  _send('hud-relay', { chatOnly: true, chat: chat });
+}
+
+// 轮询兜底：任意来源（主窗口输入、后台任务聚合、知识库等）写入 master 都能被 HUD 感知
+function startChatPolling() {
+  if (_chatPollTimer || typeof setInterval !== 'function') return;
+  _chatPollTimer = setInterval(function () {
+    try { relayMasterChat(false); } catch (e) { /* noop */ }
+  }, CHAT_POLL_MS);
+}
+
+// 把一条消息记入 master 会话（HUD 派发任务时同步用户消息/回执，保证记录可溯）
+function recordToMaster(role, content) {
+  try {
+    var masterId = findMasterId();
+    if (!masterId) return;
+    var master = Core.session.sessions[masterId];
+    if (!master || !Array.isArray(master.messages)) return;
+    master.messages.push({ role: role, content: content, timestamp: Date.now() });
+    if (Core.session.saveSession) Core.session.saveSession(masterId);
+    relayMasterChat(true);
+  } catch (e) { /* noop */ }
+}
+
 function init(_Core) {
   Core = _Core;
 
@@ -195,6 +279,9 @@ function init(_Core) {
     openCanvas: openCanvas,
     focusActiveNode: focusActiveNode,
     relayCanvasSummary: relayCanvasSummary,
+    // Wave 9：master 会话聊天中继
+    relayMasterChat: relayMasterChat,
+    findMasterId: findMasterId,
     get state() { return _state; },
     get visible() { return _visible; },
     get canvasSummary() { return recomputeCanvasSummary(); },
@@ -258,6 +345,8 @@ function init(_Core) {
       payload = payload || {};
       // Wave 6d：HUD「展开成画布」按钮
       if (payload.action === 'open-canvas') { openCanvas(); return; }
+      // Wave 9：HUD 窗口就绪 → 强制全量同步 master 会话（首次打开即可见历史）
+      if (payload.action === 'sync-chat') { relayMasterChat(true); return; }
       if (payload.text) injectCommand(payload.text);
     });
   }
@@ -269,6 +358,10 @@ function init(_Core) {
 
   // ---- Wave 6d：画布已挂载时，初始化即同步一次画布摘要 ----
   if (getStore()) relayCanvasSummary();
+
+  // ---- Wave 9：master 会话聊天轮询兜底 + 初始同步 ----
+  startChatPolling();
+  relayMasterChat(true);
 }
 
 module.exports = {
