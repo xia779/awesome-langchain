@@ -302,6 +302,7 @@ async function executeAsync(task) {
     emitEvent('task:done', { taskId: task.taskId, roleId: task.roleId, preview: String(res.content).substring(0, 200) });
     projectToCanvas(task, 'completed', { resultPreview: String(res.content).substring(0, 300) });
     notifyHud('done', task, String(res.content).substring(0, 40));
+    if (!task.parentTaskId) notifyMasterSession('done', task);
   } catch (e) {
     task.status = 'failed';
     task.error = e && e.message ? e.message : String(e);
@@ -310,6 +311,7 @@ async function executeAsync(task) {
     emitEvent('task:error', { taskId: task.taskId, error: task.error });
     projectToCanvas(task, 'failed');
     notifyHud('error', task, task.error);
+    if (!task.parentTaskId) notifyMasterSession('error', task);
   } finally {
     task.completedAt = Date.now();
     delete _running[task.taskId];
@@ -342,6 +344,7 @@ function checkAggregation(parentId) {
   emitEvent('task:aggregated', { taskId: parentId, count: children.length });
   projectToCanvas(parent, 'completed', { resultPreview: aggregated.substring(0, 300) });
   notifyHud('aggregated', parent, children.length + ' 个子任务已完成');
+  notifyMasterSession('aggregated', parent);
   scheduleSave();
 }
 
@@ -408,6 +411,53 @@ function notifyHud(kind, task, detail) {
       Core.hud.setState('idle', { text: '🧩 ' + (task.title || '复合任务') + ' 已聚合', sub: String(detail || '') });
     }
   } catch (e) { /* noop */ }
+}
+
+// ═══════════════════════════════════════════
+// 聚合到指挥官会话（DS 2.3.4 结果聚合 → master 会话）
+//   任务完成/失败/聚合时，把轻量摘要写入 roleType==='master' 的指挥官会话（廿廿），
+//   使一级会话能聚合所有后台任务结果，方便审阅介入（对齐"廿廿负责信息聚合"）。
+//   测试环境无 Core.session，严格守卫直接返回，不影响单测。
+// ═══════════════════════════════════════════
+function findMasterSessionId() {
+  if (!Core || !Core.session || !Core.session.sessions) return null;
+  var sessions = Core.session.sessions;
+  for (var id in sessions) {
+    if (sessions[id] && sessions[id].roleType === 'master') return id;
+  }
+  return null;
+}
+
+function notifyMasterSession(kind, task) {
+  try {
+    var masterId = findMasterSessionId();
+    if (!masterId) return;
+    var master = Core.session.sessions[masterId];
+    if (!master || !Array.isArray(master.messages)) return;
+
+    var body = '';
+    if (kind === 'done') {
+      var full = String(task.result || '');
+      body = '📋 ' + roleName(task.roleId) + ' 任务完成（' + task.taskId + '）：\n\n' + full.substring(0, 800) +
+        (full.length > 800 ? '\n\n...(内容较长，完整结果可用 /task 查看或切换到画布)' : '');
+    } else if (kind === 'error') {
+      body = '⚠️ 任务失败（' + task.taskId + ' · ' + (task.title || '') + '）：' + String(task.error || '未知错误');
+    } else if (kind === 'aggregated') {
+      body = '🧩 复合任务已聚合（' + task.taskId + ' · ' + (task.subtaskIds || []).length + ' 个子任务）：\n\n' +
+        String(task.result || '').substring(0, 1200);
+    }
+    if (!body) return;
+
+    master.messages.push({ role: 'ai', content: body, timestamp: Date.now() });
+    if (Core.session.saveSession) Core.session.saveSession(masterId);
+
+    // 若当前正在查看指挥官会话，刷新消息显示
+    if (Core.session.getCurrentId && Core.session.getCurrentId() === masterId) {
+      if (Core.session.renderMessages) Core.session.renderMessages(masterId);
+    }
+  } catch (e) {
+    console.warn('[task-scheduler] master 会话聚合失败:', e.message);
+  }
 }
 
 // ═══════════════════════════════════════════

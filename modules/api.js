@@ -1082,6 +1082,34 @@ async function _doSendMessage() {
       return;
     }
 
+    // 4a. 🎖️ 指挥官模式（Wave 8/9）：master 会话（廿廿）的任务意图消息交给 task-scheduler 非阻塞派发。
+    //     廿廿负责"闲聊 / 分发 / 聚合"——任务意图 → 指挥官后台派发并回执；
+    //     闲聊（intent-router 判定 chat）或指挥官未覆盖的意图（写作/教学等）落入下方原有路由与普通聊天。
+    if (currentSession && currentSession.roleType === 'master' &&
+        Core.taskScheduler && typeof Core.taskScheduler.submit === 'function') {
+      try {
+        var dispatch = Core.taskScheduler.submit(apiText || text, { callbackChannel: 'both' });
+        if (dispatch && dispatch.dispatched) {
+          // 先显示用户消息，再显示派发回执（用户偏好：消息立即显示）
+          Core.session.addMessage(text, 'user');
+          var receipt;
+          if (dispatch.count > 1) {
+            receipt = '🧩 已收到，拆解为 ' + dispatch.count + ' 个子任务后台执行（' + dispatch.taskId + '）\n\n任务：' + text;
+          } else {
+            receipt = '📨 已收到，派发给 ' + (dispatch.roleId || dispatch.intent) + ' 后台执行（' + dispatch.taskId + '）\n\n任务：' + text;
+          }
+          Core.session.addMessage(receipt, 'ai');
+          Core.dom.status.textContent = '📨 指挥官已派发（' + dispatch.taskId + '）';
+          Core.dom.sendBtn.disabled = false;
+          Core.dom.input.focus();
+          return;
+        }
+        // dispatched:false（闲聊）→ 落入下方普通流程，由廿廿自己回答
+      } catch (cmdErr) {
+        console.warn('⚠️ [api] 指挥官派发失败，回退普通路由:', cmdErr && cmdErr.message);
+      }
+    }
+
     // 4. 🔧 统一路由决策（合并主管模式路由 + 智能路由，消除冲突）
     if (Core.routing && Core.routing.analyzeMessage) {
       var routeResult = Core.routing.analyzeMessage(text, {
