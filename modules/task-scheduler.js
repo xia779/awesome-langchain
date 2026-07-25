@@ -455,6 +455,19 @@ function notifyMasterSession(kind, task) {
     if (Core.session.getCurrentId && Core.session.getCurrentId() === masterId) {
       if (Core.session.renderMessages) Core.session.renderMessages(masterId);
     }
+
+    // 知识库自动记忆：任务成功结果写入 KB（对齐 chat-handler 的 autoKnowledgeMemory）
+    if ((kind === 'done' || kind === 'aggregated') && task.result &&
+        Core.config && Core.config.autoKnowledgeMemory &&
+        Core.knowledge && typeof Core.knowledge.saveConversation === 'function') {
+      try {
+        var _q = (task.params && task.params.query) || task.title || '';
+        Core.knowledge.saveConversation(
+          [{ role: 'user', content: _q }, { role: 'ai', content: String(task.result) }],
+          '任务-' + (task.title || task.taskId)
+        ).catch(function (e) { console.warn('[task-scheduler] 知识库保存失败:', e.message); });
+      } catch (e) { console.warn('[task-scheduler] 知识库自动记忆出错:', e.message); }
+    }
   } catch (e) {
     console.warn('[task-scheduler] master 会话聚合失败:', e.message);
   }
