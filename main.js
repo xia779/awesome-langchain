@@ -54,6 +54,9 @@ try {
 // ===== 全局变量 =====
 let mainWindow = null;
 let tray = null;
+// 🖥️ HUD 悬浮窗（透明/无边框/置顶）：由 main.js 主进程持有，渲染进程 modules/hud.js 通过 IPC 控制
+let hudWindow = null;
+let hudReady = false;
 let server = null;
 let actualPort = null; // 实际监听的端口（8080 被占用时自动递增）
 
@@ -355,6 +358,73 @@ function createWindow() {
   });
 }
 
+// ===== HUD 悬浮窗管理（Wave 5）=====
+function positionHud() {
+  if (!hudWindow || hudWindow.isDestroyed()) return;
+  try {
+    const wa = screen.getPrimaryDisplay().workArea;
+    const [w, h] = hudWindow.getSize();
+    hudWindow.setPosition(wa.x + wa.width - w - 24, wa.y + wa.height - h - 24);
+  } catch (e) { console.warn('⚠️ [hud] 定位失败:', e.message); }
+}
+
+function createHudWindow() {
+  if (hudWindow && !hudWindow.isDestroyed()) return hudWindow;
+  try {
+    hudWindow = new BrowserWindow({
+      width: 760, height: 560,
+      transparent: true,
+      frame: false,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      resizable: false,
+      movable: true,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      hasShadow: false,
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: false,
+        preload: path.join(__dirname, 'preload-hud.js')
+      }
+    });
+    hudWindow.setAlwaysOnTop(true, 'screen-saver');
+    try { hudWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch (e) { /* noop */ }
+    const hudPath = path.join(__dirname, 'public', 'hud', 'index.html').replace(/\\/g, '/');
+    hudWindow.loadURL('file:///' + hudPath);
+    positionHud();
+    hudWindow.on('closed', () => { hudWindow = null; hudReady = false; });
+    console.log('🖥️ [hud] 悬浮窗已创建');
+  } catch (e) {
+    console.warn('⚠️ [hud] 创建悬浮窗失败:', e.message);
+    hudWindow = null;
+  }
+  return hudWindow;
+}
+
+function showHud() {
+  const win = createHudWindow();
+  if (win && !win.isDestroyed()) { positionHud(); win.showInactive(); }
+}
+function hideHud() {
+  if (hudWindow && !hudWindow.isDestroyed()) hudWindow.hide();
+}
+function toggleHud() {
+  if (!hudWindow || hudWindow.isDestroyed()) { showHud(); return; }
+  hudWindow.isVisible() ? hudWindow.hide() : hudWindow.showInactive();
+}
+
+function registerHudShortcut() {
+  try {
+    const ok = globalShortcut.register('CommandOrControl+Shift+H', () => toggleHud());
+    if (ok) console.log('⌨️ [hud] 全局快捷键 Ctrl+Shift+H 已注册');
+    else console.warn('⚠️ [hud] 全局快捷键注册失败（可能被占用）');
+  } catch (e) { console.warn('⚠️ [hud] 注册快捷键异常:', e.message); }
+}
+
 function setupTray() {
   // 多路径探测：开发环境 __dirname，打包后 resources/ 或 app.getAppPath()
   const candidates = [
@@ -388,6 +458,7 @@ function setupTray() {
     tray = new Tray(icon);
     const contextMenu = Menu.buildFromTemplate([
       { label: '显示窗口', click: () => { if (mainWindow) mainWindow.show(); } },
+      { label: '显示/隐藏 HUD 悬浮窗', click: () => { toggleHud(); } },
       { label: '退出', click: () => { app.isQuitting = true; app.quit(); } }
     ]);
     tray.setContextMenu(contextMenu);
@@ -1004,6 +1075,7 @@ app.whenReady().then(async () => {
 
   app.setAppUserModelId('com.yourcompany.ai-agent');
   createWindow();
+  registerHudShortcut(); // 🖥️ Wave 5: 注册 Ctrl+Shift+H 切换 HUD 悬浮窗
   await startWebServer();
   initAutoUpdater(); // 🔒 S5: 窗口就绪后启动自动更新检查
   pluginHost.registerIPC(); // 🔧 Phase 5: 注册插件 Worker 线程 IPC 处理器
@@ -1033,6 +1105,13 @@ app.on('before-quit', () => {
     try { tray.destroy(); } catch (e) { console.warn('[shutdown] tray.destroy 失败:', e.message); }
   }
 
+  // 3.1 注销全局快捷键 + 销毁 HUD 悬浮窗（Wave 5）
+  try { globalShortcut.unregisterAll(); } catch (e) { console.warn('[shutdown] globalShortcut 注销失败:', e.message); }
+  if (hudWindow && !hudWindow.isDestroyed()) {
+    try { hudWindow.destroy(); } catch (e) { console.warn('[shutdown] hudWindow.destroy 失败:', e.message); }
+    hudWindow = null;
+  }
+
   // 3.5 Phase 5: 终止所有插件 Worker 线程
   try { pluginHost.terminateAllWorkers(); } catch (e) { console.warn('[shutdown] terminateAllWorkers 失败:', e.message); }
 
@@ -1054,6 +1133,38 @@ app.on('activate', () => {
 ipcMain.on('toggle-devtools', () => {
   if (mainWindow && mainWindow.webContents) {
     mainWindow.webContents.toggleDevTools();
+  }
+});
+
+// 🖥️ HUD 悬浮窗 IPC 路由（Wave 5）
+// HUD 视图就绪：标记并推送初始状态
+ipcMain.on('hud-ready', () => {
+  hudReady = true;
+  if (hudWindow && !hudWindow.isDestroyed()) {
+    hudWindow.webContents.send('hud-state', { state: 'idle' });
+  }
+});
+// 主窗口渲染进程中继的 Agent 状态 → 转发到 HUD 视图
+ipcMain.on('hud-relay', (event, payload) => {
+  if (hudWindow && !hudWindow.isDestroyed() && hudReady) {
+    hudWindow.webContents.send('hud-state', payload || { state: 'idle' });
+  }
+});
+// HUD 窗口显隐控制
+ipcMain.on('hud-show', () => showHud());
+ipcMain.on('hud-hide', () => hideHud());
+ipcMain.on('hud-toggle', () => toggleHud());
+// HUD 视图输入的指令 → 转发到主窗口渲染进程注入并发送
+ipcMain.on('hud-input', (event, payload) => {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    mainWindow.webContents.send('hud-command', payload || {});
+    if (!mainWindow.isVisible()) mainWindow.showInactive();
+  }
+});
+// HUD 语音按钮状态 → 转发到主窗口（由语音模块处理）
+ipcMain.on('hud-voice', (event, payload) => {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    mainWindow.webContents.send('hud-command', { voice: !!(payload && payload.recording) });
   }
 });
 

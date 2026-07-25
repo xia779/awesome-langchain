@@ -482,8 +482,10 @@ async function sendToAgent(task, isDeepThink) {
         statusSpan.className = 'typing-cursor';
         if (phase === 'THINK') {
           statusSpan.textContent = '🤔 步骤 ' + s + '/' + maxSteps + '：思考中...';
+          if (Core.emit) Core.emit('agent-think', { step: s, maxSteps: maxSteps }); // 🖥️ HUD 状态
         } else if (phase === 'ACT' && actionName) {
           statusSpan.textContent = '🛠️ 执行: ' + actionName + '...';
+          if (Core.emit) Core.emit('agent-tool', { action: actionName, step: s, maxSteps: maxSteps }); // 🖥️ HUD 状态
           _currentStepRow = document.createElement('div');
           _currentStepRow.className = 'agent-step-live';
           _currentStepRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:5px 10px;margin:3px 0;font-size:12px;color:var(--text-secondary);border-left:3px solid var(--primary);border-radius:4px;background:rgba(59,130,246,0.05);';
@@ -721,6 +723,7 @@ async function sendToAgent(task, isDeepThink) {
 
     // 执行工具 — 追加步骤行（含实时计时）
     statusSpan.textContent = '🛠️ 执行: ' + action.action + '...';
+    if (Core.emit) Core.emit('agent-tool', { action: action.action, step: step, maxSteps: maxSteps }); // 🖥️ HUD 状态
     var stepRow = document.createElement('div');
     stepRow.className = 'agent-step-live';
     stepRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:5px 10px;margin:3px 0;font-size:12px;color:var(--text-secondary);border-left:3px solid var(--primary);border-radius:4px;background:rgba(59,130,246,0.05);';

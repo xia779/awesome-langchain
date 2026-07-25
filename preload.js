@@ -900,7 +900,8 @@ const electronAPIBridge = {
         'open-devtools', 'app-minimize', 'app-maximize', 'app-close',
         'select-directory', 'select-file', 'get-app-version',
         'download-update', 'install-update',
-        'plugin-worker:config'
+        'plugin-worker:config',
+        'hud-relay', 'hud-show', 'hud-hide', 'hud-toggle'
       ];
       if (allowed.includes(channel)) {
         ipcRenderer.send(channel, ...args);
@@ -924,7 +925,8 @@ const electronAPIBridge = {
         'agent:done', 'agent:typing', 'config:changed', 'session:updated',
         'notification', 'tray:action', 'app:shutdown', 'trigger-export',
         'app:update',
-        'plugin-worker:crashed', 'plugin-worker:log', 'plugin-worker:notify', 'plugin-worker:config-save'
+        'plugin-worker:crashed', 'plugin-worker:log', 'plugin-worker:notify', 'plugin-worker:config-save',
+        'hud-command'
       ];
       if (allowedOn.includes(channel)) {
         const sub = (_event, ...args) => callback(...args);
