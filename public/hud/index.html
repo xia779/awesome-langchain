@@ -38,7 +38,7 @@
 
   /* 整窗可拖动（Electron 无边框），交互元素单独 no-drag */
   body { -webkit-app-region: drag; }
-  button, input, .fn-label, .no-drag { -webkit-app-region: no-drag; }
+  button, input, .fn-label, .no-drag, #chip-canvas { -webkit-app-region: no-drag; }
 
   /* 浏览器预览背景（Electron 中 body.electron 保持透明，实现桌面悬浮叠加） */
   body:not(.electron) {
@@ -399,6 +399,12 @@
   }
   .chip .led.warn { background: #fbbf24; box-shadow: 0 0 6px #fbbf24; }
 
+  /* Wave 6d：可点击的画布入口 chip */
+  #chip-canvas { cursor: pointer; transition: border-color 0.3s, color 0.3s; }
+  #chip-canvas:hover { border-color: var(--purple); color: var(--ink); }
+  #chip-canvas .led { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+  #chip-canvas .led.warn { background: #fbbf24; box-shadow: 0 0 6px #fbbf24; }
+
   /* ============================================================
      底部输入栏 + 操作横幅
      ============================================================ */
@@ -518,6 +524,7 @@
       <div class="chip"><span class="led" id="led-model"></span><span id="chip-model">模型 · 已连接</span></div>
       <div class="chip"><span class="led" id="led-task"></span><span id="chip-task">任务 · 空闲</span></div>
       <div class="chip"><span class="led warn" id="led-net"></span><span id="chip-net">搜索 · 就绪</span></div>
+      <div class="chip" id="chip-canvas" title="展开成画布"><span class="led" id="led-canvas"></span><span id="chip-canvas-text">画布 · default</span></div>
     </div>
 
     <!-- 左侧角色状态面板 -->
@@ -648,7 +655,10 @@
     banner: document.getElementById('bottom-banner'),
     bannerText: document.getElementById('banner-text'),
     chipTask: document.getElementById('chip-task'),
-    ledTask: document.getElementById('led-task')
+    ledTask: document.getElementById('led-task'),
+    chipCanvas: document.getElementById('chip-canvas'),
+    chipCanvasText: document.getElementById('chip-canvas-text'),
+    ledCanvas: document.getElementById('led-canvas')
   };
 
   var EXEC_CIRC = 754;
@@ -768,6 +778,15 @@
     });
   }
 
+  // Wave 6d：画布摘要 → 顶部画布 chip
+  function updateCanvasChip(c) {
+    if (!c || !els.chipCanvasText) return;
+    var label = '画布 · ' + (c.workspace || 'default');
+    if (c.running) label += ' · ' + c.running + ' 运行';
+    els.chipCanvasText.textContent = label;
+    if (els.ledCanvas) els.ledCanvas.className = c.running ? 'led warn' : 'led';
+  }
+
   function setStat(key, val) {
     val = Math.max(0, Math.min(100, val));
     var bar = document.getElementById('bar-' + key);
@@ -786,6 +805,9 @@
   if (bridge && bridge.ipc && bridge.ipc.on) {
     bridge.ipc.on('hud-state', function (payload) {
       payload = payload || {};
+      // Wave 6d：画布摘要更新（canvasOnly 仅刷新 chip，不打扰角色状态）
+      if (payload.canvas) updateCanvasChip(payload.canvas);
+      if (payload.canvasOnly) return;
       if (payload.fn) setActiveFn(payload.fn);
       if (payload.gauge != null) setGauge(payload.gauge, payload.gaugeTitle, payload.gaugeSub);
       if (payload.queue != null) els.sbQueue.textContent = payload.queue + ' 个任务';
@@ -838,6 +860,15 @@
       }
     });
   });
+
+  // Wave 6d：点击画布 chip → 展开成画布
+  if (els.chipCanvas) {
+    els.chipCanvas.addEventListener('click', function () {
+      if (bridge && bridge.ipc && bridge.ipc.send) {
+        bridge.ipc.send('hud-input', { action: 'open-canvas' });
+      }
+    });
+  }
 
   var demoBar = document.getElementById('demo-bar');
   if (!bridge) {

@@ -1158,7 +1158,13 @@ ipcMain.on('hud-toggle', () => toggleHud());
 ipcMain.on('hud-input', (event, payload) => {
   if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
     mainWindow.webContents.send('hud-command', payload || {});
-    if (!mainWindow.isVisible()) mainWindow.showInactive();
+    // 🖥️ Wave 6d：HUD「展开成画布」——主动把主窗口提到前台，让画布可见
+    if (payload && payload.action === 'open-canvas') {
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+    } else if (!mainWindow.isVisible()) {
+      mainWindow.showInactive();
+    }
   }
 });
 // HUD 语音按钮状态 → 转发到主窗口（由语音模块处理）

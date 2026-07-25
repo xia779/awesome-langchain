@@ -21,6 +21,11 @@ var bridge = (typeof window !== 'undefined' && window.nodeBridge && window.nodeB
 var _state = 'idle';
 var _visible = false;
 
+// ---- Wave 6d：HUD↔画布联动状态 ----
+var _activeNodeId = null;                              // 最近进入运行态的节点（HUD 一键定位用）
+var _canvasSummary = { workspace: 'default', running: 0, total: 0 };
+var LIVE_STATES = { thinking: 1, executing: 1, running: 1 };  // 视为「活跃」的节点状态
+
 function _send(channel, payload) {
   if (bridge && typeof bridge.send === 'function') {
     try { bridge.send(channel, payload); } catch (e) { /* noop */ }
@@ -71,6 +76,65 @@ function injectCommand(text) {
   } catch (e) { /* noop */ }
 }
 
+// ═══════════════════════════════════════════
+// Wave 6d：HUD ↔ 画布联动
+// ═══════════════════════════════════════════
+
+function getStore() {
+  return (Core && Core.canvas && Core.canvas.store) || null;
+}
+
+// 重新统计画布摘要（工作区名 + 运行中/总节点数）
+function recomputeCanvasSummary() {
+  var store = getStore();
+  if (store) {
+    var nodes = (typeof store.listNodes === 'function') ? store.listNodes() : [];
+    var running = 0;
+    nodes.forEach(function (n) { if (LIVE_STATES[n.status]) running += 1; });
+    _canvasSummary = {
+      workspace: (typeof store.getWorkspace === 'function') ? store.getWorkspace() : 'default',
+      running: running,
+      total: nodes.length
+    };
+  }
+  return _canvasSummary;
+}
+
+// 把画布摘要中继到 HUD 窗口（canvasOnly 标记，HUD 视图只更新画布 chip，不打扰角色状态）
+function relayCanvasSummary() {
+  recomputeCanvasSummary();
+  _send('hud-relay', { canvasOnly: true, canvas: _canvasSummary });
+}
+
+// 记住最近进入运行态的节点，作为 HUD 一键定位的目标
+function trackActiveNode(node) {
+  if (node && node.id && LIVE_STATES[node.status]) _activeNodeId = node.id;
+}
+
+// 定位到活跃节点（需画布已挂载）
+function focusActiveNode() {
+  var store = getStore();
+  if (!_activeNodeId || !store || typeof store.getNode !== 'function') return null;
+  if (!store.getNode(_activeNodeId)) { _activeNodeId = null; return null; }
+  if (Core.canvas) {
+    if (typeof Core.canvas.focusNode === 'function') Core.canvas.focusNode(_activeNodeId);
+    if (typeof Core.canvas.selectNode === 'function') Core.canvas.selectNode(_activeNodeId);
+  }
+  return _activeNodeId;
+}
+
+// 一键展开画布并定位到活跃节点
+function openCanvas() {
+  if (Core && typeof Core.emit === 'function') {
+    try { Core.emit('hud:open-canvas', { nodeId: _activeNodeId }); } catch (e) { /* noop */ }
+  }
+  if (Core && Core.canvas && typeof Core.canvas.open === 'function') {
+    Core.canvas.open();
+    return focusActiveNode() || true;
+  }
+  return false;
+}
+
 function init(_Core) {
   Core = _Core;
 
@@ -83,8 +147,14 @@ function init(_Core) {
     hide: hide,
     toggle: toggle,
     injectCommand: injectCommand,
+    // Wave 6d：画布联动
+    openCanvas: openCanvas,
+    focusActiveNode: focusActiveNode,
+    relayCanvasSummary: relayCanvasSummary,
     get state() { return _state; },
-    get visible() { return _visible; }
+    get visible() { return _visible; },
+    get canvasSummary() { return recomputeCanvasSummary(); },
+    get activeNodeId() { return _activeNodeId; }
   };
 
   // ---- 自动中继 Agent 生命周期状态 ----
@@ -119,12 +189,31 @@ function init(_Core) {
       d = d || {};
       setState('idle', { text: '执行出错了', sub: d.message ? String(d.message).substring(0, 30) : '请检查模型或网络', gauge: 0, fn: '' });
     });
+
+    // ---- Wave 6d：订阅画布事件 → 跟踪活跃节点 + 同步 HUD 画布 chip ----
+    Core.on('canvas:node-add', function (d) {
+      if (d && d.node) trackActiveNode(d.node);
+      relayCanvasSummary();
+    });
+    Core.on('canvas:node-update', function (d) {
+      if (d && d.node) trackActiveNode(d.node);
+      relayCanvasSummary();
+    });
+    Core.on('canvas:node-remove', function (d) {
+      if (d && d.id && d.id === _activeNodeId) _activeNodeId = null;
+      relayCanvasSummary();
+    });
+    Core.on('canvas:workspace', function () { relayCanvasSummary(); });
+    Core.on('canvas:load', function () { relayCanvasSummary(); });
+    Core.on('canvas:clear', function () { _activeNodeId = null; relayCanvasSummary(); });
   }
 
   // ---- 接收 HUD 窗口发来的指令（经主进程转发）----
   if (bridge && typeof bridge.on === 'function') {
     bridge.on('hud-command', function (payload) {
       payload = payload || {};
+      // Wave 6d：HUD「展开成画布」按钮
+      if (payload.action === 'open-canvas') { openCanvas(); return; }
       if (payload.text) injectCommand(payload.text);
     });
   }
@@ -133,6 +222,9 @@ function init(_Core) {
   if (Core.custom && typeof Core.custom.registerCommand === 'function') {
     Core.custom.registerCommand('hud', '显示/隐藏桌面 HUD 悬浮窗', function () { toggle(); }, false);
   }
+
+  // ---- Wave 6d：画布已挂载时，初始化即同步一次画布摘要 ----
+  if (getStore()) relayCanvasSummary();
 }
 
 module.exports = {
@@ -140,5 +232,5 @@ module.exports = {
   dependencies: [],
   init: init,
   // 导出内部函数便于单元测试
-  _internals: { TOOL_FN_MAP: TOOL_FN_MAP }
+  _internals: { TOOL_FN_MAP: TOOL_FN_MAP, LIVE_STATES: LIVE_STATES }
 };

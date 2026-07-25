@@ -52,3 +52,11 @@ n*.backup
 *.backup
 
 *.bak
+
+# 散落数据/临时文件（运行时或外部导入，不入版本库）
+knowledge_base_*.txt
+*交易体系*.txt
+*piplog*.txt
+
+# 生成产物（AI漫画输出目录）
+public/aimanga/

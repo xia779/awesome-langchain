@@ -1,14 +1,13 @@
-// modules/canvas-view.js — 画布视图（Wave 6a 壳 / 6b 状态着色 / 6c 可交互编排）
+// modules/canvas-view.js — 画布视图（Wave 6a 壳 / 6b 状态着色 / 6c 可交互 / 6d 联动+工作区+裁剪）
 //
 // 桌面原生「工作层」：全屏无限画布，平移缩放 + 网格 + 工具栏 + 小地图 + 状态栏。
 // 节点/连线数据来自 Core.canvas.store（canvas-store.js）；本模块负责「看得见 + 可交互」。
 // 实时 agent 投影由 canvas-sync 接入；工作流编排投影由 canvas-flow 接入。
 //
-// Wave 6c 新增交互：
-//   - 选中节点（点击高亮 + Delete 删除 + Esc 取消）
-//   - 「新建」菜单：便签 / 任务 / 工作流（工作流可从内置模板或已有工作流创建）
-//   - 连线：从节点右侧手柄拖出，落到另一节点上建立 dependency 边
-//   - 检视面板：改标题、看元信息；工作流节点可填输入并「运行」
+// Wave 6c 交互：选中/删除、新建菜单（便签/任务/工作流）、手柄连线、检视面板（含运行工作流）。
+// Wave 6d 新增：
+//   - 多工作区 UI：工具栏工作区菜单，可切换 / 新建工作区（canvas-store 已提供后端）。
+//   - 视口裁剪：只渲染落在可视范围内的节点（含缓冲），大画布平移缩放更省。
 //
 // 渲染选型：方案 A —— 手写 DOM 节点 + SVG 连线 + CSS transform 平移缩放，零依赖零构建。
 // 所有 DOM 操作守卫 hasDom()，Node 测试环境下安全 no-op。
@@ -19,6 +18,10 @@ var els = {};
 var dragState = null;
 var selectedId = null;
 var _suppressRender = false; // 检视面板改标题时避免整树重渲染丢焦点
+
+// ---- Wave 6d：视口裁剪 ----
+var CULL_MARGIN = 240;        // 世界坐标缓冲，避免平移边缘节点闪烁
+var renderedIds = null;       // 上次实际渲染的节点 id 集合（数组）
 
 var TYPE_LABEL = {
   agent: 'Agent', task: '任务', tool: '工具', data: '数据',
@@ -76,6 +79,45 @@ function centerWorldPos() {
 }
 
 // ═══════════════════════════════════════════
+// Wave 6d：视口裁剪（纯函数，可单测）
+// ═══════════════════════════════════════════
+
+// 由视口 + 舞台尺寸推算可视世界矩形
+function worldRectFromViewport(vp, sw, sh) {
+  vp = vp || { x: 0, y: 0, zoom: 1 };
+  var zoom = vp.zoom || 1;
+  var x0 = -(vp.x || 0) / zoom, y0 = -(vp.y || 0) / zoom;
+  return { x0: x0, y0: y0, x1: x0 + (sw || 0) / zoom, y1: y0 + (sh || 0) / zoom };
+}
+
+// 节点是否与可视矩形相交（含缓冲 margin）
+function nodeVisible(n, rect, margin) {
+  if (!n || !rect) return false;
+  margin = margin || 0;
+  return (n.x + n.w >= rect.x0 - margin) && (n.x <= rect.x1 + margin) &&
+         (n.y + n.h >= rect.y0 - margin) && (n.y <= rect.y1 + margin);
+}
+
+// 当前应渲染的节点 id 列表（视口尺寸未知时不裁剪，全量返回）
+function currentVisibleIds() {
+  var store = getStore(); if (!store) return [];
+  var nodes = store.listNodes();
+  var sw = (els.stage && els.stage.clientWidth) || 0;
+  var sh = (els.stage && els.stage.clientHeight) || 0;
+  if (!sw || !sh) return nodes.map(function (n) { return n.id; });
+  var rect = worldRectFromViewport(store.getViewport(), sw, sh);
+  return nodes.filter(function (n) { return nodeVisible(n, rect, CULL_MARGIN); })
+              .map(function (n) { return n.id; });
+}
+
+function sameIds(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  var set = {}; b.forEach(function (id) { set[id] = 1; });
+  for (var i = 0; i < a.length; i++) { if (!set[a[i]]) return false; }
+  return true;
+}
+
+// ═══════════════════════════════════════════
 // 样式注入（自包含，作用域 #canvasRoot）
 // ═══════════════════════════════════════════
 
@@ -90,18 +132,29 @@ var CSS = [
   '.cv-btn:hover{background:rgba(124,92,255,.18);border-color:rgba(124,92,255,.5);}',
   '.cv-btn--primary{background:rgba(124,92,255,.22);border-color:rgba(124,92,255,.55);}',
   '.cv-sep{width:1px;height:20px;background:rgba(255,255,255,.1);margin:0 4px;}',
-  '.cv-ws{margin-left:auto;font-size:12px;color:#8b949e;}',
-  '.cv-ws b{color:#e6edf3;font-weight:600;}',
   // 新建菜单
-  '.cv-addwrap{position:relative;}',
-  '.cv-addmenu{position:absolute;top:36px;left:0;min-width:160px;background:#161b22;border:1px solid rgba(255,255,255,.14);',
+  '.cv-addwrap,.cv-wswrap{position:relative;}',
+  '.cv-addmenu,.cv-wsmenu{position:absolute;top:36px;left:0;min-width:170px;background:#161b22;border:1px solid rgba(255,255,255,.14);',
   'border-radius:8px;padding:4px;display:none;z-index:20;box-shadow:0 8px 24px rgba(0,0,0,.5);}',
-  '.cv-addmenu.open{display:block;}',
-  '.cv-addmenu-item{padding:7px 10px;font-size:12px;border-radius:6px;cursor:pointer;color:#e6edf3;}',
-  '.cv-addmenu-item:hover{background:rgba(124,92,255,.18);}',
+  '.cv-addmenu.open,.cv-wsmenu.open{display:block;}',
+  '.cv-addmenu-item,.cv-ws-item{padding:7px 10px;font-size:12px;border-radius:6px;cursor:pointer;color:#e6edf3;}',
+  '.cv-addmenu-item:hover,.cv-ws-item:hover{background:rgba(124,92,255,.18);}',
+  '.cv-ws-item.cur{color:#7c5cff;font-weight:600;}',
+  '.cv-ws-item.cur::before{content:"✓ ";}',
+  '.cv-ws-new{display:flex;gap:6px;padding:6px 8px;border-top:1px solid rgba(255,255,255,.1);margin-top:4px;}',
+  '.cv-ws-input{flex:1;background:#0b0e14;border:1px solid rgba(255,255,255,.14);border-radius:6px;color:#e6edf3;',
+  'padding:5px 8px;font-size:12px;font-family:inherit;}',
+  '.cv-ws-add{border:1px solid rgba(124,92,255,.5);background:rgba(124,92,255,.2);color:#e6edf3;border-radius:6px;',
+  'padding:0 10px;font-size:12px;cursor:pointer;}',
   '.cv-wf-picker{display:none;margin-top:4px;border-top:1px solid rgba(255,255,255,.1);padding-top:4px;max-height:220px;overflow:auto;}',
   '.cv-wf-picker.open{display:block;}',
   '.cv-wf-empty{padding:6px 10px;font-size:11px;color:#6e7681;}',
+  // 工作区按钮（工具栏右侧）
+  '.cv-ws{margin-left:auto;}',
+  '.cv-wsbtn{height:30px;padding:0 12px;border:1px solid rgba(255,255,255,.12);border-radius:7px;background:rgba(255,255,255,.04);',
+  'color:#8b949e;font-size:12px;cursor:pointer;}',
+  '.cv-wsbtn b{color:#e6edf3;font-weight:600;}',
+  '.cv-wsbtn:hover{border-color:rgba(124,92,255,.5);}',
   '.cv-stage{position:absolute;top:48px;left:0;right:0;bottom:24px;overflow:hidden;cursor:grab;',
   'background-color:#0b0e14;',
   'background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);',
@@ -212,7 +265,10 @@ function build() {
       '<button class="cv-btn" data-act="zoomOut">－</button>' +
       '<button class="cv-btn" data-act="zoomIn">＋</button>' +
       '<button class="cv-btn" data-act="save">保存</button>' +
-      '<span class="cv-ws">工作区：<b class="cv-ws-name">default</b></span>' +
+      '<div class="cv-ws cv-wswrap">' +
+        '<button class="cv-wsbtn" data-act="wsmenu">工作区：<b class="cv-ws-name">default</b> ▾</button>' +
+        '<div class="cv-wsmenu"></div>' +
+      '</div>' +
     '</div>' +
     '<div class="cv-stage">' +
       '<div class="cv-world">' +
@@ -246,6 +302,7 @@ function build() {
   els.addMenu = root.querySelector('.cv-addmenu');
   els.wfPicker = root.querySelector('.cv-wf-picker');
   els.inspector = root.querySelector('.cv-inspector');
+  els.wsMenu = root.querySelector('.cv-wsmenu');
 
   // 临时连线（拖拽手柄时显示），挂在 edges svg 内
   var SVGNS = 'http://www.w3.org/2000/svg';
@@ -261,11 +318,12 @@ function build() {
 function wireEvents() {
   // 工具栏（事件委托）
   els.toolbar.addEventListener('click', function (e) {
-    var btn = e.target.closest ? e.target.closest('.cv-btn') : null;
+    var btn = e.target.closest ? (e.target.closest('.cv-btn') || e.target.closest('.cv-wsbtn')) : null;
     if (!btn) return;
     var act = btn.getAttribute('data-act');
     if (act === 'back') close();
     else if (act === 'addmenu') toggleAddMenu();
+    else if (act === 'wsmenu') toggleWsMenu();
     else if (act === 'fit') fit();
     else if (act === 'reset') resetView();
     else if (act === 'zoomIn') zoomBy(1.2);
@@ -304,6 +362,30 @@ function wireEvents() {
     }
   });
 
+  // 工作区菜单项（切换 / 新建）
+  els.wsMenu.addEventListener('click', function (e) {
+    var item = e.target.closest ? e.target.closest('.cv-ws-item') : null;
+    if (item) {
+      var name = item.getAttribute('data-ws');
+      var store = getStore();
+      if (store && name) { store.switchWorkspace(name); closeWsMenu(); }
+      return;
+    }
+    if (e.target.closest && e.target.closest('.cv-ws-add')) {
+      var input = els.wsMenu.querySelector('.cv-ws-input');
+      var v = input ? input.value.trim() : '';
+      if (v) { createWorkspace(v); }
+    }
+  });
+  // 新建工作区输入框回车确认
+  els.wsMenu.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('cv-ws-input')) {
+      e.preventDefault();
+      var v = e.target.value.trim();
+      if (v) createWorkspace(v);
+    }
+  });
+
   // 平移 / 节点拖拽 / 连线（统一在 stage 上判定）
   els.stage.addEventListener('mousedown', onStageMouseDown);
 
@@ -322,20 +404,21 @@ function wireEvents() {
     if ((e.key === 'Delete' || e.key === 'Backspace') && !typing) {
       if (selectedId) { e.preventDefault(); deleteSelected(); }
     } else if (e.key === 'Escape') {
-      deselect(); closeAddMenu();
+      deselect(); closeAddMenu(); closeWsMenu();
     }
   });
 
-  // 点击画布外关闭新建菜单
+  // 点击菜单外关闭新建/工作区菜单
   document.addEventListener('mousedown', function (e) {
     if (!built) return;
-    var wrap = e.target.closest ? e.target.closest('.cv-addwrap') : null;
-    if (!wrap) closeAddMenu();
+    if (!(e.target.closest && e.target.closest('.cv-addwrap'))) closeAddMenu();
+    if (!(e.target.closest && e.target.closest('.cv-wswrap'))) closeWsMenu();
   });
 
   // 窗口尺寸变化
   window.addEventListener('resize', function () {
     applyTransform(); renderMinimap();
+    if (built) { var ids = currentVisibleIds(); if (!sameIds(ids, renderedIds)) { renderNodes(ids); renderEdges(ids); } }
   });
 }
 
@@ -377,6 +460,44 @@ function buildWfPicker() {
   }
   if (!html) html = '<div class="cv-wf-empty">暂无可用工作流</div>';
   els.wfPicker.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════
+// Wave 6d：工作区菜单
+// ═══════════════════════════════════════════
+
+function toggleWsMenu() {
+  if (!built) return;
+  if (els.wsMenu.classList.contains('open')) closeWsMenu();
+  else { buildWsMenu(); els.wsMenu.classList.add('open'); }
+}
+function closeWsMenu() {
+  if (built && els.wsMenu) els.wsMenu.classList.remove('open');
+}
+
+function buildWsMenu() {
+  if (!built || !els.wsMenu) return;
+  var store = getStore();
+  var cur = store ? store.getWorkspace() : 'default';
+  var names = (store && typeof store.listWorkspaces === 'function') ? store.listWorkspaces() : [];
+  // 确保当前工作区在列表里
+  if (names.indexOf(cur) < 0) names.unshift(cur);
+  var html = '';
+  names.forEach(function (n) {
+    html += '<div class="cv-ws-item' + (n === cur ? ' cur' : '') + '" data-ws="' + esc(n) + '">' + esc(n) + '</div>';
+  });
+  html += '<div class="cv-ws-new">' +
+            '<input class="cv-ws-input" placeholder="新工作区名…" />' +
+            '<button class="cv-ws-add">新建</button>' +
+          '</div>';
+  els.wsMenu.innerHTML = html;
+}
+
+function createWorkspace(name) {
+  var store = getStore(); if (!store || !name) return;
+  deselect();
+  store.newWorkspace(name);   // 触发 canvas:workspace → render
+  closeWsMenu();
 }
 
 // ═══════════════════════════════════════════
@@ -480,8 +601,6 @@ function onStageMouseDown(e) {
     els.stage.classList.add('cv-panning');
   }
 }
-
-function startConnect() { /* 保留占位：连线在 onStageMouseDown 内联启动 */ }
 
 function onDocMouseMove(e) {
   if (!dragState) return;
@@ -624,7 +743,7 @@ function closeInspector() {
 }
 
 // ═══════════════════════════════════════════
-// 渲染
+// 渲染（Wave 6d：视口裁剪）
 // ═══════════════════════════════════════════
 
 function makeNodeEl(n) {
@@ -645,13 +764,31 @@ function makeNodeEl(n) {
   return el;
 }
 
-function renderEdges() {
+// 只渲染可见节点（visibleIds 缺省时现算）
+function renderNodes(visibleIds) {
+  if (!built) return;
+  var store = getStore(); if (!store) return;
+  while (els.nodesLayer.firstChild) els.nodesLayer.removeChild(els.nodesLayer.firstChild);
+  var ids = visibleIds || currentVisibleIds();
+  var idSet = {}; ids.forEach(function (id) { idSet[id] = 1; });
+  store.listNodes().forEach(function (n) {
+    if (idSet[n.id]) els.nodesLayer.appendChild(makeNodeEl(n));
+  });
+  renderedIds = ids.slice();
+  els.emptyHint.style.display = store.listNodes().length ? 'none' : 'block';
+}
+
+// 连线：仅绘制两端都可见的边（临时连线始终置顶保留）
+function renderEdges(visibleIds) {
   if (!built) return;
   var store = getStore(); if (!store) return;
   var SVGNS = 'http://www.w3.org/2000/svg';
-  // 清空（保留 svg 本身），临时连线最后补回保持置顶
   while (els.edgesLayer.firstChild) els.edgesLayer.removeChild(els.edgesLayer.firstChild);
+  var ids = visibleIds || renderedIds || [];
+  var idSet = {}; ids.forEach(function (id) { idSet[id] = 1; });
+  var cull = ids.length > 0;
   store.listEdges().forEach(function (e) {
+    if (cull && (!idSet[e.from] || !idSet[e.to])) return;
     var a = store.getNode(e.from), b = store.getNode(e.to);
     if (!a || !b) return;
     var line = document.createElementNS(SVGNS, 'line');
@@ -669,11 +806,9 @@ function renderEdges() {
 function render() {
   if (!built || _suppressRender) return;
   var store = getStore(); if (!store) return;
-  while (els.nodesLayer.firstChild) els.nodesLayer.removeChild(els.nodesLayer.firstChild);
-  var nodes = store.listNodes();
-  nodes.forEach(function (n) { els.nodesLayer.appendChild(makeNodeEl(n)); });
-  renderEdges();
-  els.emptyHint.style.display = nodes.length ? 'none' : 'block';
+  var ids = currentVisibleIds();
+  renderNodes(ids);
+  renderEdges(ids);
   renderMinimap();
   updateStatus();
 }
@@ -684,7 +819,7 @@ function renderMinimap() {
   var ctx = els.minimap.getContext('2d');
   var W = els.minimap.width, H = els.minimap.height;
   ctx.clearRect(0, 0, W, H);
-  var nodes = store.listNodes();
+  var nodes = store.listNodes();   // 小地图画全量，便于全局定位
   var vp = store.getViewport();
   var sw = els.stage.clientWidth || 1, sh = els.stage.clientHeight || 1;
   var vx = -vp.x / vp.zoom, vy = -vp.y / vp.zoom, vw = sw / vp.zoom, vh = sh / vp.zoom;
@@ -759,6 +894,7 @@ function close() {
   document.body.classList.remove('canvas-open');
   closeInspector();
   closeAddMenu();
+  closeWsMenu();
 }
 
 function toggle() {
@@ -797,12 +933,17 @@ function init(_Core) {
     Core.on('canvas:node-update', function (d) {
       if (_suppressRender) return;
       render();
-      if (d && d.id && d.id === selectedId && built && els.inspector && els.inspector.classList.contains('open')) {
-        openInspector(d.id);
+      if (d && d.node && d.node.id === selectedId && built && els.inspector && els.inspector.classList.contains('open')) {
+        openInspector(d.node.id);
       }
     });
+    // Wave 6d：视口变化 → 平移缩放变换 + 仅在可见集合变化时重渲染节点
     Core.on('canvas:viewport', function () {
       applyTransform(); renderMinimap(); updateStatus();
+      if (built) {
+        var ids = currentVisibleIds();
+        if (!sameIds(ids, renderedIds)) { renderNodes(ids); renderEdges(ids); }
+      }
     });
   }
 
@@ -816,5 +957,8 @@ module.exports = {
   name: 'canvas-view',
   dependencies: ['canvas-store', 'custom'],
   init: init,
-  _internals: { TYPE_LABEL: TYPE_LABEL, TYPE_COLOR: TYPE_COLOR, STATUS_LABEL: STATUS_LABEL }
+  _internals: {
+    TYPE_LABEL: TYPE_LABEL, TYPE_COLOR: TYPE_COLOR, STATUS_LABEL: STATUS_LABEL,
+    worldRectFromViewport: worldRectFromViewport, nodeVisible: nodeVisible, CULL_MARGIN: CULL_MARGIN
+  }
 };
