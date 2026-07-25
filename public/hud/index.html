@@ -349,6 +349,7 @@
   var STATE_LABEL = { idle: '待命中', thinking: '思考中', speaking: '播报中', executing: '执行中' };
   var currentState = 'idle';
   var _thinkGuard = null;
+  var _idleNoticeTimer = null;   // BUG#3：idle 通知文案的临时显示计时器
   function armThinkGuard() {
     clearThinkGuard();
     // 45 秒无状态更新自动复位，避免永远卡在「思考中」
@@ -357,6 +358,7 @@
     }, 45000);
   }
   function clearThinkGuard() { if (_thinkGuard) { clearTimeout(_thinkGuard); _thinkGuard = null; } }
+  function clearIdleNotice() { if (_idleNoticeTimer) { clearTimeout(_idleNoticeTimer); _idleNoticeTimer = null; } }
 
   function setState(state, opts) {
     opts = opts || {};
@@ -364,7 +366,18 @@
     currentState = state;
     els.body.setAttribute('data-state', state);
     if (state === 'thinking') armThinkGuard(); else clearThinkGuard();
-    els.statusLabel.textContent = (opts.text && state !== 'idle') ? opts.text : STATE_LABEL[state];
+    // BUG#3 修复：idle 且带通知文案（任务完成/派发回执）时临时显示，4 秒后回退「待命中」
+    if (state === 'idle' && opts.text) {
+      clearIdleNotice();
+      els.statusLabel.textContent = opts.text;
+      _idleNoticeTimer = setTimeout(function () {
+        _idleNoticeTimer = null;
+        if (currentState === 'idle') els.statusLabel.textContent = STATE_LABEL.idle;
+      }, 4000);
+    } else {
+      clearIdleNotice();
+      els.statusLabel.textContent = STATE_LABEL[state];
+    }
   }
 
   // ---------- 文本格式化（轻量 Markdown：转义 + 代码块 + 行内代码 + 加粗 + 换行） ----------
