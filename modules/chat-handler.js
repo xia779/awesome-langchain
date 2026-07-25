@@ -493,6 +493,10 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
           _pendingFullText = fullText;
           // 🌐 Gateway 流式广播：实时推送给远程客户端
           if (Core.ui) Core.ui.updateLastMessage(fullText, false);
+          // 🖥️ Wave 9 步骤4：HUD 流式逐字渲染中继（hud.js 内部判断当前是否为 master 会话）
+          if (Core.hud && typeof Core.hud.relayStreamChunk === 'function') {
+            try { Core.hud.relayStreamChunk(chunk, fullText); } catch (e) { /* noop */ }
+          }
           if (Core.voice && Core.voice.streamAppend) {
             try { Core.voice.streamAppend(chunk); } catch (e) { console.warn('\u26a0\ufe0f [api] \u6d41\u5f0f\u8bed\u97f3\u8ffd\u52a0\u5931\u8d25:', e.message); }
           }
@@ -514,6 +518,10 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
           });
         };
       })(), signal);
+      // 🖥️ Wave 9 步骤4：通知 HUD 流式结束（移除流式气泡光标；归档消息随后由轮询同步渲染）
+      if (Core.hud && typeof Core.hud.relayStreamEnd === 'function') {
+        try { Core.hud.relayStreamEnd(); } catch (e) { /* noop */ }
+      }
       // 流式结束，设置冷却期标记（2 秒内不折叠）
       delete aiDiv.dataset.streaming;
       aiDiv.dataset.streamEnded = Date.now().toString();

@@ -263,6 +263,32 @@ function recordToMaster(role, content) {
   } catch (e) { /* noop */ }
 }
 
+// ═══════════════════════════════════════════
+// Wave 9 步骤4：HUD 流式逐字渲染中继
+//   主窗口 handleNormalChat 流式输出时，每个 chunk 经此推给 HUD，
+//   HUD 维护一个"流式气泡"实时刷新；流结束后发 streamEnd，随后归档
+//   消息经 relayMasterChat 正常渲染替换流式气泡。仅当前会话为 master
+//   时中继（HUD 只展示廿廿对话，其它会话不打扰）。
+// ═══════════════════════════════════════════
+var _streamActive = false;
+
+function relayStreamChunk(chunk, fullText) {
+  if (!Core || !Core.session || typeof Core.session.getCurrentId !== 'function') return;
+  var masterId = findMasterId();
+  if (!masterId || Core.session.getCurrentId() !== masterId) return;
+  _streamActive = true;
+  _send('hud-relay', {
+    streamOnly: true,
+    stream: { chunk: String(chunk == null ? '' : chunk), full: String(fullText == null ? '' : fullText) }
+  });
+}
+
+function relayStreamEnd() {
+  if (!_streamActive) return;
+  _streamActive = false;
+  _send('hud-relay', { streamOnly: true, streamEnd: true });
+}
+
 function init(_Core) {
   Core = _Core;
 
@@ -282,6 +308,9 @@ function init(_Core) {
     // Wave 9：master 会话聊天中继
     relayMasterChat: relayMasterChat,
     findMasterId: findMasterId,
+    // Wave 9 步骤4：流式逐字渲染中继
+    relayStreamChunk: relayStreamChunk,
+    relayStreamEnd: relayStreamEnd,
     get state() { return _state; },
     get visible() { return _visible; },
     get canvasSummary() { return recomputeCanvasSummary(); },

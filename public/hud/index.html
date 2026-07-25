@@ -400,6 +400,9 @@
     var msgs = (chat && chat.messages) || [];
     if (chat && chat.title) els.whoName.textContent = chat.title;
 
+    // Wave 9 步骤4：渲染完整列表前先移除流式气泡（归档消息已包含在列表中）
+    removeStreamBubble();
+
     // 是否贴近底部（贴近才自动滚动，避免打扰上滑阅读）
     var nearBottom = (els.chatList.scrollHeight - els.chatList.scrollTop - els.chatList.clientHeight) < 90;
 
@@ -429,6 +432,36 @@
       }
     }
     _seenCount = msgs.length;
+  }
+
+  // ---------- Wave 9 步骤4：流式逐字渲染（主窗口 handleNormalChat 中继 chunk） ----------
+  var _streamBubble = null;   // 流式气泡的 .bubble 元素
+  var _streamMsg = null;      // 流式气泡的 .msg 容器
+  function ensureStreamBubble() {
+    if (_streamBubble) return _streamBubble;
+    els.emptyHint.style.display = 'none';
+    _streamMsg = document.createElement('div');
+    _streamMsg.className = 'msg ai';
+    _streamBubble = document.createElement('div');
+    _streamBubble.className = 'bubble streaming';   // CSS ::after 提供闪烁光标
+    _streamMsg.appendChild(_streamBubble);
+    els.chatList.appendChild(_streamMsg);
+    return _streamBubble;
+  }
+  function removeStreamBubble() {
+    if (_streamMsg && _streamMsg.parentNode) _streamMsg.parentNode.removeChild(_streamMsg);
+    _streamMsg = null;
+    _streamBubble = null;
+  }
+  function streamChunk(s) {
+    var b = ensureStreamBubble();
+    b.innerHTML = fmt((s && s.full) || '');
+    var nearBottom = (els.chatList.scrollHeight - els.chatList.scrollTop - els.chatList.clientHeight) < 120;
+    if (nearBottom) els.chatList.scrollTop = els.chatList.scrollHeight;
+  }
+  function endStream() {
+    // 移除光标收尾；文本保留，待下一次 renderChat 用归档消息整体替换
+    if (_streamBubble) _streamBubble.classList.remove('streaming');
   }
 
   // ---------- TTS 朗读（Web Speech API，本地离线） ----------
@@ -492,6 +525,12 @@
   if (bridge && bridge.ipc && bridge.ipc.on) {
     bridge.ipc.on('hud-state', function (payload) {
       payload = payload || {};
+      // Wave 9 步骤4：流式逐字渲染（streamOnly 仅刷新流式气泡，不打扰状态）
+      if (payload.streamOnly) {
+        if (payload.streamEnd) endStream();
+        else if (payload.stream) streamChunk(payload.stream);
+        return;
+      }
       // Wave 9：master 会话聊天快照（chatOnly 仅渲染聊天，不打扰状态）
       if (payload.chat) { renderChat(payload.chat); }
       if (payload.chatOnly) return;
@@ -550,7 +589,7 @@
     setState('idle');
   }
 
-  window.HUD = { setState: setState, renderChat: renderChat, speak: speak };
+  window.HUD = { setState: setState, renderChat: renderChat, speak: speak, streamChunk: streamChunk, endStream: endStream };
 })();
 </script>
 </body>
