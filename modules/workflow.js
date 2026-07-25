@@ -885,6 +885,13 @@ async function executeStep(step, context) {
   return result;
 }
 
+// 工作流步骤广播（供 canvas-flow 投影步骤节点；守卫式，无 Core/emit 时静默）
+function emitWf(ev, data) {
+  if (Core && typeof Core.emit === 'function') {
+    try { Core.emit(ev, data); } catch (e) { /* noop */ }
+  }
+}
+
 // 执行完整工作流
 async function runWorkflow(workflowId, inputText) {
   var wf = workflows[workflowId];
@@ -895,17 +902,21 @@ async function runWorkflow(workflowId, inputText) {
   if (inputText) context.input = inputText;
 
   console.log('🔄 执行工作流:', wf.name, '步骤数:', wf.steps.length);
+  emitWf('workflow:start', { workflowId: wf.id, name: wf.name, total: wf.steps.length });
   var results = [];
 
   for (var i = 0; i < wf.steps.length; i++) {
     var step = wf.steps[i];
     console.log('  步骤 ' + (i + 1) + '/' + wf.steps.length + ':', step.type, step.name || '');
+    emitWf('workflow:step', { workflowId: wf.id, index: i, total: wf.steps.length, stepName: step.name || step.type, type: step.type, status: 'running' });
 
     var stepResult = await executeStep(step, context);
     results.push({ step: i + 1, type: step.type, name: step.name || '', result: stepResult });
+    emitWf('workflow:step', { workflowId: wf.id, index: i, total: wf.steps.length, stepName: step.name || step.type, type: step.type, status: stepResult.success ? 'done' : 'error', output: typeof stepResult.output === 'string' ? stepResult.output.substring(0, 200) : '', error: stepResult.error });
 
     if (!stepResult.success && step.required !== false) {
       console.log('  ❌ 步骤失败:', stepResult.error);
+      emitWf('workflow:done', { workflowId: wf.id, name: wf.name, success: false, error: '步骤 ' + (i + 1) + ' 失败: ' + stepResult.error });
       return { success: false, error: '步骤 ' + (i + 1) + ' 失败: ' + stepResult.error, results: results, context: context };
     }
 
@@ -920,6 +931,7 @@ async function runWorkflow(workflowId, inputText) {
   }
 
   console.log('✅ 工作流完成:', wf.name);
+  emitWf('workflow:done', { workflowId: wf.id, name: wf.name, success: true });
   return { success: true, results: results, context: context };
 }
 
