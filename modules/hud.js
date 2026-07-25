@@ -294,6 +294,71 @@ function relayStreamEnd() {
   _send('hud-relay', { streamOnly: true, streamEnd: true });
 }
 
+// ═══════════════════════════════════════════
+// Wave 10 BUG#2：HUD 语音按钮 → STT → 意图派发
+//   HUD 麦克风经 main.js 转发 { voice:bool } 到本模块：
+//     true  → Core.voice.startListening 开始录音识别，状态栏显示「聆听中」
+//     false → stopListening 停止；批量模式（本地 whisper/云端）停止后回传最终文本
+//   最终转写文本经 injectCommand 注入 → 走指挥官意图识别/任务派发（DS M6 语音闭环）。
+//   浏览器 SpeechRecognition 为连续模式，按句累积，1.6s 无新句自动发送。
+// ═══════════════════════════════════════════
+var _hudVoiceBuffer = '';
+var _hudVoiceSendTimer = null;
+
+function _flushHudVoice() {
+  if (_hudVoiceSendTimer) { clearTimeout(_hudVoiceSendTimer); _hudVoiceSendTimer = null; }
+  var text = _hudVoiceBuffer.trim();
+  _hudVoiceBuffer = '';
+  if (!text) { setState('idle', { text: '没有听清', sub: '请再说一次' }); return; }
+  injectCommand(text);
+}
+
+function handleHudVoice(recording) {
+  if (!Core || !Core.voice) {
+    setState('idle', { text: '语音模块未就绪', sub: '请稍后再试' });
+    return;
+  }
+  if (recording) {
+    if (Core.voice.isListening) return;
+    _hudVoiceBuffer = '';
+    setState('speaking', { text: '正在聆听…', sub: '说完点麦克风结束' });
+    try {
+      Core.voice.startListening(function (text, isFinal) {
+        if (!text) return;
+        if (!isFinal) {
+          setState('speaking', { text: '聆听中…', sub: String(text).substring(0, 28) });
+          return;
+        }
+        var t = String(text);
+        // 跳过状态占位文案（🎤 录音中 / 🔄 识别中 / [语音录制完成…]）
+        if (/^🎤|^🔄|^\[语音录制完成/.test(t)) return;
+        _hudVoiceBuffer += (_hudVoiceBuffer ? ' ' : '') + t;
+        if (!Core.voice.isListening) {
+          // 批量模式：停止后回传的最终结果 → 立即派发
+          _flushHudVoice();
+        } else {
+          // 浏览器连续模式：按句累积，1.6s 无新句自动派发
+          if (_hudVoiceSendTimer) clearTimeout(_hudVoiceSendTimer);
+          _hudVoiceSendTimer = setTimeout(_flushHudVoice, 1600);
+        }
+      }, function (err) {
+        setState('idle', { text: '语音识别失败', sub: String(err || '').substring(0, 28) });
+      });
+    } catch (e) {
+      setState('idle', { text: '语音启动失败', sub: String(e && e.message || '').substring(0, 28) });
+    }
+  } else {
+    if (_hudVoiceSendTimer) { clearTimeout(_hudVoiceSendTimer); _hudVoiceSendTimer = null; }
+    if (Core.voice.isListening) {
+      try { Core.voice.stopListening(); } catch (e) { /* noop */ }
+      // 批量模式停止后 onResult 会触发 flush；兜底：若仍有累积（浏览器模式）延时补发
+      setTimeout(function () { if (_hudVoiceBuffer.trim()) _flushHudVoice(); }, 900);
+    } else if (_hudVoiceBuffer.trim()) {
+      _flushHudVoice();
+    }
+  }
+}
+
 function init(_Core) {
   Core = _Core;
 
@@ -316,6 +381,8 @@ function init(_Core) {
     // Wave 9 步骤4：流式逐字渲染中继
     relayStreamChunk: relayStreamChunk,
     relayStreamEnd: relayStreamEnd,
+    // Wave 10 BUG#2：HUD 语音 → STT → 派发
+    handleHudVoice: handleHudVoice,
     get state() { return _state; },
     get visible() { return _visible; },
     get canvasSummary() { return recomputeCanvasSummary(); },
@@ -381,6 +448,8 @@ function init(_Core) {
       if (payload.action === 'open-canvas') { openCanvas(); return; }
       // Wave 9：HUD 窗口就绪 → 强制全量同步 master 会话（首次打开即可见历史）
       if (payload.action === 'sync-chat') { relayMasterChat(true); return; }
+      // Wave 10 BUG#2：HUD 麦克风按钮 → STT → 意图派发
+      if (typeof payload.voice === 'boolean') { handleHudVoice(payload.voice); return; }
       if (payload.text) injectCommand(payload.text);
     });
   }
