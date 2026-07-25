@@ -77,6 +77,7 @@ function addNode(node) {
     w: node.w || NODE_DEFAULTS.w,
     h: node.h || NODE_DEFAULTS.h,
     title: node.title || '',
+    status: node.status || 'idle',
     data: node.data || {},
     createdAt: now,
     updatedAt: now

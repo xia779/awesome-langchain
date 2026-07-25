@@ -128,6 +128,7 @@ function getTasks() {
 function clearTasks() {
   tasks = [];
   taskCounter = 0;
+  emitSync();
   hidePanel();
 }
 
@@ -171,7 +172,15 @@ function hidePanel() {
   }
 }
 
+// 任务变更全量广播（供 canvas-sync 投影任务节点；守卫式，无 Core/emit 时静默）
+function emitSync() {
+  if (Core && typeof Core.emit === 'function') {
+    try { Core.emit('task:sync', { tasks: getTasks() }); } catch (e) { /* noop */ }
+  }
+}
+
 function renderPanel() {
+  emitSync();
   if (!panelEl) return;
 
   var progress = getProgress();

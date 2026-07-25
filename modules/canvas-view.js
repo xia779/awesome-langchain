@@ -83,7 +83,18 @@ var CSS = [
   '.cv-statusbar{position:absolute;left:0;right:0;bottom:0;height:24px;display:flex;align-items:center;gap:16px;',
   'padding:0 12px;font-size:11px;color:#8b949e;background:rgba(13,17,23,.92);border-top:1px solid rgba(255,255,255,.08);z-index:4;}',
   '.cv-empty{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#6e7681;text-align:center;',
-  'pointer-events:none;font-size:13px;line-height:1.8;}'
+  'pointer-events:none;font-size:13px;line-height:1.8;}',
+  '.cv-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#8b949e;}',
+  '.cv-st--thinking .cv-dot{background:#7c5cff;animation:cv-pulse 1.2s infinite;}',
+  '.cv-st--executing .cv-dot,.cv-st--running .cv-dot{background:#d29922;animation:cv-pulse 1s infinite;}',
+  '.cv-st--done .cv-dot{background:#3fb950;}',
+  '.cv-st--error .cv-dot{background:#ef4444;}',
+  '.cv-st--interrupted .cv-dot,.cv-st--cancelled .cv-dot,.cv-st--pending .cv-dot{background:#6e7681;}',
+  '.cv-st--thinking{border-color:rgba(124,92,255,.55);}',
+  '.cv-st--executing,.cv-st--running{border-color:rgba(210,153,34,.55);}',
+  '.cv-st--error{border-color:rgba(239,68,68,.55);}',
+  '.cv-st--done{border-color:rgba(63,185,80,.4);}',
+  '@keyframes cv-pulse{0%,100%{opacity:1;}50%{opacity:.25;}}'
 ].join('');
 
 function injectStyle() {
@@ -306,13 +317,14 @@ function onDocMouseUp() {
 
 function makeNodeEl(n) {
   var el = document.createElement('div');
-  el.className = 'cv-node cv-node--' + (n.type || 'note');
+  el.className = 'cv-node cv-node--' + (n.type || 'note') + ' cv-st--' + (n.status || 'idle');
   el.style.left = n.x + 'px';
   el.style.top = n.y + 'px';
   el.style.width = n.w + 'px';
   el.style.height = n.h + 'px';
   el.setAttribute('data-id', n.id);
   el.innerHTML =
+    '<span class="cv-dot"></span>' +
     '<div class="cv-node-type">' + esc(TYPE_LABEL[n.type] || n.type || '节点') + '</div>' +
     '<div class="cv-node-title">' + esc(n.title || '未命名') + '</div>';
   return el;
