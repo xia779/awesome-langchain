@@ -259,6 +259,11 @@ function recordToMaster(role, content) {
     if (!master || !Array.isArray(master.messages)) return;
     master.messages.push({ role: role, content: content, timestamp: Date.now() });
     if (Core.session.saveSession) Core.session.saveSession(masterId);
+    // BUG#4 修复：主窗口若正停留在 master 会话，同步刷新渲染（对齐 notifyMasterSession）
+    if (Core.session.getCurrentId && Core.session.renderMessages &&
+        Core.session.getCurrentId() === masterId) {
+      Core.session.renderMessages(masterId);
+    }
     relayMasterChat(true);
   } catch (e) { /* noop */ }
 }

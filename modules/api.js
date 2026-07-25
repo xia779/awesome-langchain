@@ -302,8 +302,8 @@ function _buildHistoryMessages(currentSession, currentSessionId) {
     if (ctx) {
       if (ctx.summary) historyMessages.push({ role: 'system', content: ctx.summary });
       ctx.window.forEach(function(msg) {
-        if (msg.role === 'user' || msg.role === 'assistant') {
-          historyMessages.push({ role: msg.role, content: sanitizeContent(msg.content) });
+        if (msg.role === 'user' || msg.role === 'assistant' || msg.role === 'ai') {
+          historyMessages.push({ role: msg.role === 'ai' ? 'assistant' : msg.role, content: sanitizeContent(msg.content) });
         }
       });
       return historyMessages;
@@ -311,8 +311,8 @@ function _buildHistoryMessages(currentSession, currentSessionId) {
   }
   // 降级：固定 20 条
   currentSession.messages.slice(-20).forEach(function(msg) {
-    if (msg.role === 'user' || msg.role === 'assistant') {
-      historyMessages.push({ role: msg.role, content: sanitizeContent(msg.content) });
+    if (msg.role === 'user' || msg.role === 'assistant' || msg.role === 'ai') {
+      historyMessages.push({ role: msg.role === 'ai' ? 'assistant' : msg.role, content: sanitizeContent(msg.content) });
     }
   });
   return historyMessages;
