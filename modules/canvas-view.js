@@ -122,7 +122,7 @@ function sameIds(a, b) {
 // ═══════════════════════════════════════════
 
 var CSS = [
-  '#canvasRoot{position:fixed;inset:0;z-index:9000;display:none;background:#0b0e14;color:#e6edf3;',
+  '#canvasRoot{position:fixed;top:44px;left:0;right:0;bottom:0;z-index:100;display:none;background:#0b0e14;color:#e6edf3;',
   'font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;user-select:none;}',
   'body.canvas-open #canvasRoot{display:block;}',
   '.cv-toolbar{position:absolute;top:0;left:0;right:0;height:48px;display:flex;align-items:center;gap:6px;',
@@ -212,7 +212,12 @@ var CSS = [
   '.cv-insp-btn--run{background:rgba(63,185,80,.2);border-color:rgba(63,185,80,.5);}',
   '.cv-insp-btn--run:hover{background:rgba(63,185,80,.32);}',
   '.cv-insp-btn--del{color:#ef4444;border-color:rgba(239,68,68,.4);}',
-  '.cv-insp-btn--del:hover{background:rgba(239,68,68,.15);}'
+  '.cv-insp-btn--del:hover{background:rgba(239,68,68,.15);}',
+  // Wave 7：对话面板展开时，画布舞台和小地图让位
+  '.cv-stage{transition:right .3s ease;}',
+  'body.chat-panel-open .cv-stage{right:400px;}',
+  'body.chat-panel-open .cv-minimap{right:412px;}',
+  'body.chat-panel-open.canvas-inspector-open .cv-minimap{right:684px;}'
 ].join('');
 
 function injectStyle() {
@@ -249,7 +254,7 @@ function build() {
   root.id = 'canvasRoot';
   root.innerHTML =
     '<div class="cv-toolbar">' +
-      '<button class="cv-btn" data-act="back">← 返回聊天</button>' +
+      '<button class="cv-btn cv-btn--primary" data-act="toggleChat">💬 对话</button>' +
       '<span class="cv-sep"></span>' +
       '<div class="cv-addwrap">' +
         '<button class="cv-btn cv-btn--primary" data-act="addmenu">＋ 新建</button>' +
@@ -321,7 +326,7 @@ function wireEvents() {
     var btn = e.target.closest ? (e.target.closest('.cv-btn') || e.target.closest('.cv-wsbtn')) : null;
     if (!btn) return;
     var act = btn.getAttribute('data-act');
-    if (act === 'back') close();
+    if (act === 'toggleChat') toggleChatPanel();
     else if (act === 'addmenu') toggleAddMenu();
     else if (act === 'wsmenu') toggleWsMenu();
     else if (act === 'fit') fit();
@@ -873,6 +878,28 @@ function addNode(type, opts) {
 // ═══════════════════════════════════════════
 // 开关
 // ═══════════════════════════════════════════
+// Wave 7：聊天面板切换（画布为主，聊天为侧栏面板）
+// ═══════════════════════════════════════════
+
+function toggleChatPanel(forceOpen) {
+  if (!hasDom()) return;
+  var open = forceOpen === true || !document.body.classList.contains('chat-panel-open');
+  document.body.classList.toggle('chat-panel-open', open);
+  // 画布舞台需要重新计算尺寸（聊天面板占位后宽度变化）
+  if (built && els.stage) {
+    setTimeout(function () {
+      var store = getStore();
+      if (store) { store.emitViewport && store.emitViewport(); }
+      renderMinimap(); updateStatus();
+    }, 320); // 等 CSS transition 完成
+  }
+}
+
+function isChatPanelOpen() {
+  return hasDom() && document.body.classList.contains('chat-panel-open');
+}
+
+// ═══════════════════════════════════════════
 
 function isOpen() {
   return hasDom() && document.body.classList.contains('canvas-open');
@@ -886,19 +913,52 @@ function open() {
   document.body.classList.add('canvas-open');
   applyTransform();
   render();
+  toggleChatPanel(true); // Wave 7：默认展开对话面板
+  persistUiMode('canvas'); // Wave 9：记住上次界面模式
+  syncModeButton();
   return true;
 }
 
 function close() {
   if (!hasDom()) return;
   document.body.classList.remove('canvas-open');
+  document.body.classList.remove('chat-panel-open');
   closeInspector();
   closeAddMenu();
   closeWsMenu();
+  persistUiMode('classic'); // Wave 9：记住上次界面模式
+  syncModeButton();
 }
 
 function toggle() {
   if (isOpen()) close(); else open();
+}
+
+// ═══════════════════════════════════════════
+// Wave 9：界面模式切换（经典 ↔ 画布）
+// ═══════════════════════════════════════════
+
+// 把当前界面模式写入配置（供下次启动 autoOpenCanvas 参考）
+function persistUiMode(mode) {
+  if (Core && typeof Core.saveConfig === 'function') {
+    try { Core.saveConfig({ uiMode: mode }); } catch (e) { /* noop */ }
+  }
+}
+
+// 同步标题栏 #uiModeToggle 的图标与提示：
+//   画布中 → forum（点击返回经典）；经典中 → dashboard（点击进入画布）
+function syncModeButton() {
+  if (!hasDom()) return;
+  var btn = document.getElementById('uiModeToggle');
+  if (!btn) return;
+  var icon = btn.querySelector('.material-icons-outlined');
+  if (isOpen()) {
+    if (icon) icon.textContent = 'forum';
+    btn.title = '切换到经典界面';
+  } else {
+    if (icon) icon.textContent = 'dashboard';
+    btn.title = '切换到画布';
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -912,6 +972,8 @@ function init(_Core) {
   Core.canvas.close = close;
   Core.canvas.toggle = toggle;
   Core.canvas.isOpen = isOpen;
+  Core.canvas.toggleChatPanel = toggleChatPanel;
+  Core.canvas.isChatPanelOpen = isChatPanelOpen;
   Core.canvas.render = render;
   Core.canvas.fit = fit;
   Core.canvas.resetView = resetView;
@@ -921,6 +983,26 @@ function init(_Core) {
   Core.canvas.selectNode = selectNode;
   Core.canvas.deselect = deselect;
   Core.canvas.deleteSelected = deleteSelected;
+
+  // Wave 9：标题栏界面模式切换按钮（经典 ↔ 画布）
+  if (hasDom()) {
+    var modeBtn = document.getElementById('uiModeToggle');
+    if (modeBtn && !modeBtn._wired) {
+      modeBtn._wired = true;
+      modeBtn.addEventListener('click', function () { toggle(); });
+    }
+    syncModeButton();
+  }
+
+  // Wave 7：Ctrl+Enter 切换对话面板
+  if (hasDom()) {
+    document.addEventListener('keydown', function (e) {
+      if (e.ctrlKey && e.key === 'Enter' && isOpen()) {
+        e.preventDefault();
+        toggleChatPanel();
+      }
+    });
+  }
 
   // 订阅 store 事件 → 增量刷新（DOM 就绪后才真正生效）
   if (Core && typeof Core.on === 'function') {

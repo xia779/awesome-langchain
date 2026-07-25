@@ -64,16 +64,60 @@ function hide() { _visible = false; _send('hud-hide'); }
 function toggle() { _visible = !_visible; _send('hud-toggle'); }
 
 // 将 HUD 输入的指令注入主应用并触发发送
+// Wave 7 修复：返回布尔值表示是否成功派发；任何失败都立即回传 idle 状态，
+//              避免 HUD 永远停在「正在思考中」。
 function injectCommand(text) {
-  if (!Core || !text) return;
+  if (!Core || !text) {
+    setState('idle', { text: '指令无效', sub: '请输入有效内容' });
+    return false;
+  }
   try {
+    // ---- Wave 8 指挥官模式：任务类意图 → 非阻塞派发后台任务，立即回执"已收到" ----
+    // submit() 内部做意图识别：闲聊返回 dispatched:false，会继续走下方普通发送路径。
+    if (Core.taskScheduler && typeof Core.taskScheduler.submit === 'function') {
+      try {
+        var dispatch = Core.taskScheduler.submit(text, { callbackChannel: 'hud' });
+        if (dispatch && dispatch.dispatched) {
+          setState('idle', {
+            text: '已收到',
+            sub: (dispatch.count > 1)
+              ? ('已拆解为 ' + dispatch.count + ' 个子任务')
+              : ('派发 ' + (dispatch.roleId || dispatch.intent))
+          });
+          return true;
+        }
+      } catch (dispatchErr) {
+        console.warn('[hud] 指挥官派发失败，回退普通发送:', dispatchErr && dispatchErr.message);
+      }
+    }
+    // ---- 普通发送路径 ----
     // 真实发送路径：填入输入框 → 调用 Core.api.sendMessage()
     // （与主应用 Enter 键发送完全一致；sendMessage 无参，内部读取 Core.dom.input.value）
     if (Core.dom && Core.dom.input) Core.dom.input.value = text;
-    if (Core.api && typeof Core.api.sendMessage === 'function') { Core.api.sendMessage(); return; }
+    if (Core.api && typeof Core.api.sendMessage === 'function') {
+      var ret = Core.api.sendMessage();
+      // sendMessage 可能是 async（返回 Promise）——捕获异步拒绝并回传 HUD
+      if (ret && typeof ret.catch === 'function') {
+        ret.catch(function (err) {
+          setState('idle', {
+            text: '执行出错了',
+            sub: (err && err.message ? String(err.message) : '请检查模型或网络').substring(0, 30)
+          });
+        });
+      }
+      return true;
+    }
     // 回退：派发事件让上层处理
-    if (Core.emit) Core.emit('hud-command', { text: text });
-  } catch (e) { /* noop */ }
+    if (Core.emit) { Core.emit('hud-command', { text: text }); return true; }
+    setState('idle', { text: '主应用未就绪', sub: '聊天模块尚未加载完成' });
+    return false;
+  } catch (e) {
+    setState('idle', {
+      text: '执行出错了',
+      sub: (e && e.message ? String(e.message) : '发送失败').substring(0, 30)
+    });
+    return false;
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -229,7 +273,8 @@ function init(_Core) {
 
 module.exports = {
   name: 'hud',
-  dependencies: [],
+  // Wave 8：指挥官模式依赖任务调度器（Core.taskScheduler）做非阻塞派发
+  dependencies: ['task-scheduler'],
   init: init,
   // 导出内部函数便于单元测试
   _internals: { TOOL_FN_MAP: TOOL_FN_MAP, LIVE_STATES: LIVE_STATES }

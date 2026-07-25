@@ -1518,6 +1518,24 @@ Core.renderMarkdown = function(text) {
   }
   loadModulesWhenReady();
 
+  // Wave 7：画布优先 — 模块加载完毕后自动进入画布工作区
+  // Wave 9 修正：改为「记住上次界面模式」——仅当上次停留在画布（uiMode==='canvas'）时
+  // 才自动进入；首次运行默认经典界面，避免锁死侧边栏设置/功能键。
+  (function autoOpenCanvas() {
+    var tries = 0;
+    var timer = setInterval(function () {
+      tries++;
+      if (Core.canvas && typeof Core.canvas.open === 'function') {
+        clearInterval(timer);
+        if (Core.config && Core.config.uiMode === 'canvas') {
+          Core.canvas.open();
+        }
+      } else if (tries > 40) {
+        clearInterval(timer); // 2s 超时放弃
+      }
+    }, 50);
+  })();
+
   // 🔒 #44 修复：集中式事件注册表 — 记录所有事件名 + payload 类型，方便开发者查阅
   Core.EVENT_REGISTRY = {
     // 生命周期
@@ -1534,6 +1552,14 @@ Core.renderMarkdown = function(text) {
     'agent:error': 'agent 错误数据',
     'agent:done': 'agent 完成数据',
     'agent:typing': 'agent 打字状态',
+    // 任务调度（Wave 8 task-scheduler）
+    'task:queued': '{ taskId, taskType, roleId, priority } — 任务工单入队',
+    'task:start': '{ taskId, roleId, taskType } — 任务开始执行',
+    'task:progress': '{ taskId, progress, text } — 任务进度回传',
+    'task:done': '{ taskId, roleId, preview } — 任务完成',
+    'task:error': '{ taskId, error } — 任务失败',
+    'task:aggregated': '{ taskId, count } — 复合任务子任务聚合完成',
+    'task:cancelled': '{ taskId } — 任务已取消',
     // 服务器
     'server:port': 'port 数字 — 服务器端口',
     'app:shutdown': '无 payload — 应用即将关闭',

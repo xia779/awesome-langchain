@@ -224,20 +224,23 @@
   }
   .fn-label.active .dot { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
 
-  /* 六个功能标签定位（环绕角色） */
-  .fn-1 { left: 8px;   top: 96px; }
-  .fn-2 { left: 0;     top: 200px; }
-  .fn-3 { left: 26px;  top: 300px; }
-  .fn-4 { right: 8px;  top: 96px; }
-  .fn-5 { right: 0;    top: 200px; }
-  .fn-6 { right: 26px; top: 300px; }
+  /* 功能标签行（Wave 7 修复：底部横排，不再被左右面板遮挡） */
+  .fn-row {
+    position: absolute;
+    left: 50%; bottom: 84px;
+    transform: translateX(-50%);
+    display: flex; gap: 8px;
+    flex-wrap: wrap; justify-content: center;
+    max-width: 94%;
+    z-index: 7;
+  }
 
   /* ============================================================
      状态文字（角色下方）
      ============================================================ */
   .status-line {
     position: absolute;
-    left: 50%; top: calc(44% + 178px);
+    left: 50%; top: calc(44% + 155px);
     transform: translateX(-50%);
     text-align: center;
     z-index: 6;
@@ -410,7 +413,7 @@
      ============================================================ */
   .bottom-banner {
     position: absolute;
-    left: 50%; bottom: 70px;
+    left: 50%; bottom: 126px;
     transform: translateX(-50%);
     display: flex; align-items: center; gap: 9px;
     padding: 8px 18px;
@@ -588,13 +591,15 @@
       <div class="voice-wave" id="voice-wave"></div>
     </div>
 
-    <!-- 悬浮功能标签 -->
-    <div class="fn-label fn-1" data-fn="search"><span class="dot"></span>联网搜索</div>
-    <div class="fn-label fn-2" data-fn="research"><span class="dot"></span>深度研究</div>
-    <div class="fn-label fn-3" data-fn="knowledge"><span class="dot"></span>知识库</div>
-    <div class="fn-label fn-4" data-fn="stock"><span class="dot"></span>行情分析</div>
-    <div class="fn-label fn-5" data-fn="crawl"><span class="dot"></span>网页爬取</div>
-    <div class="fn-label fn-6" data-fn="schedule"><span class="dot"></span>任务调度</div>
+    <!-- 悬浮功能标签（Wave 7 修复：改为底部横排，避免被左右面板遮挡） -->
+    <div class="fn-row">
+      <div class="fn-label" data-fn="search"><span class="dot"></span>联网搜索</div>
+      <div class="fn-label" data-fn="research"><span class="dot"></span>深度研究</div>
+      <div class="fn-label" data-fn="knowledge"><span class="dot"></span>知识库</div>
+      <div class="fn-label" data-fn="stock"><span class="dot"></span>行情分析</div>
+      <div class="fn-label" data-fn="crawl"><span class="dot"></span>网页爬取</div>
+      <div class="fn-label" data-fn="schedule"><span class="dot"></span>任务调度</div>
+    </div>
 
     <!-- 状态文字 -->
     <div class="status-line">
@@ -718,11 +723,30 @@
   }
 
   var currentState = 'idle';
+
+  // Wave 7 修复：思考状态保护 — 若后端静默失败、一直不回状态，
+  // 45 秒内无任何状态更新就自动复位，避免 HUD 永远卡在「正在思考中」。
+  var _thinkGuard = null;
+  function armThinkGuard() {
+    clearThinkGuard();
+    _thinkGuard = setTimeout(function () {
+      if (currentState === 'thinking') {
+        setState('idle', { text: '响应超时', sub: '未收到模型回复，请检查模型与网络配置' });
+      }
+    }, 45000);
+  }
+  function clearThinkGuard() {
+    if (_thinkGuard) { clearTimeout(_thinkGuard); _thinkGuard = null; }
+  }
+
   function setState(state, opts) {
     opts = opts || {};
     if (!STATE_TEXT[state]) state = 'idle';
     currentState = state;
     els.body.setAttribute('data-state', state);
+
+    // 思考中 → 重启保护计时；离开思考 → 取消保护
+    if (state === 'thinking') { armThinkGuard(); } else { clearThinkGuard(); }
 
     var txt = STATE_TEXT[state];
     els.statusText.textContent = opts.text || txt.main;
