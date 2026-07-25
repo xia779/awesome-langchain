@@ -270,6 +270,7 @@ function build() {
       '<button class="cv-btn" data-act="zoomOut">－</button>' +
       '<button class="cv-btn" data-act="zoomIn">＋</button>' +
       '<button class="cv-btn" data-act="save">保存</button>' +
+      '<button class="cv-btn" data-act="popout" title="在独立窗口中打开画布">🗖 独立窗口</button>' +
       '<div class="cv-ws cv-wswrap">' +
         '<button class="cv-wsbtn" data-act="wsmenu">工作区：<b class="cv-ws-name">default</b> ▾</button>' +
         '<div class="cv-wsmenu"></div>' +
@@ -334,6 +335,11 @@ function wireEvents() {
     else if (act === 'zoomIn') zoomBy(1.2);
     else if (act === 'zoomOut') zoomBy(1 / 1.2);
     else if (act === 'save') { var s = getStore(); if (s) s.save(); }
+    else if (act === 'popout') {
+      if (Core && Core.canvasWindow && typeof Core.canvasWindow.open === 'function') {
+        Core.canvasWindow.open();
+      }
+    }
   });
 
   // 新建菜单项

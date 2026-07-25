@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>画布 · AI 智能体</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0b0e14; }
+    /* ── 独立窗口专属覆写（canvas-standalone 由启动脚本加到 body）── */
+    /* 主窗口里 #canvasRoot 让位 44px 标题栏；独立窗口是普通窗体，从顶部 0 开始 */
+    body.canvas-standalone #canvasRoot { top: 0; }
+    /* 独立窗口没有主窗口的聊天侧栏，隐藏「对话」按钮；弹出按钮也只对主窗口有意义 */
+    body.canvas-standalone .cv-btn[data-act="toggleChat"],
+    body.canvas-standalone .cv-btn[data-act="popout"] { display: none; }
+    /* 抵消 chat-panel-open 带来的舞台/小地图让位（open() 会默认展开聊天面板） */
+    body.canvas-standalone .cv-stage { right: 0 !important; }
+    body.canvas-standalone .cv-minimap { right: 12px !important; }
+    body.canvas-standalone.canvas-inspector-open .cv-minimap { right: 284px !important; }
+    /* 连接状态提示 */
+    #cv-sync-tip {
+      position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%);
+      background: rgba(13,17,23,.92); border: 1px solid rgba(255,255,255,.12);
+      color: #8b949e; font-size: 12px; padding: 6px 14px; border-radius: 20px;
+      z-index: 200; pointer-events: none; opacity: 0; transition: opacity .3s;
+      font-family: "Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+    }
+    #cv-sync-tip.show { opacity: 1; }
+  </style>
+</head>
+<body class="canvas-standalone">
+  <div id="cv-sync-tip">正在连接主应用…</div>
+
+  <!-- CommonJS 垫片：canvas-view.js 以 module.exports 导出 -->
+  <script>
+    var module = { exports: {} };
+    var exports = module.exports;
+    function require(name) { throw new Error('[canvas-window] require 不可用: ' + name); }
+  </script>
+  <!-- 复用主窗口的画布渲染器（同一份代码，避免两套实现分叉） -->
+  <script src="../../modules/canvas-view.js"></script>
+
+  <script>
+  (function () {
+    'use strict';
+    var canvasViewModule = module.exports;
+    var bridge = (window.nodeBridge && window.nodeBridge.ipc) ? window.nodeBridge.ipc : null;
+
+    var tip = document.getElementById('cv-sync-tip');
+    function showTip(text, ms) {
+      if (!tip) return;
+      tip.textContent = text;
+      tip.classList.add('show');
+      if (ms) setTimeout(function () { tip.classList.remove('show'); }, ms);
+    }
+
+    // ═══════════════════════════════════════════
+    // Core 垫片：本地事件总线 + 必要守卫
+    // ═══════════════════════════════════════════
+    var Core = {
+      canvas: {},
+      _handlers: {},
+      on: function (ev, fn) {
+        (this._handlers[ev] = this._handlers[ev] || []).push(fn);
+      },
+      emit: function (ev, data) {
+        var hs = this._handlers[ev] || [];
+        for (var i = 0; i < hs.length; i++) {
+          try { hs[i](data); } catch (e) { console.warn('[canvas-window] handler error:', ev, e); }
+        }
+      },
+      saveConfig: function () { /* 独立窗口不持久化界面模式 */ },
+      DATA_ROOT: ''
+    };
+
+    // ═══════════════════════════════════════════
+    // 远程 Store：镜像主窗口的 canvas-store，写操作经 IPC 代理回主窗口
+    //   · 节点/连线/工作区 = 共享状态（与主窗口双向同步）
+    //   · 视口 = 本窗口私有（各自平移缩放互不干扰）
+    // ═══════════════════════════════════════════
+    var remoteStore = (function () {
+      var ZOOM_MIN = 0.2, ZOOM_MAX = 3;
+      var state = { nodes: {}, edges: {}, viewport: { x: 0, y: 0, zoom: 1 } };
+      var currentWorkspace = 'default';
+      var workspaces = [];
+      var _idc = 0;
+      var _viewportInitialized = false;
+      var _posTimer = null;
+      var _pendingPositions = {};
+
+      function genId(prefix) {
+        _idc += 1;
+        return prefix + '_' + Date.now().toString(36) + '_' + _idc.toString(36);
+      }
+      function clampZoom(z) { z = Number(z) || 1; return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z)); }
+      function emit(ev, data) { Core.emit(ev, data); }
+      function sendOp(op, args) {
+        if (bridge && typeof bridge.send === 'function') {
+          try { bridge.send('canvas-op', { op: op, args: args }); } catch (e) { /* noop */ }
+        }
+      }
+
+      // 拖拽期间位置更新节流上报（尾随触发，保证最后一次位置送达）
+      function flushPositions() {
+        var ids = Object.keys(_pendingPositions);
+        for (var i = 0; i < ids.length; i++) {
+          var p = _pendingPositions[ids[i]];
+          sendOp('setNodePosition', [ids[i], p[0], p[1]]);
+        }
+        _pendingPositions = {};
+      }
+      function schedulePositionFlush() {
+        if (_posTimer) return;
+        _posTimer = setTimeout(function () { _posTimer = null; flushPositions(); }, 50);
+      }
+
+      // 接收主窗口推送的全量状态（初始同步或回声）
+      function applyState(st, isInitial) {
+        if (!st) return;
+        if (st.nodes) state.nodes = st.nodes;
+        if (st.edges) state.edges = st.edges;
+        if (st.workspace) currentWorkspace = st.workspace;
+        if (st.workspaces) workspaces = st.workspaces;
+        if (isInitial && !_viewportInitialized && st.viewport) {
+          state.viewport = { x: st.viewport.x || 0, y: st.viewport.y || 0, zoom: st.viewport.zoom || 1 };
+          _viewportInitialized = true;
+        }
+        emit('canvas:load', { workspace: currentWorkspace, empty: false });
+      }
+
+      function addNode(node) {
+        node = node || {};
+        var id = node.id || genId('n');
+        var now = Date.now();
+        var rec = {
+          id: id, type: node.type || 'note',
+          x: typeof node.x === 'number' ? node.x : 80,
+          y: typeof node.y === 'number' ? node.y : 80,
+          w: node.w || 180, h: node.h || 90,
+          title: node.title || '', status: node.status || 'idle',
+          data: node.data || {}, createdAt: now, updatedAt: now
+        };
+        state.nodes[id] = rec;
+        emit('canvas:node-add', { node: rec });
+        sendOp('addNode', [rec]); // 带上本地生成的 id，主窗口沿用，保证两侧 id 一致
+        return rec;
+      }
+
+      function updateNode(id, patch) {
+        var rec = state.nodes[id];
+        if (!rec) return null;
+        patch = patch || {};
+        Object.keys(patch).forEach(function (k) {
+          if (k === 'id' || k === 'createdAt') return;
+          rec[k] = patch[k];
+        });
+        rec.updatedAt = Date.now();
+        emit('canvas:node-update', { node: rec, patch: patch });
+        sendOp('updateNode', [id, patch]);
+        return rec;
+      }
+
+      function setNodePosition(id, x, y) {
+        var rec = state.nodes[id];
+        if (!rec) return null;
+        rec.x = x; rec.y = y;
+        rec.updatedAt = Date.now();
+        _pendingPositions[id] = [x, y];
+        schedulePositionFlush();
+        return rec;
+      }
+
+      function removeNode(id) {
+        var rec = state.nodes[id];
+        if (!rec) return false;
+        delete state.nodes[id];
+        var removedEdges = [];
+        Object.keys(state.edges).forEach(function (eid) {
+          var e = state.edges[eid];
+          if (e.from === id || e.to === id) { delete state.edges[eid]; removedEdges.push(eid); }
+        });
+        emit('canvas:node-remove', { id: id, removedEdges: removedEdges });
+        sendOp('removeNode', [id]);
+        return true;
+      }
+
+      function getNode(id) { return state.nodes[id] || null; }
+      function listNodes() {
+        return Object.keys(state.nodes).map(function (k) { return state.nodes[k]; });
+      }
+
+      function addEdge(edge) {
+        edge = edge || {};
+        if (!edge.from || !edge.to) return null;
+        if (!state.nodes[edge.from] || !state.nodes[edge.to]) return null;
+        var id = edge.id || genId('e');
+        var rec = { id: id, from: edge.from, to: edge.to, kind: edge.kind || 'data-flow', createdAt: Date.now() };
+        state.edges[id] = rec;
+        emit('canvas:edge-add', { edge: rec });
+        sendOp('addEdge', [rec]);
+        return rec;
+      }
+      function removeEdge(id) {
+        if (!state.edges[id]) return false;
+        delete state.edges[id];
+        emit('canvas:edge-remove', { id: id });
+        sendOp('removeEdge', [id]);
+        return true;
+      }
+      function listEdges() {
+        return Object.keys(state.edges).map(function (k) { return state.edges[k]; });
+      }
+
+      // 视口：本窗口私有，不上报主窗口
+      function setViewport(vp) {
+        vp = vp || {};
+        if (typeof vp.x === 'number') state.viewport.x = vp.x;
+        if (typeof vp.y === 'number') state.viewport.y = vp.y;
+        if (typeof vp.zoom === 'number') state.viewport.zoom = clampZoom(vp.zoom);
+        emit('canvas:viewport', { viewport: getViewport() });
+        return getViewport();
+      }
+      function getViewport() {
+        return { x: state.viewport.x, y: state.viewport.y, zoom: state.viewport.zoom };
+      }
+      function emitViewport() { emit('canvas:viewport', { viewport: getViewport() }); }
+
+      function save() {
+        if (_posTimer) { clearTimeout(_posTimer); _posTimer = null; }
+        flushPositions(); // 先把拖拽的最终位置送达，再存盘
+        sendOp('save', []);
+        emit('canvas:saved', { workspace: currentWorkspace });
+        return true;
+      }
+      function load() { return true; /* 数据经 canvas-ready → canvas-state 注入 */ }
+
+      function getWorkspace() { return currentWorkspace; }
+      function listWorkspaces() { return workspaces.slice(); }
+      function switchWorkspace(name) {
+        currentWorkspace = String(name || 'default');
+        state.nodes = {}; state.edges = {};
+        emit('canvas:workspace', { workspace: currentWorkspace });
+        sendOp('switchWorkspace', [name]);
+        return currentWorkspace;
+      }
+      function newWorkspace(name) {
+        currentWorkspace = String(name || 'default');
+        state.nodes = {}; state.edges = {};
+        emit('canvas:workspace', { workspace: currentWorkspace, created: true });
+        sendOp('newWorkspace', [name]);
+        return currentWorkspace;
+      }
+      function clear() {
+        state.nodes = {}; state.edges = {};
+        emit('canvas:clear', { workspace: currentWorkspace });
+      }
+      function serialize() {
+        return {
+          workspace: currentWorkspace, viewport: getViewport(),
+          nodes: JSON.parse(JSON.stringify(state.nodes)),
+          edges: JSON.parse(JSON.stringify(state.edges))
+        };
+      }
+
+      return {
+        addNode: addNode, updateNode: updateNode, setNodePosition: setNodePosition,
+        removeNode: removeNode, getNode: getNode, listNodes: listNodes,
+        addEdge: addEdge, removeEdge: removeEdge, listEdges: listEdges,
+        setViewport: setViewport, getViewport: getViewport, emitViewport: emitViewport,
+        save: save, load: load,
+        getWorkspace: getWorkspace, listWorkspaces: listWorkspaces,
+        switchWorkspace: switchWorkspace, newWorkspace: newWorkspace,
+        clear: clear, serialize: serialize,
+        ZOOM_MIN: ZOOM_MIN, ZOOM_MAX: ZOOM_MAX,
+        _applyState: applyState
+      };
+    })();
+
+    // ═══════════════════════════════════════════
+    // 启动：挂载 store → 初始化渲染器 → 打开画布 → 请求初始状态
+    // ═══════════════════════════════════════════
+    Core.canvas.store = remoteStore;
+    try {
+      canvasViewModule.init(Core);
+      Core.canvas.open();
+    } catch (e) {
+      console.error('[canvas-window] 初始化失败:', e);
+      showTip('画布初始化失败: ' + (e && e.message || e));
+      return;
+    }
+
+    // 接收主窗口状态推送
+    if (bridge && typeof bridge.on === 'function') {
+      bridge.on('canvas-state', function (payload) {
+        var st = payload && payload.state ? payload.state : payload;
+        try {
+          remoteStore._applyState(st, true);
+          showTip('已同步 · ' + (st && st.workspace || 'default'), 1200);
+        } catch (e) {
+          console.warn('[canvas-window] 应用状态失败:', e);
+        }
+      });
+      // 请求初始状态
+      bridge.send('canvas-ready', {});
+    } else {
+      showTip('IPC 桥接不可用');
+    }
+  })();
+  </script>
+</body>
+</html>

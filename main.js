@@ -57,6 +57,10 @@ let tray = null;
 // 🖥️ HUD 悬浮窗（透明/无边框/置顶）：由 main.js 主进程持有，渲染进程 modules/hud.js 通过 IPC 控制
 let hudWindow = null;
 let hudReady = false;
+// 🗂️ 画布独立窗口（普通窗体，可缩放/平移/拖拽）：由 main.js 主进程持有，
+//    主窗口渲染进程 modules/canvas-relay.js 经 IPC 推送画布状态，窗口内远程 store 镜像渲染
+let canvasWindow = null;
+let canvasReady = false;
 let server = null;
 let actualPort = null; // 实际监听的端口（8080 被占用时自动递增）
 
@@ -415,6 +419,48 @@ function hideHud() {
 function toggleHud() {
   if (!hudWindow || hudWindow.isDestroyed()) { showHud(); return; }
   hudWindow.isVisible() ? hudWindow.hide() : hudWindow.showInactive();
+}
+
+// ===== 🗂️ 画布独立窗口管理（Wave 10）=====
+function createCanvasWindow() {
+  if (canvasWindow && !canvasWindow.isDestroyed()) return canvasWindow;
+  try {
+    canvasWindow = new BrowserWindow({
+      width: 1100, height: 760,
+      minWidth: 640, minHeight: 420,
+      title: '画布 · AI 智能体',
+      show: false,
+      backgroundColor: '#0b0e14',
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: false,
+        preload: path.join(__dirname, 'preload-canvas.js')
+      }
+    });
+    const canvasPath = path.join(__dirname, 'public', 'canvas', 'index.html').replace(/\\/g, '/');
+    canvasWindow.loadURL('file:///' + canvasPath);
+    canvasWindow.once('ready-to-show', () => { if (canvasWindow && !canvasWindow.isDestroyed()) canvasWindow.show(); });
+    canvasWindow.on('closed', () => { canvasWindow = null; canvasReady = false; });
+    console.log('🗂️ [canvas] 独立窗口已创建');
+  } catch (e) {
+    console.warn('⚠️ [canvas] 创建独立窗口失败:', e.message);
+    canvasWindow = null;
+  }
+  return canvasWindow;
+}
+
+function showCanvasWindow() {
+  const win = createCanvasWindow();
+  if (win && !win.isDestroyed() && !win.isVisible()) win.show();
+  if (win && !win.isDestroyed()) win.focus();
+}
+function hideCanvasWindow() {
+  if (canvasWindow && !canvasWindow.isDestroyed()) canvasWindow.hide();
+}
+function toggleCanvasWindow() {
+  if (!canvasWindow || canvasWindow.isDestroyed()) { showCanvasWindow(); return; }
+  canvasWindow.isVisible() ? canvasWindow.hide() : (canvasWindow.show(), canvasWindow.focus());
 }
 
 function registerHudShortcut() {
@@ -1112,6 +1158,12 @@ app.on('before-quit', () => {
     hudWindow = null;
   }
 
+  // 3.2 销毁画布独立窗口（Wave 10）
+  if (canvasWindow && !canvasWindow.isDestroyed()) {
+    try { canvasWindow.destroy(); } catch (e) { console.warn('[shutdown] canvasWindow.destroy 失败:', e.message); }
+    canvasWindow = null;
+  }
+
   // 3.5 Phase 5: 终止所有插件 Worker 线程
   try { pluginHost.terminateAllWorkers(); } catch (e) { console.warn('[shutdown] terminateAllWorkers 失败:', e.message); }
 
@@ -1177,6 +1229,35 @@ ipcMain.on('hud-voice', (event, payload) => {
     mainWindow.webContents.send('hud-command', { voice: !!(payload && payload.recording) });
   }
 });
+
+// 🗂️ 画布独立窗口 IPC 路由（Wave 10）
+// 画布窗口就绪：标记并通知主窗口渲染进程推送初始画布状态
+ipcMain.on('canvas-ready', () => {
+  canvasReady = true;
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    mainWindow.webContents.send('canvas-window-command', { action: 'sync' });
+  }
+});
+// 主窗口渲染进程中继的画布全量状态 → 转发到画布独立窗口
+ipcMain.on('canvas-relay', (event, payload) => {
+  if (canvasWindow && !canvasWindow.isDestroyed() && canvasReady) {
+    canvasWindow.webContents.send('canvas-state', payload || {});
+  }
+});
+// 画布独立窗口的写操作 → 转发到主窗口渲染进程应用到 canvas-store
+ipcMain.on('canvas-op', (event, payload) => {
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+    mainWindow.webContents.send('canvas-window-command', {
+      action: 'op',
+      op: payload && payload.op,
+      args: payload && payload.args
+    });
+  }
+});
+// 画布独立窗口显隐控制（来自主窗口渲染进程 canvas-relay）
+ipcMain.on('canvas-window-open', () => showCanvasWindow());
+ipcMain.on('canvas-window-close', () => hideCanvasWindow());
+ipcMain.on('canvas-window-toggle', () => toggleCanvasWindow());
 
 // 🔒 S5: 自动更新——事件转发 + IPC 控制
 let _updateStatus = 'idle'; // idle | checking | available | downloading | downloaded | error
