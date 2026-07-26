@@ -418,8 +418,28 @@ function evaluateAnswer(answer) {
   if (fallbackOnly) return { pass: false, reason: '格式化失败的兆底文案' };
   return { pass: true, reason: '' };
 }
+
+// ⏰ 时间意图预检：用户问"现在几点/今天几号/星期几"时，直接调用确定性工具 get_current_time，
+// 把权威时间作为硬事实前置注入任务，杜绝模型走 web_search 抓到过期网页快照（如 Time.is 缓存时间）。
+// 在 sendToAgent 入口统一处理，状态机路径与传统循环路径都生效。
+var _TIME_INTENT_RE = /(现在几点|几点了|几点钟|什么时间|现在时间|当前时间|今天几号|几月几号|星期几|今天日期|什么日期|now what time|what time is it|current time|today'?s date)/i;
+
+async function _injectAuthoritativeTime(task) {
+  if (!task || typeof task !== 'string' || !_TIME_INTENT_RE.test(task)) return task;
+  try {
+    if (Core && Core.toolsRegistry && typeof Core.toolsRegistry.executeTool === 'function') {
+      var timeResult = await Core.toolsRegistry.executeTool('get_current_time', {});
+      if (timeResult && typeof timeResult === 'string' && timeResult.indexOf('当前') > -1) {
+        return '【权威时间事实（必须采用，禁止用 web_search 核对或推断时间）】' + timeResult + '\n\n用户任务：' + task;
+      }
+    }
+  } catch (e) { /* 注入失败不阻断主流程，回退到提示词内的时间规则 */ }
+  return task;
+}
 // ===== Agent 智能体循环 =====
 async function sendToAgent(task, isDeepThink) {
+  // ⏰ 时间类问题先注入权威时间，避免模型用 web_search 抓到过期时间快照
+  task = await _injectAuthoritativeTime(task);
   var _cfgMaxSteps = (Core && Core.config && Core.config.maxAgentSteps) || 20;
   const maxSteps = isDeepThink ? (_cfgMaxSteps * 2) : _cfgMaxSteps;
   let context = '';

@@ -15,6 +15,20 @@ const CONFIG = {
 var _syncTimer = null;
 var _lastSyncTime = 0;
 
+// 安全序列化：剥离函数引用、断开循环引用（会话消息可能内嵌 tool_calls 函数/agent 上下文循环引用，
+// 直接 JSON.stringify 会抛 "Converting circular structure to JSON"，经 IPC 则抛 "An object could not be cloned"）
+function _safeStringify(obj, indent) {
+  var seen = new WeakSet();
+  return JSON.stringify(obj, function (k, v) {
+    if (typeof v === 'function') return undefined;
+    if (typeof v === 'object' && v !== null) {
+      if (seen.has(v)) return '[Circular]';
+      seen.add(v);
+    }
+    return v;
+  }, indent);
+}
+
 function init(_Core) {
   Core = _Core;
 
@@ -126,7 +140,7 @@ function exportAll(format) {
       };
     });
     return {
-      content: JSON.stringify(data, null, 2),
+      content: _safeStringify(data, 2),
       filename: 'ai-agent-full-backup_' + new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19) + '.json',
       format: 'json',
       sessionCount: ids.length

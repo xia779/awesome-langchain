@@ -34,6 +34,22 @@ function getStore() {
   return (Core && Core.canvas && Core.canvas.store) || null;
 }
 
+// 结构化克隆清洗：剥离函数/DOM 节点/循环引用，避免 IPC 发送时
+// "An object could not be cloned"（_send 的 try-catch 会静默吞掉整个 payload，造成同步丢失）
+function _safeClone(obj) {
+  var seen = new WeakSet();
+  try {
+    return JSON.parse(JSON.stringify(obj, function (k, v) {
+      if (typeof v === 'function') return undefined;
+      if (typeof v === 'object' && v !== null) {
+        if (seen.has(v)) return undefined;   // 循环引用 → 断开
+        seen.add(v);
+      }
+      return v;
+    }));
+  } catch (e) { return null; }
+}
+
 function _send(channel, payload) {
   if (bridge && typeof bridge.send === 'function') {
     try { bridge.send(channel, payload); } catch (e) { /* noop */ }
@@ -49,7 +65,7 @@ function buildState() {
   if (!store || typeof store.serialize !== 'function') return null;
   var st = store.serialize();
   st.workspaces = (typeof store.listWorkspaces === 'function') ? store.listWorkspaces() : [];
-  return st;
+  return _safeClone(st) || { nodes: {}, edges: {}, viewport: { x: 0, y: 0, zoom: 1 }, workspaces: [] };
 }
 
 function pushState() {
