@@ -875,10 +875,13 @@ ipcMain.on('backup-data', (event) => {
   if (filePath) {
     // 🔒 安全修复：备份前清理 API 密钥，防止泄露
     const tempBackup = path.join(require('os').tmpdir(), 'ai-agent-backup-sanitized-' + Date.now());
-    const API_KEY_FIELDS = [
-      'deepseekKey', 'qwenKey', 'doubaoKey', 'customKey',
-      'bochaApiKey', 'tavilyApiKey', 'siliconFlowKey', 'openaiImageKey'
-    ];
+    // 🔧 B2: 统一引用 crypto-utils 的敏感字段单一真相源，避免与加密列表脱节漏掉新字段
+    let API_KEY_FIELDS;
+    try {
+      API_KEY_FIELDS = require('./modules/crypto-utils').SENSITIVE_KEY_FIELDS;
+    } catch (e) {
+      API_KEY_FIELDS = ['deepseekKey', 'qwenKey', 'doubaoKey', 'customKey', 'bochaApiKey', 'tavilyApiKey', 'siliconFlowKey', 'openaiImageKey', 'bingSearchKey', 'unsplashKey'];
+    }
     try {
       // 1. 复制数据到临时目录
       fs.cpSync(DATA_ROOT, tempBackup, { recursive: true });

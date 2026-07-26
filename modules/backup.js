@@ -118,12 +118,15 @@ function exportAllSessionsToMarkdown(sessions) {
 // ===== 配置导出为 JSON =====
 function exportConfig() {
   const config = { ...Core.config };
-  // 🔒 安全修复：脱敏所有 API Keys（完整列表）
-  const sensitiveKeys = [
-    'deepseekKey', 'qwenKey', 'doubaoKey', 'customKey',
-    'bingApiKey', 'bochaApiKey', 'googleApiKey', 'googleCx',
-    'searxngApiKey', 'openaiKey'
-  ];
+  // 🔒 安全修复：脱敏所有 API Keys
+  // 🔧 B2: 旧列表写错字段名（bingApiKey/googleApiKey 等并不存在），反而漏掉真实密钥字段，
+  //     现统一引用 crypto-utils 的敏感字段单一真相源
+  let sensitiveKeys;
+  try {
+    sensitiveKeys = require('./crypto-utils').SENSITIVE_KEY_FIELDS;
+  } catch (e) {
+    sensitiveKeys = ['deepseekKey', 'qwenKey', 'doubaoKey', 'customKey', 'bochaApiKey', 'tavilyApiKey', 'siliconFlowKey', 'openaiImageKey', 'bingSearchKey', 'unsplashKey'];
+  }
   for (const key of sensitiveKeys) {
     if (config[key]) {
       const val = config[key];

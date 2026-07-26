@@ -18,9 +18,12 @@ const ENC_PREFIX_V2 = 'enc:v2:';   // 新后端（safeStorage）
 const ENC_PREFIXES = [ENC_PREFIX, ENC_PREFIX_V2];
 
 // 合并后的完整字段列表（消除两处不一致的 bug）
+// 🔧 B2: 单一真相源——main.js / backup.js 的备份脱敏必须引用本列表，禁止各自硬编码
+// bingSearchKey / unsplashKey 为 image-search.js 真实使用的密钥字段，此前遗漏导致明文存储
 const SENSITIVE_KEY_FIELDS = [
   'deepseekKey', 'qwenKey', 'doubaoKey', 'customKey',
-  'bochaApiKey', 'tavilyApiKey', 'siliconFlowKey', 'openaiImageKey'
+  'bochaApiKey', 'tavilyApiKey', 'siliconFlowKey', 'openaiImageKey',
+  'bingSearchKey', 'unsplashKey'
 ];
 
 let _crypto = null;
