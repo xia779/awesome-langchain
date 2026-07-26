@@ -1,6 +1,6 @@
 {
   "name": "ai-agent-pro",
-  "version": "1.2.0",
+  "version": "1.5.0",
   "description": "AI智能体 - 本地多模型聚合桌面助手",
   "main": "main.js",
   "author": "AI Team",

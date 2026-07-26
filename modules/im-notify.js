@@ -210,6 +210,184 @@ function registerCommands() {
   });
 }
 
+// ===== P5-3: 双向通信 — Webhook 接收器 =====
+var _webhookServer = null;
+var _webhookPort = 0;
+var _messageHandlers = [];  // [{ filter: fn, handler: fn }]
+
+function startWebhookReceiver(port) {
+  if (_webhookServer) return { success: true, alreadyRunning: true, port: _webhookPort };
+  port = port || 9876;
+
+  try {
+    var http = require('http');
+    _webhookServer = http.createServer(function(req, res) {
+      if (req.method !== 'POST') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', service: 'ai-agent-im-webhook' }));
+        return;
+      }
+
+      var body = '';
+      req.on('data', function(chunk) { body += chunk; if (body.length > 1048576) req.destroy(); });
+      req.on('end', function() {
+        var parsed = null;
+        try { parsed = JSON.parse(body); } catch (e) { /* not JSON */ }
+
+        var message = _parseIncomingMessage(req.url, parsed, body);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ received: true }));
+
+        if (message && message.text) {
+          _routeIncomingMessage(message);
+        }
+      });
+    });
+
+    _webhookServer.listen(port, '127.0.0.1', function() {
+      _webhookPort = port;
+      console.log('\u2705 im-notify: Webhook \u63a5\u6536\u5668\u5df2\u542f\u52a8 (127.0.0.1:' + port + ')');
+    });
+
+    _webhookServer.on('error', function(e) {
+      console.warn('\u26a0\ufe0f im-notify: Webhook \u670d\u52a1\u5668\u9519\u8bef:', e.message);
+      _webhookServer = null;
+    });
+
+    return { success: true, port: port };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function stopWebhookReceiver() {
+  if (_webhookServer) {
+    _webhookServer.close();
+    _webhookServer = null;
+    _webhookPort = 0;
+    return { success: true };
+  }
+  return { success: true, alreadyStopped: true };
+}
+
+function getWebhookStatus() {
+  return { running: !!_webhookServer, port: _webhookPort };
+}
+
+// 解析不同平台的入站消息格式
+function _parseIncomingMessage(url, parsed, rawBody) {
+  if (!parsed) {
+    // 纯文本 body
+    return { platform: 'generic', text: rawBody, sender: 'unknown', timestamp: Date.now() };
+  }
+
+  // Telegram Bot webhook: { message: { text, from: { username }, chat: { id } } }
+  if (parsed.message && parsed.message.text) {
+    return {
+      platform: 'telegram',
+      text: parsed.message.text,
+      sender: (parsed.message.from && parsed.message.from.username) || 'telegram_user',
+      chatId: parsed.message.chat && String(parsed.message.chat.id || ''),
+      timestamp: (parsed.message.date || 0) * 1000 || Date.now()
+    };
+  }
+
+  // DingTalk: { msgtype: 'text', text: { content }, senderNick }
+  if (parsed.msgtype === 'text' && parsed.text && parsed.text.content) {
+    return {
+      platform: 'dingtalk',
+      text: parsed.text.content,
+      sender: parsed.senderNick || 'dingtalk_user',
+      timestamp: Date.now()
+    };
+  }
+
+  // WeCom (企业微信): { MsgType: 'text', Content, FromUserName }
+  if (parsed.MsgType === 'text' && parsed.Content) {
+    return {
+      platform: 'wecom',
+      text: parsed.Content,
+      sender: parsed.FromUserName || 'wecom_user',
+      timestamp: Date.now()
+    };
+  }
+
+  // Slack: { text, user_name }
+  if (parsed.text && (parsed.user_name || parsed.user_id)) {
+    return {
+      platform: 'slack',
+      text: parsed.text,
+      sender: parsed.user_name || parsed.user_id,
+      timestamp: Date.now()
+    };
+  }
+
+  // 通用格式: { text/message, sender/from }
+  var text = parsed.text || parsed.message || parsed.content || '';
+  if (text) {
+    return {
+      platform: parsed.platform || 'generic',
+      text: String(text),
+      sender: parsed.sender || parsed.from || parsed.user || 'unknown',
+      timestamp: Date.now()
+    };
+  }
+
+  return null;
+}
+
+// 路由入站消息到 Agent
+function _routeIncomingMessage(message) {
+  console.log('\ud83d\udce8 im-notify: \u6536\u5230\u6d88\u606f [' + message.platform + '] ' + message.sender + ': ' + message.text.substring(0, 80));
+
+  // 先检查自定义处理器
+  for (var i = 0; i < _messageHandlers.length; i++) {
+    var h = _messageHandlers[i];
+    if (!h.filter || h.filter(message)) {
+      try {
+        var handled = h.handler(message);
+        if (handled === true) return; // 已处理，不再继续
+      } catch (e) { console.warn('im-notify: handler error', e.message); }
+    }
+  }
+
+  // 默认路由：发送到当前会话
+  if (Core.session && Core.session.addMessage && Core.session.getCurrentId) {
+    var currentId = Core.session.getCurrentId();
+    if (currentId) {
+      Core.session.addMessage('[IM:' + message.platform + '] ' + message.sender + ': ' + message.text, 'user');
+      if (Core.session.renderMessages) Core.session.renderMessages(currentId);
+
+      // 触发 AI 回复
+      if (Core.api && Core.api.sendMessage && Core.dom && Core.dom.input) {
+        Core.dom.input.value = message.text;
+        Core.api.sendMessage().catch(function(e) {
+          console.warn('im-notify: auto-reply failed', e.message);
+        });
+      }
+    }
+  }
+
+  // 触发 trigger-engine 事件
+  if (Core.triggerEngine && Core.triggerEngine.emit) {
+    Core.triggerEngine.emit('im.message', message);
+  }
+}
+
+// 注册自定义消息处理器
+function onIncomingMessage(filter, handler) {
+  _messageHandlers.push({ filter: filter, handler: handler });
+  return _messageHandlers.length - 1;
+}
+
+function removeMessageHandler(index) {
+  if (index >= 0 && index < _messageHandlers.length) {
+    _messageHandlers.splice(index, 1);
+    return true;
+  }
+  return false;
+}
+
 // ===== 初始化 =====
 
 function init(_Core) {
@@ -220,14 +398,27 @@ function init(_Core) {
   loadState();
   registerCommands();
   _maybeWrapNotifications();
+
+  // P5-3: 自动启动 webhook 接收器（如果配置了）
+  var cfg = (Core.config && Core.config.imNotify) || {};
+  if (cfg.webhookEnabled) {
+    startWebhookReceiver(cfg.webhookPort || 9876);
+  }
+
   Core.imNotify = {
     push: imPush,
     addNotifier: addNotifier,
     removeNotifier: removeNotifier,
     listNotifiers: listNotifiers,
-    test: testNotifier
+    test: testNotifier,
+    // P5-3: 双向通信
+    startWebhook: startWebhookReceiver,
+    stopWebhook: stopWebhookReceiver,
+    webhookStatus: getWebhookStatus,
+    onMessage: onIncomingMessage,
+    removeMessageHandler: removeMessageHandler
   };
-  console.log('✅ im-notify.js 已加载 (' + notifiers.length + ' 个 IM 通知)');
+  console.log('\u2705 im-notify.js \u5df2\u52a0\u8f7d (' + notifiers.length + ' \u4e2a IM \u901a\u77e5' + (cfg.webhookEnabled ? ', Webhook\u5df2\u542f\u52a8' : '') + ')');
 }
 
 module.exports = {
@@ -235,5 +426,6 @@ module.exports = {
   dependencies: [],
   init: init,
   _resolveEndpoint: _resolveEndpoint,
-  _buildMessage: _buildMessage
+  _buildMessage: _buildMessage,
+  _parseIncomingMessage: _parseIncomingMessage
 };
