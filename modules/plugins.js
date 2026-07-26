@@ -720,7 +720,9 @@ function installPlugin(sourcePath) {
     if (stat.isFile() && sourcePath.endsWith('.zip')) {
       // ZIP 安装：解压到临时目录后按目录安装
       const os = require('os');
-      const { execSync } = require('child_process');
+      const _cpBridge = require('child_process');
+      // 🔒 S1: plugin install is user-initiated, use privileged _rawExecSync
+      const execSync = _cpBridge._rawExecSync || _cpBridge.execSync;
       const tmpDir = path.join(os.tmpdir(), 'plugin-install-' + Date.now());
       try {
         fs.mkdirSync(tmpDir, { recursive: true });

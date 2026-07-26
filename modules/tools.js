@@ -1,7 +1,10 @@
 // modules/tools.js - MCP 工具注册表
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const _cpBridge = require('child_process');
+// 🔒 S1: tools.js does its own risk classification + user confirmation,
+// so it uses the privileged _rawExec that bypasses preload-level blocking.
+const exec = _cpBridge._rawExec || _cpBridge.exec;
 const http = require('http');
 const https = require('https');
 const { URL } = require('url');

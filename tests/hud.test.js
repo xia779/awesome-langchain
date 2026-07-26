@@ -6,14 +6,16 @@ const { createMockCore } = require('./helper');
 const HUD_PATH = require.resolve('../modules/hud.js');
 
 test('hud: 暴露 Core.hud API 并中继 Agent 状态', () => {
-  // 注入 fake bridge，模拟渲染进程 window.nodeBridge.ipc
+  // 注入 fake bridge，模拟渲染进程 window.nodeBridge.electronAPI.ipc
   const sent = [];
   const handlers = {};
   global.window = {
     nodeBridge: {
-      ipc: {
-        send: (ch, payload) => sent.push({ ch, payload }),
-        on: (ch, cb) => { handlers[ch] = cb; return () => {}; }
+      electronAPI: {
+        ipc: {
+          send: (ch, payload) => sent.push({ ch, payload }),
+          on: (ch, cb) => { handlers[ch] = cb; return () => {}; }
+        }
       }
     }
   };

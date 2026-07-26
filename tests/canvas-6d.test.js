@@ -54,9 +54,11 @@ function hudSetup() {
   const handlers = {};
   global.window = {
     nodeBridge: {
-      ipc: {
-        send: (ch, payload) => sent.push({ ch, payload }),
-        on: (ch, cb) => { handlers[ch] = cb; return () => {}; }
+      electronAPI: {
+        ipc: {
+          send: (ch, payload) => sent.push({ ch, payload }),
+          on: (ch, cb) => { handlers[ch] = cb; return () => {}; }
+        }
       }
     }
   };

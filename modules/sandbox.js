@@ -2,7 +2,12 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { exec, execSync, execFile } = require('child_process');
+const _cpBridge = require('child_process');
+// 🔒 S1: sandbox.js manages its own security (dir isolation + Docker),
+// uses privileged _raw* methods that bypass preload-level classification.
+const exec = _cpBridge._rawExec || _cpBridge.exec;
+const execSync = _cpBridge._rawExecSync || _cpBridge.execSync;
+const execFile = _cpBridge._rawExecFile || _cpBridge.execFile || _cpBridge._rawExec;
 
 let Core = null;
 

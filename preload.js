@@ -19,6 +19,59 @@ const MODULES_DIR = path.join(ROOT_DIR, 'modules');
 const DATA_ROOT = path.join(ROOT_DIR, 'data');
 const NODE_MODULES_DIR = path.join(ROOT_DIR, 'node_modules');
 
+// ===== 🔒 S1 Security: Write-path sandbox =====
+// All destructive fs operations (write/delete/rename/chmod) must target paths
+// within these roots. Reads remain permissive (the agent needs to read user files).
+const _allowedWriteRoots = [
+  path.resolve(ROOT_DIR),
+  path.resolve(DATA_ROOT),
+  path.resolve(os.tmpdir()),
+  path.resolve(path.join(os.homedir(), 'Desktop')),
+  path.resolve(path.join(os.homedir(), 'Downloads')),
+  path.resolve(path.join(os.homedir(), 'Documents'))
+];
+
+// Auto-detect actual data directory (mirrors main.js getDataRoot logic)
+if (process.platform === 'win32') {
+  if (fs.existsSync('E:\\my-ai-data')) _allowedWriteRoots.push(path.resolve('E:\\my-ai-data'));
+} else {
+  const unixData = path.join(os.homedir(), '.ai-agent-data');
+  if (fs.existsSync(unixData)) _allowedWriteRoots.push(path.resolve(unixData));
+}
+// Also allow Electron userData (app.getPath('userData') equivalent)
+const _userDataPath = path.join(os.homedir(), 'AppData', 'Roaming', 'ai-agent-pro');
+if (fs.existsSync(_userDataPath)) _allowedWriteRoots.push(path.resolve(_userDataPath));
+
+function registerWriteRoot(dir) {
+  const resolved = path.resolve(dir);
+  if (!_allowedWriteRoots.includes(resolved)) {
+    _allowedWriteRoots.push(resolved);
+  }
+  return true;
+}
+
+function validateWritePath(filePath) {
+  if (!filePath || typeof filePath !== 'string') return false;
+  const resolved = path.resolve(filePath);
+  const normalizedTarget = resolved.toLowerCase().replace(/\//g, path.sep);
+  for (let i = 0; i < _allowedWriteRoots.length; i++) {
+    const normalizedRoot = _allowedWriteRoots[i].toLowerCase().replace(/\//g, path.sep);
+    if (normalizedTarget === normalizedRoot || normalizedTarget.startsWith(normalizedRoot + path.sep)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function guardWritePath(filePath, operation) {
+  if (!validateWritePath(filePath)) {
+    const msg = '[preload:security] Blocked fs.' + operation + ' outside sandbox: ' + filePath;
+    console.warn(msg);
+    return { error: 'Path not in allowed write roots: ' + filePath + ' (operation: ' + operation + ')' };
+  }
+  return null; // null means allowed
+}
+
 // ===== Helper: convert fs.Stats to plain object =====
 function safeStat(stats) {
   if (!stats) return null;
@@ -149,16 +202,24 @@ const fsBridge = {
     }
     return result;
   }),
-  writeFileSync: (filePath, data, options) => wrapErr(() => {
-    const realData = (data && data._isBufferProxy) ? unwrapBuffer(data) : data;
-    fs.writeFileSync(filePath, realData, options);
-    return true;
-  }),
+  writeFileSync: (filePath, data, options) => {
+    const blocked = guardWritePath(filePath, 'writeFileSync');
+    if (blocked) return blocked;
+    return wrapErr(() => {
+      const realData = (data && data._isBufferProxy) ? unwrapBuffer(data) : data;
+      fs.writeFileSync(filePath, realData, options);
+      return true;
+    });
+  },
   existsSync: (filePath) => wrapErr(() => fs.existsSync(filePath)),
-  mkdirSync: (dirPath, options) => wrapErr(() => {
-    const result = fs.mkdirSync(dirPath, options);
-    return result !== undefined ? String(result) : true;
-  }),
+  mkdirSync: (dirPath, options) => {
+    const blocked = guardWritePath(dirPath, 'mkdirSync');
+    if (blocked) return blocked;
+    return wrapErr(() => {
+      const result = fs.mkdirSync(dirPath, options);
+      return result !== undefined ? String(result) : true;
+    });
+  },
   readdirSync: (dirPath, options) => wrapErr(() => {
     const entries = fs.readdirSync(dirPath, options);
     if (options && options.withFileTypes) {
@@ -168,14 +229,42 @@ const fsBridge = {
   }),
   statSync: (filePath, options) => wrapErr(() => safeStat(fs.statSync(filePath, options))),
   lstatSync: (filePath, options) => wrapErr(() => safeStat(fs.lstatSync(filePath, options))),
-  unlinkSync: (filePath) => wrapErr(() => { fs.unlinkSync(filePath); return true; }),
-  renameSync: (oldPath, newPath) => wrapErr(() => { fs.renameSync(oldPath, newPath); return true; }),
-  copyFileSync: (src, dest, mode) => wrapErr(() => { fs.copyFileSync(src, dest, mode); return true; }),
-  appendFileSync: (filePath, data, options) => wrapErr(() => { const d = (data && data._isBufferProxy) ? unwrapBuffer(data) : data; fs.appendFileSync(filePath, d, options); return true; }),
-  rmSync: (target, options) => wrapErr(() => { fs.rmSync(target, options); return true; }),
-  rmdirSync: (dirPath, options) => wrapErr(() => { fs.rmdirSync(dirPath, options); return true; }),
+  unlinkSync: (filePath) => {
+    const blocked = guardWritePath(filePath, 'unlinkSync');
+    if (blocked) return blocked;
+    return wrapErr(() => { fs.unlinkSync(filePath); return true; });
+  },
+  renameSync: (oldPath, newPath) => {
+    const blocked = guardWritePath(newPath, 'renameSync');
+    if (blocked) return blocked;
+    return wrapErr(() => { fs.renameSync(oldPath, newPath); return true; });
+  },
+  copyFileSync: (src, dest, mode) => {
+    const blocked = guardWritePath(dest, 'copyFileSync');
+    if (blocked) return blocked;
+    return wrapErr(() => { fs.copyFileSync(src, dest, mode); return true; });
+  },
+  appendFileSync: (filePath, data, options) => {
+    const blocked = guardWritePath(filePath, 'appendFileSync');
+    if (blocked) return blocked;
+    return wrapErr(() => { const d = (data && data._isBufferProxy) ? unwrapBuffer(data) : data; fs.appendFileSync(filePath, d, options); return true; });
+  },
+  rmSync: (target, options) => {
+    const blocked = guardWritePath(target, 'rmSync');
+    if (blocked) return blocked;
+    return wrapErr(() => { fs.rmSync(target, options); return true; });
+  },
+  rmdirSync: (dirPath, options) => {
+    const blocked = guardWritePath(dirPath, 'rmdirSync');
+    if (blocked) return blocked;
+    return wrapErr(() => { fs.rmdirSync(dirPath, options); return true; });
+  },
   accessSync: (filePath, mode) => wrapErr(() => { fs.accessSync(filePath, mode); return true; }),
-  chmodSync: (filePath, mode) => wrapErr(() => { fs.chmodSync(filePath, mode); return true; }),
+  chmodSync: (filePath, mode) => {
+    const blocked = guardWritePath(filePath, 'chmodSync');
+    if (blocked) return blocked;
+    return wrapErr(() => { fs.chmodSync(filePath, mode); return true; });
+  },
   realpathSync: (filePath) => wrapErr(() => fs.realpathSync(filePath)),
 
   // Async methods (callback-based converted to Promise)
@@ -191,6 +280,8 @@ const fsBridge = {
     });
   }),
   writeFile: (filePath, data, options) => new Promise((resolve, reject) => {
+    const blocked = guardWritePath(filePath, 'writeFile');
+    if (blocked) return reject(blocked);
     const d = (data && data._isBufferProxy) ? unwrapBuffer(data) : data;
     fs.writeFile(filePath, d, options, (err) => {
       if (err) return reject({ error: err.message });
@@ -198,6 +289,8 @@ const fsBridge = {
     });
   }),
   mkdir: (dirPath, options) => new Promise((resolve, reject) => {
+    const blocked = guardWritePath(dirPath, 'mkdir');
+    if (blocked) return reject(blocked);
     fs.mkdir(dirPath, options, (err, result) => {
       if (err) return reject({ error: err.message });
       resolve(result !== undefined ? String(result) : true);
@@ -219,24 +312,32 @@ const fsBridge = {
     });
   }),
   unlink: (filePath) => new Promise((resolve, reject) => {
+    const blocked = guardWritePath(filePath, 'unlink');
+    if (blocked) return reject(blocked);
     fs.unlink(filePath, (err) => {
       if (err) return reject({ error: err.message });
       resolve(true);
     });
   }),
   rename: (oldPath, newPath) => new Promise((resolve, reject) => {
+    const blocked = guardWritePath(newPath, 'rename');
+    if (blocked) return reject(blocked);
     fs.rename(oldPath, newPath, (err) => {
       if (err) return reject({ error: err.message });
       resolve(true);
     });
   }),
   copyFile: (src, dest, mode) => new Promise((resolve, reject) => {
+    const blocked = guardWritePath(dest, 'copyFile');
+    if (blocked) return reject(blocked);
     fs.copyFile(src, dest, mode, (err) => {
       if (err) return reject({ error: err.message });
       resolve(true);
     });
   }),
   appendFile: (filePath, data, options) => new Promise((resolve, reject) => {
+    const blocked = guardWritePath(filePath, 'appendFile');
+    if (blocked) return reject(blocked);
     const d = (data && data._isBufferProxy) ? unwrapBuffer(data) : data;
     fs.appendFile(filePath, d, options, (err) => {
       if (err) return reject({ error: err.message });
@@ -244,6 +345,8 @@ const fsBridge = {
     });
   }),
   rm: (target, options) => new Promise((resolve, reject) => {
+    const blocked = guardWritePath(target, 'rm');
+    if (blocked) return reject(blocked);
     fs.rm(target, options, (err) => {
       if (err) return reject({ error: err.message });
       resolve(true);
@@ -291,6 +394,8 @@ const fsBridge = {
     }
   },
   createWriteStream: (filePath, options) => {
+    const blocked = guardWritePath(filePath, 'createWriteStream');
+    if (blocked) return blocked;
     try {
       const id = fsBridge._streamIdCounter++;
       const stream = fs.createWriteStream(filePath, options);
@@ -355,7 +460,11 @@ const fsBridge = {
     if (!rs || !ws) return { error: 'Stream not found' };
     rs.pipe(ws);
     return true;
-  }
+  },
+
+  // 🔒 S1: Public API for registering additional allowed write directories
+  registerWriteRoot: (dir) => registerWriteRoot(dir),
+  isWritePathAllowed: (filePath) => validateWritePath(filePath)
 };
 
 // ============================================================
@@ -514,10 +623,89 @@ const osBridge = {
 };
 
 // ============================================================
-// 5. childProcess bridge
+// 5. childProcess bridge — 🔒 S1: command classification gate
 // ============================================================
+
+// Classification prefixes (mirrors modules/tools.js B1 fix)
+const _CP_SAFE_PREFIXES = [
+  'dir ', 'ls ', 'cat ', 'type ', 'echo ', 'pwd', 'cd ', 'whoami',
+  'hostname', 'date ', 'time ', 'ver', 'uname ', 'id ', 'env',
+  'git status', 'git log', 'git diff', 'git branch', 'git remote',
+  'git show', 'git rev-parse', 'git ls-files', 'git config --get',
+  'node --version', 'node -v', 'npm --version', 'npm -v',
+  'python --version', 'python -v', 'python3 --version', 'pip --version',
+  'where ', 'which ', 'find ', 'grep ', 'head ', 'tail ', 'wc ',
+  'systeminfo', 'ipconfig', 'ifconfig', 'ping ', 'nslookup ',
+  'tasklist', 'ps ', 'df ', 'du ', 'free ', 'netstat '
+];
+const _CP_HIGH_RISK_PREFIXES = [
+  'format ', 'del /s', 'del /q', 'rd /s', 'deltree',
+  'rm -rf /', 'rm -rf ~', 'rm -rf .', 'mkfs', 'fdisk', 'diskpart',
+  'shutdown', 'reboot', 'halt', 'poweroff', 'init 0', 'init 6',
+  'cmd /c ', 'cmd /k ', 'cmd.exe /c ', 'cmd.exe /k ',
+  'powershell -command', 'powershell -file', 'powershell -encodedcommand',
+  'powershell.exe -command', 'powershell.exe -file', 'powershell.exe -encodedcommand',
+  'bash -c ', 'sh -c ', 'mshta', 'wscript', 'cscript',
+  'regsvr32', 'rundll32', 'certutil -urlcache', 'bitsadmin',
+  'net user', 'net localgroup', 'sc create', 'sc delete',
+  'schtasks /create', 'schtasks /delete', 'reg add', 'reg delete',
+  'icacls ', 'takeown ', 'attrib '
+];
+
+function classifyCommand(cmd) {
+  if (!cmd || typeof cmd !== 'string') return 'high';
+  const cmdLower = cmd.trim().toLowerCase();
+  // Check high risk first
+  for (let i = 0; i < _CP_HIGH_RISK_PREFIXES.length; i++) {
+    const hp = _CP_HIGH_RISK_PREFIXES[i];
+    if (cmdLower.startsWith(hp) || cmdLower === hp.trim()) return 'high';
+  }
+  // Chain detection: split by &&, ||, ;, | and check each segment
+  if (/[&;|]/.test(cmdLower)) {
+    const segments = cmdLower.split(/&&|\|\||;|\|/);
+    let worst = 'safe';
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i].trim();
+      if (!seg) continue;
+      const segClass = classifyCommand(seg);
+      if (segClass === 'high') return 'high';
+      if (segClass === 'medium') worst = 'medium';
+    }
+    return worst;
+  }
+  // Check safe
+  for (let i = 0; i < _CP_SAFE_PREFIXES.length; i++) {
+    const sp = _CP_SAFE_PREFIXES[i];
+    if (cmdLower.startsWith(sp) || cmdLower === sp.trim()) return 'safe';
+  }
+  // Unknown defaults to medium (not auto-blocked, but logged)
+  return 'medium';
+}
+
+// Spawn binary whitelist (modules that need specific binaries)
+const _SPAWN_ALLOWED_BINARIES = [
+  'git', 'python', 'python3', 'node', 'npm', 'npx', 'pip', 'pip3',
+  'ollama', 'gh', 'ffmpeg', 'ffprobe', 'unzip', 'tar', 'curl', 'wget',
+  'code', 'dotnet', 'java', 'javac', 'go', 'cargo', 'rustc'
+];
+
+function isSpawnBinaryAllowed(cmd) {
+  if (!cmd || typeof cmd !== 'string') return false;
+  const basename = path.basename(cmd).toLowerCase().replace(/\.exe$/, '');
+  return _SPAWN_ALLOWED_BINARIES.includes(basename);
+}
+
 const childProcessBridge = {
+  // 🔒 Classified exec — blocks HIGH risk commands
   execSync: (cmd, opts) => {
+    const risk = classifyCommand(cmd);
+    if (risk === 'high') {
+      console.warn('[preload:security] Blocked HIGH-risk execSync:', cmd);
+      return { stdout: '', stderr: 'Blocked by security policy (high-risk command). Use run_command tool with user confirmation.', error: 'SECURITY_BLOCKED', status: 1 };
+    }
+    if (risk === 'medium') {
+      console.info('[preload:security] execSync medium-risk (allowed):', cmd);
+    }
     try {
       const options = Object.assign({}, opts, { encoding: opts && opts.encoding ? opts.encoding : 'utf8' });
       const stdout = cpExecSync(cmd, options);
@@ -531,10 +719,34 @@ const childProcessBridge = {
       };
     }
   },
-  exec: (cmd, opts) => {
+  exec: (cmd, opts, maybeCb) => {
+    // Support both exec(cmd, opts) → Promise and exec(cmd, opts, cb) → callback
+    let options = opts;
+    let callback = null;
+    if (typeof opts === 'function') { callback = opts; options = {}; }
+    else if (typeof maybeCb === 'function') { callback = maybeCb; }
+
+    const risk = classifyCommand(cmd);
+    if (risk === 'high') {
+      console.warn('[preload:security] Blocked HIGH-risk exec:', cmd);
+      const result = { stdout: '', stderr: 'Blocked by security policy (high-risk command). Use run_command tool with user confirmation.', code: 1, error: 'SECURITY_BLOCKED' };
+      if (callback) { const err = new Error('SECURITY_BLOCKED'); err.code = 1; callback(err, '', result.stderr); return undefined; }
+      return Promise.resolve(result);
+    }
+    if (risk === 'medium') {
+      console.info('[preload:security] exec medium-risk (allowed):', cmd);
+    }
+    if (callback) {
+      // Callback style (matches Node.js child_process.exec)
+      const cbOptions = Object.assign({}, options, { encoding: options && options.encoding ? options.encoding : 'utf8' });
+      cpExec(cmd, cbOptions, (error, stdout, stderr) => {
+        callback(error, stdout, stderr);
+      });
+      return undefined;
+    }
     return new Promise((resolve) => {
-      const options = Object.assign({}, opts, { encoding: opts && opts.encoding ? opts.encoding : 'utf8' });
-      cpExec(cmd, options, (error, stdout, stderr) => {
+      const cbOptions = Object.assign({}, options, { encoding: options && options.encoding ? options.encoding : 'utf8' });
+      cpExec(cmd, cbOptions, (error, stdout, stderr) => {
         resolve({
           stdout: typeof stdout === 'string' ? stdout : (stdout ? stdout.toString('utf8') : ''),
           stderr: typeof stderr === 'string' ? stderr : (stderr ? stderr.toString('utf8') : ''),
@@ -545,6 +757,10 @@ const childProcessBridge = {
     });
   },
   spawn: (cmd, args, opts) => {
+    if (!isSpawnBinaryAllowed(cmd)) {
+      console.warn('[preload:security] Blocked spawn of non-whitelisted binary:', cmd);
+      return { error: 'Binary not in spawn whitelist: ' + cmd + '. Allowed: ' + _SPAWN_ALLOWED_BINARIES.join(', '), pid: null };
+    }
     try {
       const child = cpSpawn(cmd, args || [], opts || {});
       const wrapper = {
@@ -578,7 +794,6 @@ const childProcessBridge = {
         end: () => {
           try { child.stdin.end(); return true; } catch (e) { return { error: e.message }; }
         },
-        // 🔧 兼容标准 Node.js ChildProcess .on() API（python.js 等模块使用）
         on: (event, cb) => {
           if (event === 'close') child.on('close', (code, signal) => cb(code, signal));
           else if (event === 'exit') child.on('exit', (code, signal) => cb(code, signal));
@@ -595,6 +810,104 @@ const childProcessBridge = {
     } catch (e) {
       return { error: e.message, pid: null };
     }
+  },
+
+  // 🔒 Privileged methods — for modules that do their own user-confirmation
+  // (tools.js run_command, sandbox.js, mcp.js). These bypass classification.
+  _rawExec: (cmd, opts, maybeCb) => {
+    let options = opts;
+    let callback = null;
+    if (typeof opts === 'function') { callback = opts; options = {}; }
+    else if (typeof maybeCb === 'function') { callback = maybeCb; }
+    if (callback) {
+      const cbOptions = Object.assign({}, options, { encoding: options && options.encoding ? options.encoding : 'utf8' });
+      cpExec(cmd, cbOptions, (error, stdout, stderr) => { callback(error, stdout, stderr); });
+      return undefined;
+    }
+    return new Promise((resolve) => {
+      const cbOptions = Object.assign({}, options, { encoding: options && options.encoding ? options.encoding : 'utf8' });
+      cpExec(cmd, cbOptions, (error, stdout, stderr) => {
+        resolve({
+          stdout: typeof stdout === 'string' ? stdout : (stdout ? stdout.toString('utf8') : ''),
+          stderr: typeof stderr === 'string' ? stderr : (stderr ? stderr.toString('utf8') : ''),
+          code: error ? (error.code || 1) : 0,
+          error: error ? error.message : null
+        });
+      });
+    });
+  },
+  _rawExecSync: (cmd, opts) => {
+    try {
+      const options = Object.assign({}, opts, { encoding: opts && opts.encoding ? opts.encoding : 'utf8' });
+      const stdout = cpExecSync(cmd, options);
+      return { stdout: typeof stdout === 'string' ? stdout : stdout.toString('utf8'), stderr: '' };
+    } catch (e) {
+      return {
+        stdout: e.stdout ? (typeof e.stdout === 'string' ? e.stdout : e.stdout.toString('utf8')) : '',
+        stderr: e.stderr ? (typeof e.stderr === 'string' ? e.stderr : e.stderr.toString('utf8')) : e.message,
+        error: e.message,
+        status: e.status
+      };
+    }
+  },
+  _rawExecFile: (file, args, opts, maybeCb) => {
+    // execFile doesn't use a shell — safer than exec for direct binary invocation
+    let options = opts;
+    let callback = null;
+    if (typeof opts === 'function') { callback = opts; options = {}; }
+    else if (typeof maybeCb === 'function') { callback = maybeCb; }
+    const { execFile: cpExecFile } = require('child_process');
+    if (callback) {
+      cpExecFile(file, args || [], options || {}, callback);
+      return undefined;
+    }
+    return new Promise((resolve) => {
+      cpExecFile(file, args || [], Object.assign({ encoding: 'utf8' }, options), (error, stdout, stderr) => {
+        resolve({
+          stdout: typeof stdout === 'string' ? stdout : (stdout ? stdout.toString('utf8') : ''),
+          stderr: typeof stderr === 'string' ? stderr : (stderr ? stderr.toString('utf8') : ''),
+          code: error ? (error.code || 1) : 0,
+          error: error ? error.message : null
+        });
+      });
+    });
+  },
+  _rawSpawn: (cmd, args, opts) => {
+    try {
+      const child = cpSpawn(cmd, args || [], opts || {});
+      const wrapper = {
+        pid: child.pid,
+        kill: (signal) => { try { child.kill(signal); return true; } catch (e) { return { error: e.message }; } },
+        onData: (cb) => { child.stdout.on('data', (data) => cb(Buffer.isBuffer(data) ? data.toString('utf8') : data)); return wrapper; },
+        onStderr: (cb) => { child.stderr.on('data', (data) => cb(Buffer.isBuffer(data) ? data.toString('utf8') : data)); return wrapper; },
+        onExit: (cb) => { child.on('exit', (code, signal) => cb(code, signal)); return wrapper; },
+        onEnd: (cb) => { child.on('close', (code, signal) => cb(code, signal)); return wrapper; },
+        onError: (cb) => { child.on('error', (err) => cb(err.message)); return wrapper; },
+        write: (data) => { try { child.stdin.write(data); return true; } catch (e) { return { error: e.message }; } },
+        end: () => { try { child.stdin.end(); return true; } catch (e) { return { error: e.message }; } },
+        on: (event, cb) => {
+          if (event === 'close') child.on('close', (code, signal) => cb(code, signal));
+          else if (event === 'exit') child.on('exit', (code, signal) => cb(code, signal));
+          else if (event === 'error') child.on('error', (err) => cb(err));
+          else if (event === 'data') child.stdout.on('data', (d) => cb(Buffer.isBuffer(d) ? d.toString('utf8') : d));
+          else child.on(event, cb);
+          return wrapper;
+        },
+        stdout: { on: (ev, cb) => { child.stdout.on(ev, (d) => cb(Buffer.isBuffer(d) ? d.toString('utf8') : d)); return wrapper; } },
+        stderr: { on: (ev, cb) => { child.stderr.on(ev, (d) => cb(Buffer.isBuffer(d) ? d.toString('utf8') : d)); return wrapper; } },
+        stdin: { write: (d) => { try { child.stdin.write(d); return true; } catch (e) { return false; } }, end: () => { try { child.stdin.end(); return true; } catch (e) { return false; } } }
+      };
+      return wrapper;
+    } catch (e) {
+      return { error: e.message, pid: null };
+    }
+  },
+  // Utility: expose classification for modules that want to check
+  classifyCommand: classifyCommand,
+  registerSpawnBinary: (name) => {
+    const lower = (name || '').toLowerCase().replace(/\.exe$/, '');
+    if (lower && !_SPAWN_ALLOWED_BINARIES.includes(lower)) _SPAWN_ALLOWED_BINARIES.push(lower);
+    return true;
   }
 };
 
@@ -1503,36 +1816,61 @@ const projectInfoBridge = {
 };
 
 // ============================================================
-// 16. ipcRenderer bridge (more permissive for internal modules)
+// 16. ipcRenderer bridge — 🔒 S1: hardened with expanded blocklist + audit
 // ============================================================
+const _IPC_BLOCKED_CHANNELS = [
+  // App lifecycle (prevent renderer from killing the app)
+  'app-exit', 'app-quit', 'destroy-window', 'app:force-quit',
+  // Security-sensitive (prevent bypass of main-process gates)
+  'disable-security', 'bypass-auth', 'reset-password',
+  'grant-all-permissions', 'disable-sandbox',
+  // Data destruction (must go through confirmed UI flows)
+  'wipe-data', 'factory-reset', 'delete-all-sessions',
+  // Window management abuse
+  'set-always-on-top', 'set-fullscreen-forced'
+];
+
 const ipcBridge = {
   send: (channel, ...args) => {
-    const blocked = ['app-exit', 'app-quit', 'destroy-window'];
-    if (blocked.includes(channel)) {
-      console.warn('[preload] ipcBridge blocked channel:', channel);
+    if (_IPC_BLOCKED_CHANNELS.includes(channel)) {
+      console.warn('[preload:security] ipcBridge BLOCKED send:', channel);
       return;
     }
+    console.debug('[preload:ipc] send:', channel);
     ipcRenderer.send(channel, ...args);
   },
   sendSync: (channel, ...args) => {
-    const blocked = ['app-exit', 'app-quit', 'destroy-window'];
-    if (blocked.includes(channel)) {
-      console.warn('[preload] ipcBridge blocked sync channel:', channel);
+    if (_IPC_BLOCKED_CHANNELS.includes(channel)) {
+      console.warn('[preload:security] ipcBridge BLOCKED sendSync:', channel);
       return null;
     }
+    console.debug('[preload:ipc] sendSync:', channel);
     return ipcRenderer.sendSync(channel, ...args);
   },
   on: (channel, cb) => {
+    if (_IPC_BLOCKED_CHANNELS.includes(channel)) {
+      console.warn('[preload:security] ipcBridge BLOCKED on:', channel);
+      return () => {};
+    }
     const sub = (_event, ...args) => cb(...args);
     ipcRenderer.on(channel, sub);
     return () => ipcRenderer.removeListener(channel, sub);
   },
   once: (channel, cb) => {
+    if (_IPC_BLOCKED_CHANNELS.includes(channel)) {
+      console.warn('[preload:security] ipcBridge BLOCKED once:', channel);
+      return () => {};
+    }
     const sub = (_event, ...args) => cb(...args);
     ipcRenderer.once(channel, sub);
     return () => ipcRenderer.removeListener(channel, sub);
   },
   invoke: (channel, ...args) => {
+    if (_IPC_BLOCKED_CHANNELS.includes(channel)) {
+      console.warn('[preload:security] ipcBridge BLOCKED invoke:', channel);
+      return Promise.reject(new Error('Channel blocked by security policy: ' + channel));
+    }
+    console.debug('[preload:ipc] invoke:', channel);
     return ipcRenderer.invoke(channel, ...args);
   },
   removeListener: (channel, cb) => {

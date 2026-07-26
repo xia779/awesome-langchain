@@ -1,6 +1,8 @@
 // modules/mcp.js - MCP 协议（本地工具 + 外部服务器 stdio 传输）
 let Core;
-const { spawn } = require('child_process');
+const _cpBridge = require('child_process');
+// 🔒 S1: MCP servers are user-configured (any binary), use privileged _rawSpawn.
+const spawn = _cpBridge._rawSpawn || _cpBridge.spawn;
 const fs = require('fs');
 const path = require('path');
 
