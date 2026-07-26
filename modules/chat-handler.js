@@ -306,7 +306,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   
   const finalSystemPrompt = Core.skills.applySkillToPrompt ? Core.skills.applySkillToPrompt(userSystemPrompt) : userSystemPrompt;
 
-  // 🔧 智能记忆注入：用户画像 + 关键记忆 + 相关记忆 + 日志
+  // 🔧 P1-1: 智能记忆注入 + 预算管理
   // 查询改写：将指代性追问转为完整查询，提升记忆召回精度
   var memorySearchQuery = text;
   if (Core.queryRewriter) {
@@ -317,35 +317,49 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   }
   var memoryContext = '';
   if (Core.memoryEnhance && Core.memoryEnhance.getEnhancedContext) {
-    memoryContext = await Core.memoryEnhance.getEnhancedContext(memorySearchQuery);
+    try { memoryContext = await Core.memoryEnhance.getEnhancedContext(memorySearchQuery) || ''; } catch (e) {}
   } else if (Core.memory) {
     if (Core.memory.smartContext) {
-      memoryContext = await Core.memory.smartContext(memorySearchQuery, 8);
+      try { memoryContext = await Core.memory.smartContext(memorySearchQuery, 8) || ''; } catch (e) {}
     } else if (Core.memory.getContext) {
-      memoryContext = Core.memory.getContext(10);
+      memoryContext = Core.memory.getContext(10) || '';
     }
   }
-  var injectedSystemPrompt = finalSystemPrompt;
-  if (memoryContext) {
-    injectedSystemPrompt = finalSystemPrompt + '\n\n' + memoryContext;
-  }
 
-  // ⏰ 注入当前时间：让AI知道"现在"，才能判断信息时效性（如凌晨没有当天开盘/收盘数据），避免编造数字、混淆日期
+  // ⏰ 当前时间
   var _nowChat = new Date();
   var _weekDayZh = ['日','一','二','三','四','五','六'];
-  injectedSystemPrompt += '\n\n【当前时间】现在是 ' + _nowChat.getFullYear() + '年' + (_nowChat.getMonth() + 1) + '月' + _nowChat.getDate() + '日 星期' + _weekDayZh[_nowChat.getDay()] + ' ' + String(_nowChat.getHours()).padStart(2, '0') + ':' + String(_nowChat.getMinutes()).padStart(2, '0') + '。请基于这个时间点判断信息时效性，不要编造不存在的数据（如非交易时段的当天开盘/收盘价）。';
+  var _timeCtx = '\n\n【当前时间】现在是 ' + _nowChat.getFullYear() + '年' + (_nowChat.getMonth() + 1) + '月' + _nowChat.getDate() + '日 星期' + _weekDayZh[_nowChat.getDay()] + ' ' + String(_nowChat.getHours()).padStart(2, '0') + ':' + String(_nowChat.getMinutes()).padStart(2, '0') + '。请基于这个时间点判断信息时效性，不要编造不存在的数据（如非交易时段的当天开盘/收盘价）。';
 
-  // 📁 项目上下文注入：自动读取项目约定文件并注入系统提示
+  // 📁 项目上下文
+  var _projCtx = '';
   if (Core.projectContext && Core.projectContext.hasContext()) {
-    var projectCtx = Core.projectContext.getContextString();
-    if (projectCtx) {
-      injectedSystemPrompt += projectCtx;
-    }
+    _projCtx = Core.projectContext.getContextString() || '';
   }
 
-  // 📚 知识库上下文注入：将检索到的相关知识作为参考材料提供给 AI
+  // 🔧 P1-1: 预算分配
+  var _knowledgeCtx = '';
   if (knowledgeContext && knowledgeContext.trim()) {
-    injectedSystemPrompt += '\n\n【知识库参考】\n以下是与用户问题相关的知识片段，请据此回答：\n' + knowledgeContext + '\n【知识库参考结束】';
+    _knowledgeCtx = '【知识库参考】\n以下是与用户问题相关的知识片段，请据此回答：\n' + knowledgeContext + '\n【知识库参考结束】';
+  }
+  var injectedSystemPrompt;
+  if (Core.contextBudget && Core.contextBudget.buildSystemPrompt) {
+    injectedSystemPrompt = Core.contextBudget.buildSystemPrompt({
+      base: finalSystemPrompt,
+      time: _timeCtx,
+      project: _projCtx,
+      memory: memoryContext,
+      knowledge: _knowledgeCtx,
+      lessons: '',
+      mcpTools: ''
+    }, {});
+  } else {
+    // 降级兼容
+    injectedSystemPrompt = finalSystemPrompt;
+    if (memoryContext) injectedSystemPrompt += '\n\n' + memoryContext;
+    injectedSystemPrompt += _timeCtx;
+    if (_projCtx) injectedSystemPrompt += _projCtx;
+    if (_knowledgeCtx) injectedSystemPrompt += '\n\n' + _knowledgeCtx;
   }
 
   // 📝 备忘录上下文注入：将用户备忘录内容提供给 AI 读取

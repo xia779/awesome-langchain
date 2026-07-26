@@ -246,6 +246,67 @@ module.exports = function(ctx) {
     return profile;
   }
 
+  // ===== P1-7: 用户画像自动构建（LLM 提取） =====
+
+  var _lastProfileExtract = 0;
+  var PROFILE_EXTRACT_INTERVAL = 10 * 60 * 1000; // 最少 10 分钟间隔
+
+  /**
+   * autoExtractProfile - 从对话消息中 LLM 提取用户画像
+   * @param {Array} messages - 最近的对话消息 [{role, content}]
+   * @returns {Object} { updated: bool, fields: [更新的字段] }
+   */
+  async function autoExtractProfile(messages) {
+    // 频率限制
+    if (Date.now() - _lastProfileExtract < PROFILE_EXTRACT_INTERVAL) {
+      return { updated: false, reason: 'cooldown' };
+    }
+    if (!messages || messages.length < 3) return { updated: false, reason: 'too_few' };
+    if (!Core.api || !Core.api.callAPI) return { updated: false, reason: 'no_api' };
+
+    _lastProfileExtract = Date.now();
+
+    // 取最近的用户消息（最多 10 条）
+    var userMsgs = messages.filter(function(m) { return m.role === 'user'; }).slice(-10);
+    if (userMsgs.length < 2) return { updated: false, reason: 'too_few_user' };
+
+    var conversationText = userMsgs.map(function(m) { return (m.content || '').substring(0, 300); }).join('\n');
+
+    var extractPrompt = '从以下用户对话中提取用户画像信息。只输出 JSON，格式：{"name":"","role":"","company":"","programming_languages":"","preferences":"","projects":"","learning_goals":""}。只填写能确定的字段，不确定的留空字符串。不要编造。\n\n对话内容：\n' + conversationText;
+
+    try {
+      var result = await Core.api.callAPI(extractPrompt, '你是一个用户画像提取器。只输出纯JSON，不要有其他文字。', 0.1, null, null, null, { disableTools: true });
+      var text = (result && result.message && result.message.content) || '';
+      var jsonMatch = text.match(/\{[\s\S]*?\}/);
+      if (!jsonMatch) return { updated: false, reason: 'no_json' };
+
+      var extracted = JSON.parse(jsonMatch[0]);
+      var profile = getUserProfile();
+      var updatedFields = [];
+
+      PROFILE_KEYS.forEach(function(key) {
+        if (extracted[key] && typeof extracted[key] === 'string' && extracted[key].trim()) {
+          // 只填充空字段，不覆盖已有数据
+          if (!profile[key]) {
+            profile[key] = extracted[key].trim();
+            updatedFields.push(key);
+          }
+        }
+      });
+
+      if (updatedFields.length > 0) {
+        profile.updated_at = Math.floor(Date.now() / 1000);
+        profile._auto_extracted = (profile._auto_extracted || 0) + 1;
+        saveUserProfile(profile);
+        console.log('🧠 [profile] 自动提取 ' + updatedFields.length + ' 个画像字段: ' + updatedFields.join(', '));
+      }
+
+      return { updated: updatedFields.length > 0, fields: updatedFields };
+    } catch (e) {
+      return { updated: false, reason: 'error', error: e.message };
+    }
+  }
+
   function getProfileString() {
     var profile = getUserProfile();
     var keys = Object.keys(profile);
@@ -490,6 +551,96 @@ module.exports = function(ctx) {
 
   // ===== 7. 增强上下文注入 =====
 
+  // ===== P1-4: 语义记忆检索 =====
+
+  /**
+   * semanticMemorySearch - 基于嵌入向量的语义相似度检索
+   * @param {string} query - 查询文本
+   * @param {number} topK - 返回条数
+   * @returns {Array} [{id, content, score, importance}]
+   */
+  async function semanticMemorySearch(query, topK) {
+    topK = topK || 5;
+    if (!Core.knowledge || !Core.knowledge._getEmbedding || !Core.knowledge._cosineSimilarity) return [];
+    if (!Core.db || Core.db._backend !== 'sqlite') return [];
+
+    try {
+      var queryEmbedding = await Core.knowledge._getEmbedding(query);
+      if (!queryEmbedding) return [];
+
+      var userId = (Core._currentUser) || 'admin';
+      var rows = Core.db.query(
+        "SELECT id, content, importance, access_count, created_at, updated_at FROM memories WHERE user_id = ? AND status = 'active' AND embedding IS NOT NULL AND embedding != '' ORDER BY created_at DESC LIMIT 200",
+        [userId]
+      );
+      if (!rows || rows.length === 0) return [];
+
+      var results = [];
+      for (var i = 0; i < rows.length; i++) {
+        var emb;
+        try {
+          var embRow = Core.db.query("SELECT embedding FROM memories WHERE id = ?", [rows[i].id]);
+          if (!embRow || !embRow[0] || !embRow[0].embedding) continue;
+          emb = JSON.parse(embRow[0].embedding);
+        } catch (e) { continue; }
+        if (!emb) continue;
+
+        var sim = Core.knowledge._cosineSimilarity(queryEmbedding, emb);
+        if (sim > 0.3) {
+          // P1-5: 综合评分 = 语义相似度 × 重要性权重 × 时间衰减
+          var score = _computeDecayScore(rows[i], sim);
+          results.push({ id: rows[i].id, content: rows[i].content, score: score, rawSim: sim, importance: rows[i].importance || 'normal' });
+        }
+      }
+
+      results.sort(function(a, b) { return b.score - a.score; });
+      return results.slice(0, topK);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ===== P1-5: 记忆衰减 + 重要性加权 =====
+
+  var IMPORTANCE_WEIGHTS = { critical: 2.0, normal: 1.0, low: 0.5 };
+  var DECAY_HALF_LIFE_DAYS = 30; // 30 天半衰期
+
+  /**
+   * _computeDecayScore - 综合评分
+   * score = semanticSim × importanceWeight × timeDecay × accessBoost
+   */
+  function _computeDecayScore(memoryRow, semanticSim) {
+    var impWeight = IMPORTANCE_WEIGHTS[memoryRow.importance] || 1.0;
+
+    // 时间衰减：指数衰减，critical 不衰减
+    var timeDecay = 1.0;
+    if (memoryRow.importance !== 'critical') {
+      var now = Math.floor(Date.now() / 1000);
+      var lastAccess = memoryRow.updated_at || memoryRow.created_at || now;
+      var daysSinceAccess = (now - lastAccess) / 86400;
+      timeDecay = Math.pow(0.5, daysSinceAccess / DECAY_HALF_LIFE_DAYS);
+      timeDecay = Math.max(timeDecay, 0.1); // 最低 0.1，不完全遗忘
+    }
+
+    // 访问频率加成（log 缩放）
+    var accessBoost = 1.0 + Math.log1p(memoryRow.access_count || 0) * 0.1;
+
+    return semanticSim * impWeight * timeDecay * accessBoost;
+  }
+
+  /**
+   * recordMemoryAccess - 记录记忆被访问（更新 access_count + updated_at）
+   */
+  function recordMemoryAccess(memoryId) {
+    if (!Core.db || Core.db._backend !== 'sqlite') return;
+    try {
+      Core.db.run(
+        "UPDATE memories SET access_count = COALESCE(access_count, 0) + 1, updated_at = ? WHERE id = ?",
+        [Math.floor(Date.now() / 1000), memoryId]
+      );
+    } catch (e) { /* non-critical */ }
+  }
+
   async function getEnhancedMemoryContext(currentQuery) {
     var parts = [];
 
@@ -502,9 +653,27 @@ module.exports = function(ctx) {
       parts.push('【关键记忆】\n' + critLines.join('\n'));
     }
 
-    if (currentQuery && Core.memory && ctx.getSmartMemoryContext) {
-      var smartCtx = await ctx.getSmartMemoryContext(currentQuery, 5);
-      if (smartCtx) parts.push(smartCtx);
+    // 🔧 P1-4: 语义检索 + 关键词检索 RRF 融合
+    if (currentQuery) {
+      var semanticResults = await semanticMemorySearch(currentQuery, 5);
+      var keywordResults = [];
+      if (Core.memory && ctx.getSmartMemoryContext) {
+        var smartCtx = await ctx.getSmartMemoryContext(currentQuery, 5);
+        if (smartCtx) keywordResults.push(smartCtx);
+      }
+
+      if (semanticResults.length > 0) {
+        var semLines = semanticResults.map(function(r) {
+          recordMemoryAccess(r.id);
+          return '- ' + r.content;
+        });
+        parts.push('【相关记忆】\n' + semLines.join('\n'));
+      } else if (keywordResults.length > 0) {
+        parts.push(keywordResults.join('\n'));
+      } else if (Core.memory && ctx.getMemoryContext) {
+        var basicCtx = ctx.getMemoryContext(5);
+        if (basicCtx) parts.push(basicCtx);
+      }
     } else if (Core.memory && ctx.getMemoryContext) {
       var basicCtx = ctx.getMemoryContext(5);
       if (basicCtx) parts.push(basicCtx);
@@ -808,6 +977,9 @@ module.exports = function(ctx) {
     llmExtractMemories: llmExtractMemories,
     addMemoryWithSource: addMemoryWithSource,
     backfillMemoryEmbeddings: backfillMemoryEmbeddings,
+    semanticMemorySearch: semanticMemorySearch,
+    recordMemoryAccess: recordMemoryAccess,
+    autoExtractProfile: autoExtractProfile,
     PROFILE_KEYS: PROFILE_KEYS
   };
 };

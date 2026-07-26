@@ -600,15 +600,11 @@ async function sendToAgent(task, isDeepThink) {
     let reply = '';
     try {
       // 📁 Agent 模式也注入项目上下文 + 增强记忆
-      var agentPrompt = AGENT_SYSTEM_PROMPT;
-      // ⏰ 注入当前时间：让 Agent 知道"现在"，才能判断市场是否开盘、数据是否过期，避免编造开盘/收盘点位、混淆日期
+      // 🔧 P1-1: 使用 context-budget 预算管理，防止记忆+知识+MCP 工具无脑拼接导致上下文溢出
       var _nowDt = new Date();
       var _weekDayNames = ['日','一','二','三','四','五','六'];
-      agentPrompt += '\n\n【当前时间】现在是 ' + _nowDt.getFullYear() + '年' + (_nowDt.getMonth() + 1) + '月' + _nowDt.getDate() + '日 星期' + _weekDayNames[_nowDt.getDay()] + ' ' + String(_nowDt.getHours()).padStart(2, '0') + ':' + String(_nowDt.getMinutes()).padStart(2, '0') + '。请基于这个时间点判断信息时效性：A股交易时段为工作日 9:30-15:00，非交易时段（如凌晨、深夜、周末）不存在当天的开盘/收盘数据，不要编造。';
-      if (Core.projectContext && Core.projectContext.hasContext()) {
-        var pCtx = Core.projectContext.getContextString();
-        if (pCtx) agentPrompt += pCtx;
-      }
+      var _timeStr = '\n\n【当前时间】现在是 ' + _nowDt.getFullYear() + '年' + (_nowDt.getMonth() + 1) + '月' + _nowDt.getDate() + '日 星期' + _weekDayNames[_nowDt.getDay()] + ' ' + String(_nowDt.getHours()).padStart(2, '0') + ':' + String(_nowDt.getMinutes()).padStart(2, '0') + '。请基于这个时间点判断信息时效性：A股交易时段为工作日 9:30-15:00，非交易时段（如凌晨、深夜、周末）不存在当天的开盘/收盘数据，不要编造。';
+
       // 🔍 查询改写：将指代性任务描述转为完整查询，提升记忆/知识召回精度
       var agentSearchQuery = task;
       if (Core.queryRewriter) {
@@ -617,35 +613,42 @@ async function sendToAgent(task, isDeepThink) {
           if (agentRw.changed) agentSearchQuery = agentRw.rewritten;
         } catch (e) { /* 改写失败不影响主流程 */ }
       }
-      if (Core.memoryEnhance && Core.memoryEnhance.getEnhancedContext) {
-        var memCtx = await Core.memoryEnhance.getEnhancedContext(agentSearchQuery);
-        if (memCtx) agentPrompt += '\n\n' + memCtx;
+
+      // 收集各段内容
+      var _projectCtx = '';
+      if (Core.projectContext && Core.projectContext.hasContext()) {
+        _projectCtx = Core.projectContext.getContextString() || '';
       }
-      // 📚 注入历史经验教训：避免 Agent 重复犯同样的错误（如 ComfyUI 未启动、CUDA OOM 等）
+      var _memoryCtx = '';
+      if (Core.memoryEnhance && Core.memoryEnhance.getEnhancedContext) {
+        try { _memoryCtx = await Core.memoryEnhance.getEnhancedContext(agentSearchQuery) || ''; } catch (e) {}
+      }
+      var _lessonsCtx = '';
       if (Core.knowledgeDistill && Core.knowledgeDistill.getRelevantLessons) {
         var lessons = Core.knowledgeDistill.getRelevantLessons(null, agentSearchQuery);
         if (lessons && lessons.length > 0) {
-          agentPrompt += Core.knowledgeDistill.formatLessonsForPrompt(lessons);
+          _lessonsCtx = Core.knowledgeDistill.formatLessonsForPrompt(lessons);
         }
       }
-      // 🔌 动态注入 MCP 外部工具：让 Agent 知道可以调用哪些 MCP 注册的工具
+      var _mcpCtx = '';
       if (Core.mcp && Core.mcp.enabled && Core.mcp.enabled()) {
         try {
           var mcpTools = Core.mcp.getAllTools();
-          // 过滤掉已在静态提示词中列出的内置工具，只注入额外的 MCP 工具
           var builtinNames = ['web_search','read_url','read_file','write_file','edit_file','list_dir','search_files','file_info','run_command','run_python','browser_navigate','browser_click','browser_type','browser_extract','browser_screenshot','browser_wait','github_pr','github_issue','github_repo','github_release','image_search','image_download','stock_quote','ask_user','parallel_execute','handoff_to_agent','deep_research','complete'];
           var extraTools = mcpTools.filter(function(t) { return builtinNames.indexOf(t.name) < 0; });
           if (extraTools.length > 0) {
-            agentPrompt += '\n\n【MCP 扩展工具】以下是通过 MCP 协议注册的额外工具，调用方式与内置工具相同：\n';
+            _mcpCtx = '\n\n【MCP 扩展工具】以下是通过 MCP 协议注册的额外工具，调用方式与内置工具相同：\n';
             extraTools.forEach(function(t) {
-              agentPrompt += '- ' + t.name + ': ' + (t.description || '无描述') + '\n';
+              _mcpCtx += '- ' + t.name + ': ' + (t.description || '无描述') + '\n';
               if (t.schema && t.schema.properties) {
-                agentPrompt += '  参数: ' + JSON.stringify(t.schema.properties) + '\n';
+                _mcpCtx += '  参数: ' + JSON.stringify(t.schema.properties) + '\n';
               }
             });
           }
         } catch (e) { console.warn('[agent-loop] MCP 工具列表注入失败:', e.message); }
       }
+
+      // 🔧 P1-1: 预算分配——在模型上下文窗口内智能拼接各段
       // 🔧 使用用户当前选择的模型/提供商，而非硬编码 ollama
       var agentProvider = 'ollama';
       var agentModel = null;
@@ -656,6 +659,24 @@ async function sendToAgent(task, isDeepThink) {
           agentProvider = selVal.substring(0, colonIdx);
           agentModel = selVal.substring(colonIdx + 1);
         }
+      }
+      var agentPrompt;
+      if (Core.contextBudget && Core.contextBudget.buildSystemPrompt) {
+        agentPrompt = Core.contextBudget.buildSystemPrompt({
+          base: AGENT_SYSTEM_PROMPT,
+          time: _timeStr,
+          project: _projectCtx,
+          memory: _memoryCtx,
+          knowledge: '',
+          lessons: _lessonsCtx,
+          mcpTools: _mcpCtx
+        }, { model: agentModel });
+      } else {
+        // 降级：无预算管理器时直接拼接（向后兼容）
+        agentPrompt = AGENT_SYSTEM_PROMPT + _timeStr + _projectCtx;
+        if (_memoryCtx) agentPrompt += '\n\n' + _memoryCtx;
+        if (_lessonsCtx) agentPrompt += _lessonsCtx;
+        if (_mcpCtx) agentPrompt += _mcpCtx;
       }
       const data = await Core.api.callAPI(prompt, agentPrompt, 0.7, agentModel, agentProvider, null, { disableTools: true });
       reply = (data.message && data.message.content) || data.response || '';
