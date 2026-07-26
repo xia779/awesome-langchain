@@ -306,6 +306,13 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   
   const finalSystemPrompt = Core.skills.applySkillToPrompt ? Core.skills.applySkillToPrompt(userSystemPrompt) : userSystemPrompt;
 
+  // 🔧 P2: 人格引擎增强——情绪感知 + 风格适配 + 亲密度
+  var personaEnhancedPrompt = finalSystemPrompt;
+  if (Core.persona && Core.persona.enhanceSystemPrompt) {
+    personaEnhancedPrompt = Core.persona.enhanceSystemPrompt(finalSystemPrompt, text);
+    Core.persona.recordInteraction(text.length > 100 ? 2 : 1);
+  }
+
   // 🔧 P1-1: 智能记忆注入 + 预算管理
   // 查询改写：将指代性追问转为完整查询，提升记忆召回精度
   var memorySearchQuery = text;
@@ -345,7 +352,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
   var injectedSystemPrompt;
   if (Core.contextBudget && Core.contextBudget.buildSystemPrompt) {
     injectedSystemPrompt = Core.contextBudget.buildSystemPrompt({
-      base: finalSystemPrompt,
+      base: personaEnhancedPrompt,
       time: _timeCtx,
       project: _projCtx,
       memory: memoryContext,
@@ -355,7 +362,7 @@ async function handleNormalChat(text, knowledgeContext, apiText) {
     }, {});
   } else {
     // 降级兼容
-    injectedSystemPrompt = finalSystemPrompt;
+    injectedSystemPrompt = personaEnhancedPrompt;
     if (memoryContext) injectedSystemPrompt += '\n\n' + memoryContext;
     injectedSystemPrompt += _timeCtx;
     if (_projCtx) injectedSystemPrompt += _projCtx;
