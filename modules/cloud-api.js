@@ -113,6 +113,31 @@ function resolveCloudModel(provider, model) {
   return defaults[provider] || model || 'gpt-3.5-turbo';
 }
 
+// 🔧 B6 修复：max_tokens 按提供商/模型分级，避免小输出上限模型（豆包/DeepSeek-chat 等）收到 16384 直接 400
+// 优先级：调用方显式 options.maxTokens > 用户配置 Core.config.maxTokens > 提供商/模型默认值
+function resolveMaxTokens(provider, model, options) {
+  if (options && typeof options.maxTokens === 'number' && options.maxTokens > 0) {
+    return Math.min(options.maxTokens, 32768);
+  }
+  if (Core.config && typeof Core.config.maxTokens === 'number' && Core.config.maxTokens > 0) {
+    return Math.min(Core.config.maxTokens, 32768);
+  }
+  var m = String(model || '').toLowerCase();
+  // 推理系模型（长思维链输出）
+  if (m.indexOf('reasoner') >= 0 || m.indexOf('-r1') >= 0 || m.indexOf('qwq') >= 0) return 16384;
+  // 豆包 Ark 端点常见输出上限 4096
+  if (provider === 'doubao') return 4096;
+  // DeepSeek 官方 chat 输出上限 8192
+  if (provider === 'deepseek') return 8192;
+  // 通义千问主流模型输出上限 8192
+  if (provider === 'qwen') return 8192;
+  // 硅基流动聚合平台模型差异大，8192 是安全值
+  if (provider === 'silicon') return 8192;
+  // 自定义端点保守取值，可在设置中通过 maxTokens 覆盖
+  if (provider === 'custom') return 4096;
+  return 8192;
+}
+
 // 获取已配置 API Key 的可用云端提供商列表
 function getAvailableProviders() {
   var result = [];
@@ -212,6 +237,31 @@ function buildMessages(prompt, systemMsg) {
     } else {
       history = sessionData.messages.slice(-10);
     }
+    // 🔧 P0-5: 输入 token 预算保护——防止超长会话/大文档导致 API 上下文溢出报错
+    try {
+      var _budget = (Core.config && Core.config.contextTokenBudget) || 100000;
+      var _estTokens = function (t) {
+        if (t == null) return 0;
+        var s = typeof t === 'string' ? t : JSON.stringify(t);
+        return Math.ceil(s.length / 4);
+      };
+      if (history && history.length) {
+        // 单条消息超预算则截断其内容，避免单条撑爆上下文
+        history = history.map(function (m) {
+          if (_estTokens(m.content) > _budget) {
+            var raw = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+            return Object.assign({}, m, { content: raw.slice(0, _budget * 4) + '\n…[内容已截断]' });
+          }
+          return m;
+        });
+        // 整体超预算则丢弃最旧消息（保留最新对话）
+        while (history.length > 1) {
+          var _sum = history.reduce(function (acc, m) { return acc + _estTokens(m.content); }, 0);
+          if (_sum <= _budget) break;
+          history.shift();
+        }
+      }
+    } catch (e) { console.warn('⚠️ [cloud-api] P0-5 预算截断失败，沿用原历史:', e.message || e); }
     // 注入上下文摘要（被窗口截断的早期消息摘要）
     if (ctxSummary) {
       messages.push({ role: 'system', content: '[早期对话摘要] ' + ctxSummary });
@@ -299,7 +349,7 @@ function stripDSMLMarkers(text) {
 }
 
 // ===== 处理工具调用并生成后续消息 =====
-async function handleToolCalls(toolCalls, messages, apiKey, baseURL, model, temperature) {
+async function handleToolCalls(toolCalls, messages, apiKey, baseURL, model, temperature, provider) {
   if (!toolCalls || toolCalls.length === 0) return null;
 
   // 将 assistant 的 tool_calls 加入消息历史
@@ -347,7 +397,7 @@ async function handleToolCalls(toolCalls, messages, apiKey, baseURL, model, temp
       model: model,
       messages: messages,
       temperature: _tempFloat(temperature),
-      max_tokens: 16384,
+      max_tokens: resolveMaxTokens(provider, model),
       stream: false
     })
   });
@@ -388,7 +438,7 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
         model: actualModel,
         messages: messages,
         temperature: _temp,
-        max_tokens: 16384,
+        max_tokens: resolveMaxTokens(provider, actualModel, options),
         stream: false
       };
 
@@ -419,7 +469,7 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
       // 🔧 F12: 处理 tool_calls — 如果模型请求工具调用，执行后再次请求
       const toolCalls = data.choices?.[0]?.message?.tool_calls;
       if (toolCalls && toolCalls.length > 0) {
-        const followUpData = await handleToolCalls(toolCalls, messages, apiKey, baseURL, actualModel, temperature);
+        const followUpData = await handleToolCalls(toolCalls, messages, apiKey, baseURL, actualModel, temperature, provider);
         if (followUpData) {
           data = followUpData;
           console.log('🔄 Function Calling: 最终回复已获取');
@@ -449,6 +499,20 @@ async function callCloudAPI(prompt, systemMsg, temperature, model, provider, opt
         return await callCloudAPI(prompt, systemMsg, temperature, model, fallback);
       }
     }
+    // 🔧 P2-3: 云端所有提供商均失败后，启用本地推理兜底（Ollama / 兼容端点）
+    if (Core.config && Core.config.localInference && Core.config.localInference.enabled && Core.localInference) {
+      try {
+        console.log('🔄 云端全部失败，启用本地推理兜底');
+        if (Core.dom && Core.dom.status) Core.dom.status.textContent = '🔄 本地推理兜底中...';
+        return await Core.localInference.complete(prompt, systemMsg, {
+          temperature: temperature,
+          model: model,
+          maxTokens: (options && options.maxTokens) || undefined
+        });
+      } catch (le) {
+        console.warn('⚠️ 本地推理兜底也失败:', le.message);
+      }
+    }
     throw err;
   }
 }
@@ -473,7 +537,7 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
     model: actualModel,
     messages: messages,
     temperature: _temp,
-    max_tokens: 16384,
+    max_tokens: resolveMaxTokens(provider, actualModel),
     stream: true
   };
   console.log('[cloud-api] stream request:', JSON.stringify({ model: requestBody.model, temperature: requestBody.temperature, tempType: typeof requestBody.temperature }));
@@ -497,74 +561,114 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
   };
   if (signal) fetchOpts.signal = signal;
   
-  const response = await fetch(baseURL + '/chat/completions', fetchOpts);
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error('API 请求失败 (' + response.status + '): ' + errText.substring(0, 200));
-  }
-  
-  if (!response.body) throw new Error('无响应体');
-  
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
   // 🔧 F12: 用于累积流式 tool_calls
   let accumulatedToolCalls = [];
-  
-  while (true) {
-    let chunkData;
-    try {
-      chunkData = await reader.read();
-    } catch (readErr) {
-      if (signal && signal.aborted) {
-        console.log('⏹ 流式读取被中断');
-        return fullText;
-      }
-      throw readErr;
+  // decoder 提到外层：follow-up 请求（function calling）也会复用
+  const decoder = new TextDecoder();
+
+  try {
+    const response = await fetch(baseURL + '/chat/completions', fetchOpts);
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error('API 请求失败 (' + response.status + '): ' + errText.substring(0, 200));
     }
-    if (chunkData.done) break;
     
-    buffer += decoder.decode(chunkData.value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || ''; // 保留未完成的行
+    if (!response.body) throw new Error('无响应体');
     
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed === 'data: [DONE]') continue;
-      if (trimmed.startsWith('data: ')) {
-        try {
-          const data = JSON.parse(trimmed.substring(6));
-          const delta = data.choices?.[0]?.delta;
-          const rawContent = delta?.content || data.choices?.[0]?.text || '';
-          // 🔧 过滤 DSML 标记，防止 || DSML || tool_calls> 等原始文本显示在聊天中
-          const content = stripDSMLMarkers(rawContent);
-          if (content) {
-            fullText += content;
-            onChunk(content, fullText);
-          }
-          // 🔧 F12: 累积流式 tool_calls
-          if (delta?.tool_calls) {
-            for (const tc of delta.tool_calls) {
-              const idx = tc.index || 0;
-              if (!accumulatedToolCalls[idx]) {
-                accumulatedToolCalls[idx] = {
-                  id: tc.id || '',
-                  type: 'function',
-                  function: { name: '', arguments: '' }
-                };
-              }
-              if (tc.id) accumulatedToolCalls[idx].id = tc.id;
-              if (tc.function?.name) accumulatedToolCalls[idx].function.name += tc.function.name;
-              if (tc.function?.arguments) accumulatedToolCalls[idx].function.arguments += tc.function.arguments;
+    const reader = response.body.getReader();
+    
+    while (true) {
+      let chunkData;
+      try {
+        chunkData = await reader.read();
+      } catch (readErr) {
+        if (signal && signal.aborted) {
+          console.log('⏹ 流式读取被中断');
+          return fullText;
+        }
+        throw readErr;
+      }
+      if (chunkData.done) break;
+      
+      buffer += decoder.decode(chunkData.value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // 保留未完成的行
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+        if (trimmed.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(trimmed.substring(6));
+            const delta = data.choices?.[0]?.delta;
+            const rawContent = delta?.content || data.choices?.[0]?.text || '';
+            // 🔧 过滤 DSML 标记，防止 || DSML || tool_calls> 等原始文本显示在聊天中
+            const content = stripDSMLMarkers(rawContent);
+            if (content) {
+              fullText += content;
+              onChunk(content, fullText);
             }
+            // 🔧 F12: 累积流式 tool_calls
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index || 0;
+                if (!accumulatedToolCalls[idx]) {
+                  accumulatedToolCalls[idx] = {
+                    id: tc.id || '',
+                    type: 'function',
+                    function: { name: '', arguments: '' }
+                  };
+                }
+                if (tc.id) accumulatedToolCalls[idx].id = tc.id;
+                if (tc.function?.name) accumulatedToolCalls[idx].function.name += tc.function.name;
+                if (tc.function?.arguments) accumulatedToolCalls[idx].function.arguments += tc.function.arguments;
+              }
+            }
+          } catch (e) {
+            // 忽略解析错误，继续处理下一行
+            console.warn('[cloud-api] 流式数据行解析失败:', e.message);
           }
-        } catch (e) {
-          // 忽略解析错误，继续处理下一行
-          console.warn('[cloud-api] 流式数据行解析失败:', e.message);
         }
       }
     }
+  } catch (err) {
+    // 主请求（含 SSE 读取）失败 → 与非流式保持一致：先故障转移到备用云端提供商，再启用本地推理兜底
+    console.warn('☁️ 流式 ' + provider + ' 请求失败:', err.message);
+    if (Core.recovery && Core.recovery.getFallbackProvider) {
+      var fallback = Core.recovery.getFallbackProvider(provider);
+      // 🔧 ollama 是本地模型，走独立的 Ollama 路径，不能经 callCloudAPIStream 云端路径调用
+      if (fallback && fallback !== provider && fallback !== 'ollama') {
+        console.log('🔄 流式故障转移到: ' + fallback);
+        if (Core.dom && Core.dom.status) Core.dom.status.textContent = '🔄 已切换到 ' + fallback + '...';
+        return await callCloudAPIStream(prompt, systemMsg, temperature, model, fallback, onChunk, signal);
+      }
+    }
+    // 🔧 P2-3: 云端所有提供商均失败后，启用本地推理流式兜底（Ollama / 兼容端点）
+    if (Core.config && Core.config.localInference && Core.config.localInference.enabled && Core.localInference) {
+      try {
+        console.log('🔄 流式云端全部失败，启用本地推理兜底');
+        if (Core.dom && Core.dom.status) Core.dom.status.textContent = '🔄 本地推理兜底中...';
+        var _localFull = await Core.localInference.stream(
+          prompt, systemMsg,
+          { temperature: temperature, model: model, signal: signal },
+          function (piece) {
+            if (piece) {
+              fullText += piece;
+              onChunk(piece, fullText);
+            }
+          }
+        );
+        if (typeof _localFull === 'string' && _localFull) fullText = _localFull;
+        // 本地兜底不触发云端 function-calling 流水线，直接收尾
+        fullText = stripDSMLMarkers(fullText).trim();
+        return fullText;
+      } catch (le) {
+        console.warn('⚠️ 流式本地推理兜底也失败:', le.message);
+      }
+    }
+    throw err;
   }
   
   // 处理缓冲区中剩余的数据
@@ -627,12 +731,13 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
     }
     // 发起后续流式请求获取最终回复
     console.log('🔄 Function Calling (stream): 请求最终回复...');
+    var toolReplyFailed = false;
     var _fuTemp = _tempFloat(temperature);
     const followUpBody = {
       model: actualModel,
       messages: messages,
       temperature: _fuTemp,
-      max_tokens: 16384,
+      max_tokens: resolveMaxTokens(provider, actualModel),
       stream: true
     };
     const followUpOpts = {
@@ -687,20 +792,21 @@ async function callCloudAPIStream(prompt, systemMsg, temperature, model, provide
           }
         }
       } else {
+        toolReplyFailed = true;
         console.warn('[cloud-api] 流式后续请求失败:', followUpResp.status, followUpResp.statusText);
       }
     } catch (fuErr) {
       if (signal && signal.aborted) { /* 用户取消，静默 */ }
-      else { console.warn('[cloud-api] 流式后续请求异常:', fuErr.message); }
+      else { toolReplyFailed = true; console.warn('[cloud-api] 流式后续请求异常:', fuErr.message); }
     }
   }
   
   // 🔧 最终安全清理：确保返回的文本不包含任何 DSML 标记
   fullText = stripDSMLMarkers(fullText).trim();
   
-  // 🔧 如果执行了工具调用但后续回复为空，提供兜底提示
+  // 🔧 如果执行了工具调用但后续回复为空，提供兜底提示（M11：区分"已完成"与"失败"）
   if (validToolCalls && validToolCalls.length > 0 && !fullText) {
-    fullText = '✅ 工具调用已完成';
+    fullText = toolReplyFailed ? '⚠️ 工具已执行，但获取最终回复失败，请重试' : '✅ 工具调用已完成';
   }
   
   return fullText;

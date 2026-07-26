@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent Pro - 3D Nebula Interface</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #000; font-family: 'Segoe UI', system-ui, sans-serif; }
+#canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+
+/* UI Overlay */
+.ui-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 10;
+}
+.ui-overlay * { pointer-events: auto; }
+
+/* Header */
+.header {
+  position: absolute; top: 24px; left: 32px;
+  display: flex; align-items: center; gap: 16px;
+}
+.logo {
+  width: 42px; height: 42px; border-radius: 12px;
+  background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: bold; color: #fff;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+}
+.title-group h1 {
+  font-size: 18px; font-weight: 600; color: #fff;
+  text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+}
+.title-group p { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+
+/* Stats Panel */
+.stats-panel {
+  position: absolute; top: 24px; right: 32px;
+  background: rgba(15, 15, 35, 0.7);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 12px; padding: 16px 20px;
+  backdrop-filter: blur(10px);
+  min-width: 180px;
+}
+.stat-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-label { font-size: 11px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-value { font-size: 13px; color: #a78bfa; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Bottom Bar */
+.bottom-bar {
+  position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 12px; align-items: center;
+}
+.nav-btn {
+  padding: 10px 20px; border-radius: 24px;
+  background: rgba(15, 15, 35, 0.7);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: rgba(255,255,255,0.8); font-size: 13px;
+  cursor: pointer; transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+.nav-btn:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.6);
+  color: #fff;
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+}
+.nav-btn.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.4));
+  border-color: rgba(168, 85, 247, 0.6);
+  color: #fff;
+}
+
+/* Mode Indicator */
+.mode-indicator {
+  position: absolute; bottom: 24px; left: 32px;
+  display: flex; align-items: center; gap: 8px;
+}
+.mode-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #34d399; animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px #34d399; }
+  50% { opacity: 0.5; box-shadow: 0 0 8px #34d399; }
+}
+.mode-text { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+/* FPS Counter */
+.fps {
+  position: absolute; bottom: 24px; right: 32px;
+  font-size: 11px; color: rgba(255,255,255,0.3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Color Picker */
+.color-picker {
+  position: absolute; top: 50%; right: 32px; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.color-dot {
+  width: 24px; height: 24px; border-radius: 50%;
+  cursor: pointer; transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+.color-dot:hover { transform: scale(1.3); }
+.color-dot.active { border-color: #fff; box-shadow: 0 0 10px currentColor; }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div class="ui-overlay">
+  <div class="header">
+    <div class="logo">A</div>
+    <div class="title-group">
+      <h1>AI Agent Pro</h1>
+      <p>Multi-Device AI Ecosystem</p>
+    </div>
+  </div>
+
+  <div class="stats-panel">
+    <div class="stat-row"><span class="stat-label">Particles</span><span class="stat-value" id="stat-particles">0</span></div>
+    <div class="stat-row"><span class="stat-label">Modules</span><span class="stat-value">32</span></div>
+    <div class="stat-row"><span class="stat-label">Tools</span><span class="stat-value">28</span></div>
+    <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value" style="color:#34d399">Online</span></div>
+  </div>
+
+  <div class="color-picker">
+    <div class="color-dot active" style="background: linear-gradient(135deg, #6366f1, #a855f7);" data-theme="nebula"></div>
+    <div class="color-dot" style="background: linear-gradient(135deg, #06b6d4, #3b82f6);" data-theme="ocean"></div>
+    <div class="color-dot" style="background: linear-gradient(135deg, #f43f5e, #f97316);" data-theme="fire"></div>
+    <div class="color-dot" style="background: linear-gradient(135deg, #10b981, #84cc16);" data-theme="aurora"></div>
+  </div>
+
+  <div class="bottom-bar">
+    <div class="nav-btn active">Nebula</div>
+    <div class="nav-btn">Research</div>
+    <div class="nav-btn">Skills</div>
+    <div class="nav-btn">Monitor</div>
+  </div>
+
+  <div class="mode-indicator">
+    <div class="mode-dot"></div>
+    <span class="mode-text">Agent Active - Deep Think Mode</span>
+  </div>
+
+  <div class="fps" id="fps">60 FPS</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ===== 3D Nebula Particle System =====
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.z = 5;
+
+// ===== Color Themes =====
+const themes = {
+  nebula: { c1: new THREE.Color(0x6366f1), c2: new THREE.Color(0xa855f7), c3: new THREE.Color(0xec4899), bg: 0x050510 },
+  ocean:  { c1: new THREE.Color(0x06b6d4), c2: new THREE.Color(0x3b82f6), c3: new THREE.Color(0x8b5cf6), bg: 0x020812 },
+  fire:   { c1: new THREE.Color(0xf43f5e), c2: new THREE.Color(0xf97316), c3: new THREE.Color(0xfbbf24), bg: 0x0a0505 },
+  aurora: { c1: new THREE.Color(0x10b981), c2: new THREE.Color(0x84cc16), c3: new THREE.Color(0x06b6d4), bg: 0x020a05 }
+};
+let currentTheme = 'nebula';
+
+// ===== Nebula Particles =====
+const PARTICLE_COUNT = 15000;
+const geometry = new THREE.BufferGeometry();
+const positions = new Float32Array(PARTICLE_COUNT * 3);
+const colors = new Float32Array(PARTICLE_COUNT * 3);
+const sizes = new Float32Array(PARTICLE_COUNT);
+const velocities = new Float32Array(PARTICLE_COUNT * 3);
+const phases = new Float32Array(PARTICLE_COUNT);
+
+function initParticles() {
+  const theme = themes[currentTheme];
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const i3 = i * 3;
+    // Distribute in a nebula shape (flattened sphere with arms)
+    const radius = Math.pow(Math.random(), 0.6) * 4;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = (Math.random() - 0.5) * Math.PI * 0.6;
+    const arm = Math.floor(Math.random() * 3) * (Math.PI * 2 / 3);
+    const spiral = radius * 0.8;
+
+    positions[i3] = Math.cos(theta + arm + spiral) * radius * Math.cos(phi);
+    positions[i3 + 1] = Math.sin(phi) * radius * 0.4;
+    positions[i3 + 2] = Math.sin(theta + arm + spiral) * radius * Math.cos(phi);
+
+    // Color based on distance from center
+    const t = radius / 4;
+    const color = new THREE.Color();
+    if (t < 0.33) color.copy(theme.c1).lerp(theme.c2, t * 3);
+    else if (t < 0.66) color.copy(theme.c2).lerp(theme.c3, (t - 0.33) * 3);
+    else color.copy(theme.c3).lerp(theme.c1, (t - 0.66) * 3);
+
+    colors[i3] = color.r;
+    colors[i3 + 1] = color.g;
+    colors[i3 + 2] = color.b;
+
+    sizes[i] = Math.random() * 3 + 0.5;
+    phases[i] = Math.random() * Math.PI * 2;
+
+    velocities[i3] = (Math.random() - 0.5) * 0.002;
+    velocities[i3 + 1] = (Math.random() - 0.5) * 0.001;
+    velocities[i3 + 2] = (Math.random() - 0.5) * 0.002;
+  }
+}
+
+initParticles();
+
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+// Custom shader material for soft particles
+const vertexShader = `
+  attribute float size;
+  varying vec3 vColor;
+  varying float vAlpha;
+  uniform float uTime;
+  void main() {
+    vColor = color;
+    vec3 pos = position;
+    pos.x += sin(uTime * 0.3 + position.z * 2.0) * 0.05;
+    pos.y += cos(uTime * 0.2 + position.x * 2.0) * 0.03;
+    pos.z += sin(uTime * 0.25 + position.y * 2.0) * 0.05;
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+    float dist = length(mvPosition.xyz);
+    vAlpha = smoothstep(8.0, 2.0, dist) * 0.8;
+    gl_PointSize = size * (200.0 / -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const fragmentShader = `
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    float d = length(gl_PointCoord - vec2(0.5));
+    if (d > 0.5) discard;
+    float alpha = smoothstep(0.5, 0.1, d) * vAlpha;
+    gl_FragColor = vec4(vColor, alpha);
+  }
+`;
+
+const material = new THREE.ShaderMaterial({
+  vertexShader, fragmentShader,
+  uniforms: { uTime: { value: 0 } },
+  vertexColors: true,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+});
+
+const nebula = new THREE.Points(geometry, material);
+scene.add(nebula);
+
+// ===== Star Field =====
+const starCount = 3000;
+const starGeo = new THREE.BufferGeometry();
+const starPos = new Float32Array(starCount * 3);
+const starSizes = new Float32Array(starCount);
+for (let i = 0; i < starCount; i++) {
+  starPos[i * 3] = (Math.random() - 0.5) * 50;
+  starPos[i * 3 + 1] = (Math.random() - 0.5) * 50;
+  starPos[i * 3 + 2] = (Math.random() - 0.5) * 50;
+  starSizes[i] = Math.random() * 1.5 + 0.3;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+
+const starMat = new THREE.ShaderMaterial({
+  vertexShader: `
+    attribute float size;
+    varying float vAlpha;
+    uniform float uTime;
+    void main() {
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      vAlpha = 0.3 + 0.7 * abs(sin(uTime * 0.5 + position.x * 10.0));
+      gl_PointSize = size * (100.0 / -mvPosition.z);
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: `
+    varying float vAlpha;
+    void main() {
+      float d = length(gl_PointCoord - vec2(0.5));
+      if (d > 0.5) discard;
+      float alpha = smoothstep(0.5, 0.0, d) * vAlpha;
+      gl_FragColor = vec4(1.0, 1.0, 1.0, alpha);
+    }
+  `,
+  uniforms: { uTime: { value: 0 } },
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+});
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+// ===== Core Glow =====
+const glowGeo = new THREE.SphereGeometry(0.3, 32, 32);
+const glowMat = new THREE.MeshBasicMaterial({
+  color: themes[currentTheme].c2,
+  transparent: true,
+  opacity: 0.3,
+  blending: THREE.AdditiveBlending
+});
+const coreGlow = new THREE.Mesh(glowGeo, glowMat);
+scene.add(coreGlow);
+
+// ===== Mouse Interaction =====
+let mouseX = 0, mouseY = 0;
+let targetRotX = 0, targetRotY = 0;
+document.addEventListener('mousemove', (e) => {
+  mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+  mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+});
+
+// Scroll to zoom
+document.addEventListener('wheel', (e) => {
+  camera.position.z = Math.max(2, Math.min(10, camera.position.z + e.deltaY * 0.005));
+});
+
+// ===== Theme Switching =====
+document.querySelectorAll('.color-dot').forEach(dot => {
+  dot.addEventListener('click', () => {
+    document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+    dot.classList.add('active');
+    currentTheme = dot.dataset.theme;
+    applyTheme(currentTheme);
+  });
+});
+
+function applyTheme(name) {
+  const theme = themes[name];
+  scene.background = new THREE.Color(theme.bg);
+  glowMat.color.copy(theme.c2);
+  // Recolor particles
+  const colAttr = geometry.getAttribute('color');
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const i3 = i * 3;
+    const radius = Math.sqrt(positions[i3]**2 + positions[i3+1]**2 + positions[i3+2]**2);
+    const t = Math.min(radius / 4, 1);
+    const color = new THREE.Color();
+    if (t < 0.33) color.copy(theme.c1).lerp(theme.c2, t * 3);
+    else if (t < 0.66) color.copy(theme.c2).lerp(theme.c3, (t - 0.33) * 3);
+    else color.copy(theme.c3).lerp(theme.c1, (t - 0.66) * 3);
+    colAttr.array[i3] = color.r;
+    colAttr.array[i3 + 1] = color.g;
+    colAttr.array[i3 + 2] = color.b;
+  }
+  colAttr.needsUpdate = true;
+}
+scene.background = new THREE.Color(themes[currentTheme].bg);
+
+// ===== Animation Loop =====
+let frameCount = 0;
+let lastFpsTime = performance.now();
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const time = clock.getElapsedTime();
+
+  material.uniforms.uTime.value = time;
+  starMat.uniforms.uTime.value = time;
+
+  // Smooth camera rotation following mouse
+  targetRotY += (mouseX * 0.3 - targetRotY) * 0.02;
+  targetRotX += (mouseY * 0.2 - targetRotX) * 0.02;
+
+  nebula.rotation.y = time * 0.05 + targetRotY;
+  nebula.rotation.x = targetRotX * 0.3;
+  stars.rotation.y = time * 0.01;
+  stars.rotation.x = time * 0.005;
+
+  // Core glow pulse
+  const pulse = 0.25 + Math.sin(time * 2) * 0.1;
+  coreGlow.scale.setScalar(1 + Math.sin(time * 1.5) * 0.2);
+  glowMat.opacity = pulse;
+
+  renderer.render(scene, camera);
+
+  // FPS counter
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 1000) {
+    document.getElementById('fps').textContent = frameCount + ' FPS';
+    frameCount = 0;
+    lastFpsTime = now;
+  }
+}
+
+animate();
+
+// Update particle count display
+document.getElementById('stat-particles').textContent = (PARTICLE_COUNT + starCount).toLocaleString();
+
+// ===== Resize =====
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ===== Nav button interaction =====
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

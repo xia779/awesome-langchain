@@ -3,6 +3,16 @@
 // 架构：Playwright 渲染 → 正文评分提取 → 结构化输出 → 可选 LLM 摘要 → 知识库入库
 let Core = null;
 
+// 🔧 M8: callAPI 返回 { message: { content } }（或 OpenAI choices 形状），统一提取纯文本
+function _textOf(r) {
+  if (!r) return '';
+  if (typeof r === 'string') return r;
+  if (r.content) return r.content;
+  if (r.message && r.message.content) return r.message.content;
+  if (r.choices && r.choices[0] && r.choices[0].message && r.choices[0].message.content) return r.choices[0].message.content;
+  return '';
+}
+
 // ===== 配置 =====
 var DEFAULT_OPTIONS = {
   maxDepth: 2,          // 最大爬取深度
@@ -194,11 +204,11 @@ async function crawl(startUrl, options) {
     for (var i = 0; i < pages.length; i++) {
       if (pages[i].content.length > 3000) {
         try {
-          var summary = await Core.api.callAPI(
+          var summary = _textOf(await Core.api.callAPI(
             '请用3-5句话概括以下网页的核心内容，保留关键数据和事实：\n\n' + pages[i].content.substring(0, 8000),
             '你是一个内容摘要专家，输出简洁准确的中文摘要。',
             0.3, null, null, null, { disableTools: true }
-          );
+          ));
           if (summary && summary.length > 20) pages[i].summary = summary;
         } catch (e) { /* 摘要失败不影响主流程 */ }
       }
@@ -251,11 +261,11 @@ async function smartFetch(url, options) {
   // LLM 摘要（长文）
   if (result.content.length > 5000 && Core.api && Core.api.callAPI) {
     try {
-      var summary = await Core.api.callAPI(
+      var summary = _textOf(await Core.api.callAPI(
         '请用3-5句话概括以下内容的核心要点：\n\n' + result.content.substring(0, 10000),
         '你是内容分析专家，输出简洁准确的中文摘要，保留关键数据。',
         0.3, null, null, null, { disableTools: true }
-      );
+      ));
       if (summary && summary.length > 20) {
         output = '📋 摘要: ' + summary + '\n\n---\n\n' + output;
       }

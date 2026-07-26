@@ -157,6 +157,39 @@ async function _planResearch(topic, opts) {
   return parsed;
 }
 
+// ===== 来源重排序（词重叠 rerank + 时效加权）=====
+function _rankSources(sources, queries) {
+  var nowYear = new Date().getFullYear();
+  sources.forEach(function(s) {
+    var text = ((s.title || '') + ' ' + (s.snippet || '') + ' ' + (s.url || '') + ' ' + (s.query || '')).toLowerCase();
+    var score = 0;
+    queries.forEach(function(q) {
+      var terms = String(q).toLowerCase().split(/\s+/).filter(function(t) { return t.length > 1; });
+      terms.forEach(function(t) {
+        if (text.indexOf(t) !== -1) {
+          // 词边界命中加权（前后有空格或位于开头）
+          var boundary = (text.indexOf(' ' + t + ' ') !== -1) || text.indexOf(t + ' ') === 0 || text.lastIndexOf(' ' + t) === text.length - (' ' + t).length;
+          score += boundary ? 2 : 1;
+        }
+      });
+    });
+    // 时效加权：近三年年份命中（当年最高）
+    for (var y = 0; y < 3; y++) {
+      var yr = String(nowYear - y);
+      if (text.indexOf(yr) !== -1) score += (3 - y) * 1.5;
+    }
+    s._rankScore = score;
+    // 回写用于下游（如深度阅读的优选顺序）
+    if (typeof s.relevanceScore === 'number') s.relevanceScore = score;
+  });
+  sources.sort(function(a, b) {
+    if (a.isLocal && !b.isLocal) return -1;
+    if (!a.isLocal && b.isLocal) return 1;
+    return (b._rankScore || 0) - (a._rankScore || 0);
+  });
+  return sources;
+}
+
 // ===== Phase 2: 并行检索 =====
 async function _parallelSearch(subQuestions, opts, onProgress) {
   var allSources = [];
@@ -214,12 +247,8 @@ async function _parallelSearch(subQuestions, opts, onProgress) {
     }
   }
 
-  // 按相关性排序（本地知识优先）
-  allSources.sort(function(a, b) {
-    if (a.isLocal && !b.isLocal) return -1;
-    if (!a.isLocal && b.isLocal) return 1;
-    return (b.relevanceScore || 0) - (a.relevanceScore || 0);
-  });
+  // 按相关性排序（本地知识优先 + 词重叠 rerank + 时效加权）
+  allSources = _rankSources(allSources, subQuestions);
 
   // 限制总数
   allSources = allSources.slice(0, opts.maxSourcesPerQuery * subQuestions.length);

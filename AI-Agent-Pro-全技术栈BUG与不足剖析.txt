@@ -1,0 +1,280 @@
+================================================================
+  AI Agent Pro —— 全技术栈 BUG 与功能不足剖析（全面只读审查版）
+================================================================
+
+版本：v1.0  ｜  基于 2026-07-26 全面只读代码审查
+覆盖范围：modules/（90+ 模块）、server/（完整后端）、scripts/（Python 服务）、
+          tests/（30+ 测试）、前端三件套（index.html/app.js/styles.css）
+说明：本文件为纯文本分析，不修改任何业务代码、不新增功能。
+
+----------------------------------------------------------------
+一、全技术栈角度分析（六层）
+----------------------------------------------------------------
+
+[1.1] 前端层（Electron 渲染）
+  现状：渲染进程通过 eval 执行模块（core-v10.js），主题系统存在「双系统并存」，
+        多处永久定时器与全局监听未清理。
+  主要问题：
+    - 主题双系统冲突：浅色主题下聊天区仍被硬刷成黑底（theme.js:39 + ui-interactions.js:468）。
+    - 资源泄漏：notifications.js:224、hud.js:248、canvas-view.js:407-430 的定时器/全局监听
+      永不销毁，renderer 重载后叠加，空闲也吃 CPU。
+    - 拖拽附件在 contextIsolation 下 require('fs') 为 {}，卡在「正在保存」（ui-interactions.js:4-5,140）。
+  对比：KIMI（Web/App 流式顺滑、Artifact 并排、停止醒目）与 QODERWORK（IDE 内联 diff/文件树）
+        在流畅度与内联体验上明显领先；本产品补全弹窗侵入、画布/HUD 与对话割裂。
+
+[1.2] 后端层（双后端架构）
+  现状：Electron 主进程（web-server.js:8080 + core-v10.js + modules/*）与独立进程
+        （server/index.js:3847 + core.js + server/modules/*）是两套平行实现，
+        工具/agent/guardrails 各自重复。
+  主要问题：
+    - 双后端割裂：无单一事实源，行为易漂移；免费搜索强依赖 8080 代理。
+    - 单点故障：server/index.js 单进程 in-memory（clients/nodes/pendingCalls 均 Map），
+      无 HA、无水平扩展、无消息队列。
+    - serveStatic 流无 error handler（server/index.js:184,190），文件被删即进程崩溃。
+  对比：KIMI 云端多实例负载均衡自动扩缩；QODERWORK 云端编排 + 工具沙箱隔离 + 超时重试。
+        本产品无 HA、工具本地执行、节点无心跳检测死连接（ws-router.js + node-proxy.js:125）。
+
+[1.3] 模型层（多供应商 + 本地兜底）
+  现状：云端 API（DeepSeek/硅基/豆包等）+ Ollama 嵌入兜底，resolveCloudModel 路由。
+  主要问题：
+    - 状态机硬编码 ollama（agent-workflow.js:103,261；agent-handoff.js:67），云端模型选择形同虚设。
+    - max_tokens:16384 硬编码（cloud-api.js:391,476），小输出模型（豆包/DeepSeek-chat）直接 400。
+    - fallback 到 ollama 时 callCloudAPI 抛「请填 ollama Key」而非优雅降级（cloud-api.js:443 + error-recovery.js:313）。
+  对比：KIMI 自研大模型、QODERWORK 专业代码大模型；本产品模型调度鲁棒性弱、缺降级闭环。
+
+[1.4] 工具层（bash/文件/浏览器/搜索）
+  现状：bash、文件、浏览器（Playwright）、搜索、知识库检索等工具齐全。
+  主要问题：
+    - run_command 白名单被 shell 元字符绕过（server/modules/tools.js:172-180；node-agent.js:213）。
+    - Playwright 未安装（browser-pro.js:8），JS 渲染抓取与 /browser 长期失效。
+    - Python 沙箱过度拦截 os/sys/subprocess（sandbox.js:35），data_analyst 角色被废。
+  对比：KIMI/QODERWORK 普遍内置浏览器自动化与受限沙箱；本产品沙箱过严且白名单可被绕过（两端失衡）。
+
+[1.5] 数据层（SQLite + 文件）
+  现状：better-sqlite3 + 文件系统，本地知识库 BM25+向量+RRF 检索较强。
+  主要问题：
+    - 数据目录写死 E:\my-ai-data（main.js:52/69、core-v10.js:359、database.js:43、node-agent.js:41 等），
+      非 Windows / 无 E 盘环境直接失效。
+    - 普通聊天不注入记忆上下文（memory.js + api.js:349），「记忆」形同摆设。
+    - memory 写入缺 created_at（server/modules/memory.js:23），时间衰减失效。
+  对比：主流产品记忆与知识检索深度集成；本产品记忆召回链路断裂。
+
+[1.6] 部署层（electron-builder 多平台）
+  现状：package.json 已配 win/mac/linux/arm 多目标构建。
+  主要问题：
+    - 路径写死 E: 导致跨平台构建产物在非 Windows 实际不可用（与「多平台」目标自相矛盾）。
+    - Playwright/iconv-lite 等依赖未随包或声明不全，全新 npm install 后功能丢失。
+  对比：KIMI/QODERWORK 为云端服务无分发问题；本产品桌面分发受路径/依赖硬编码拖累。
+
+----------------------------------------------------------------
+二、功能模块角度分析（盘点）
+----------------------------------------------------------------
+
+[2.1] 实质可用模块
+  盯盘数据链：market-data.js（pytdx→腾讯→缓存三级降级）、stock-quote.js、market-db.js、market-panel.js
+  知识/检索 ：knowledge.js（BM25+向量+RRF）、search.js（代理+付费直连）、crawl-service.js（HTTP 兜底）
+  研究/智能 ：deep-research.js、agent-loop.js、skill-generator.js、query-rewriter.js
+  工程/集成 ：github.js、image-search.js、voice.js、manga-*、task-queue.js、scheduler.js、guardrails.js
+  画布/UI   ：canvas-*、context-panel.js、admin-ui.js、notifications.js、theme.js
+
+[2.2] 半成品 / 未接通模块
+  股价预警引擎：watcher.js 监控逻辑存在，但 market-db.js + market-panel.js 中 logAlert 零调用，
+                预警面板永远无数据；且 watcher.js:128 把中文名直接喂给需代码数组的 fetchQuotes，监控失效。
+  交易日历    ：trading-calendar.js 仅硬编码 2026 节假日，未处理中国调休补班日，无 2025/2027 数据。
+  浏览器自动化：browser-pro.js 依赖 Playwright 未装，长期降级/失效。
+  邮件        ：office-auto.js 仅实现 SMTP 发信，readEmails 为占位报错，CalDAV 声明与实际不符。
+
+[2.3] 概念级 / 占位模块（planned，无后端）
+  IM 接入     ：connectors.js 中微信/钉钉/飞书/Slack/Telegram 全部 status:'planned'。
+  邮箱收发    ：仅发信；收信占位；无邮件触发 Agent。
+  信息聚合    ：无 RSS/Atom/多源订阅面板；websearch/crawl 存在但无「聚合 feed」。
+  网页监控    ：watcher.js 仅有 stock/keyword 两类，无指定 URL 内容变更监控。
+  自我进化闭环：仅有 per-task 反思 + 技能推荐，缺「失败→自动改 prompt/策略」闭环。
+  云端同步    ：sync-client.js 依赖本地 127.0.0.1:8080，无真实云后端。
+  数据连接器  ：MySQL/Redis、Notion/Obsidian/Calendar、Docker/SSH/VSCode 全为 planned。
+
+----------------------------------------------------------------
+三、BUG 总表（按严重度，均带文件:行号）
+----------------------------------------------------------------
+
+===== High（高，建议优先修复 / 影响安全或核心功能）=====
+
+[B1]  server/modules/tools.js:172-180 [High] run_command 白名单用 startsWith 前缀判断，
+       shell 元字符可绕过（git log && rm -rf X）被整体 exec。
+       影响：本地命令执行绕过白名单，可造成文件破坏 / 任意命令执行。
+
+[B2]  server/modules/crypto-utils.js + server/index.js:113 [High] AES-256-GCM 模块已注册但
+       全仓无 encrypt 调用；cloud-api.js 直接读 config Key；config.json 明文写盘。
+       影响：API Key 明文落盘，磁盘泄露风险。
+
+[B3]  node-agent.js:41 / 213-223 [High] 文件白名单硬编码 E:/，run_command 仅黑名单且
+       rm -rf / 在列但 rm -rf E:/xxx 不在；白名单内可误删文件。
+       影响：节点本机可误删任意白名单内文件；非 E 盘用户文件工具被拒。
+
+[B4]  modules/agent-workflow.js:103,261 + agent-handoff.js:67 [High] 状态机 callAPI 硬编码
+       provider='ollama'，忽略用户所选云端模型。
+       影响：Agent/Handoff 永远走本地 Ollama；Ollama 未启动即报错，云端选择形同虚设。
+
+[B5]  modules/agent-workflow.js:227 [High] 状态机 ctx.context 无截断（旧路径有 12000 截断）。
+       影响：多步任务历史无限累积 → 超出上下文窗口 → API 400，长任务必崩。
+
+[B6]  modules/cloud-api.js:391,476 [High] max_tokens:16384 硬编码，未按模型输出上限调整。
+       影响：豆包/DeepSeek-chat 等小输出模型收到 16384 → 400 报错且无降级。
+
+[B7]  modules/workflow.js:924-930 [High] runWorkflow 的 condition 跳转 i=thenGoto-1 无迭代上限。
+       影响：规则配置成回跳/环路即死循环（重试风暴）。
+
+[B8]  modules/watcher.js:128-145 [High] _checkStockCondition 把中文名直接传给需代码数组的
+       fetchQuotes，未做名称解析。
+       影响：股价监控对名称型目标永远不触发，核心盯盘/预警功能失效。
+
+[B9]  modules/theme.js:39 + ui-interactions.js:468-519 [High] 主题双系统并存，浅色主题下
+       聊天容器被硬刷成 #0d0d0d。
+       影响：切浅色主题聊天区仍为黑底，第一眼视觉割裂（体验级 High）。
+
+===== Med（中，影响可靠性 / 功能正确性）=====
+
+[M1]  server/modules/cloud-api.js:96/:134 [Med] 流式未判断 res.ok，4xx/5xx 仍 getReader 读错误体。
+       影响：聊天/agent 静默返回空，无报错；res.body 为 null 时 reader 抛异常未兜底。
+[M2]  server/ws-router.js + node-proxy.js:125-143 [Med] 无 ping/pong 心跳，节点 TCP 静默死亡
+       仍被选执行，30s 超时后才回退本地。影响：工具调用延迟高、偶发失败。
+[M3]  server/modules/database.js:43 [Med] 导入会话硬编码 path.join('E:','my-ai-data',...)。
+       影响：非 Windows 或数据不在 E: 时读错目录 / 导入失败。
+[M4]  server/modules/knowledge.js:457-459 [Med] importFromUrl 重定向无最大次数。
+       影响：重定向环导致递归 / 死循环。
+[M5]  server/modules/agent.js:288 [Med] runAgent 无 .catch()，broadcast 抛错成 unhandledRejection。
+[M6]  modules/cloud-api.js:443-449 + error-recovery.js:313-318 [Med] fallback 到 ollama 时
+       callCloudAPI 抛「请填 ollama Key」而非降级。影响：云端故障路径实际抛错。
+[M7]  modules/query-rewriter.js:70 [Med] 用 if(data&&data.content) 判断，但 api 返回 {message:{content}}。
+       影响：查询改写永远失效、静默回退原文，记忆/知识召回质量下降。
+[M8]  modules/crawl-service.js:202,259 [Med] summary 是对象 {message:{content}}，.length 为 undefined。
+       影响：抓取摘要 pages[i].summary / smartFetch 摘要永不赋值。
+[M9]  modules/knowledge.js:1084-1086 [Med] rerankResults 越界 return null，随后 sort 对 null 取属性。
+       影响：rerank 偶发 TypeError（被 catch 降级 RRF，仍属逻辑 bug）。
+[M10] modules/sandbox.js:35 [Med] PYTHON_CRITICAL_PATTERNS 将 import os/sys/subprocess 判 CRITICAL 拦截。
+       影响：data_analyst 需 os 路径操作，Python 工具被过度封杀。
+[M11] modules/cloud-api.js:609,689-695 [Med] 流式工具调用失败仅 console.warn，返回「✅ 已完成」。
+       影响：工具结果丢失且对用户静默，误以为成功。
+[M12] modules/knowledge.js:1159 [Med] minScore 默认 0.01 过低。
+       影响：低相关片段被当参考来源注入，污染回答。
+[M13] modules/memory.js + api.js:349-375 [Med] 普通聊天 callAPI 不注入记忆上下文。
+       影响：自动提取记忆几乎不被召回，「记忆」形同摆设。
+[M14] modules/proactive.js:29 [Med] fetchQuotes('上证指数,...') 传逗号字符串，需数组 join 抛 TypeError。
+       影响：晨报大盘行情段被静默吞掉。
+[M15] modules/trading-calendar.js:29-34,8-18 [Med] 仅硬编码 2026 节假日，未处理调休补班日。
+       影响：调休工作日误判休市，交易状态不准。
+[M16] modules/browser-pro.js:8,20-26 [Med] playwright/playwright-core 均未安装。
+       影响：/browser 命令、JS 渲染抓取失效；crawl-service 仅 HTTP 兜底。
+[M17] modules/stock-quote.js:13 [Med] 依赖 iconv-lite 但 package.json 未声明。
+       影响：GBK 行情解码全新 npm install 后丢失 / Electron 内可能乱码。
+[M18] modules/office-auto.js:116 [Med] readEmails 为占位，直接返回「需要 nodemailer」错误。
+       影响：收邮件完全未实现。
+[M19] modules/market-db.js + market-panel.js [Med] logAlert 零调用，P3 预警引擎未接通。
+       影响：预警面板始终无数据（半成品）。
+[M20] modules/notifications.js:224 [Med] hookIntoEvents 中 setInterval 后台轮询永不清空。
+       影响：常驻定时器泄漏，renderer 重载后叠加。
+[M21] modules/hud.js:248 [Med] startChatPolling 每 900ms setInterval 永久运行，HUD 关闭仍轮询。
+       影响：空闲也持续 IPC/CPU，拖累桌面流畅度。
+[M22] modules/canvas-view.js:407-430 [Med] document/window 全局监听从未 removeEventListener。
+       影响：renderer 重载后监听器翻倍，拖拽/按键可能重复触发。
+[M23] modules/ux-polish.js:411-412 [Med] 速查表✕用 onclick 仅 remove() 节点，未重置状态。
+       影响：按 ? 打开一次后无法再次打开（状态错乱）。
+[M24] modules/autocomplete.js:265-271 [Med] 任意 ≥2 字非 / 输入都弹「预测补全」。
+       影响：正常打字频繁弹窗遮挡输入区。
+[M25] modules/artifact-render.js:319-330 [Med] JSX 新窗口仅把源码塞进 <pre>，未渲染 React。
+       影响：用户看到代码而非预览。
+[M26] modules/ui-interactions.js:4-5,140 [Med] 渲染进程 require('fs') 在 contextIsolation 下为 {}，
+       拖文件附件 writeFileSync 抛错且 Promise 不 resolve。影响：拖拽附件卡「正在保存」。
+[M27] modules/admin-ui.js:724,753 [Med] setInterval 写在注入 HTML 字符串内，innerHTML 的 <script> 不执行。
+       影响：管理面板自动刷新失效。
+[M28] node-agent.js:41 [Med] getAllowedDirs() 硬编码 'E:/' 为唯一允许根目录。
+       影响：跨机器 / 无 E 盘环境白名单失效，文件/Shell 工具被拒。
+[M29] modules/connectors.js:16-36 [Med/Low] 微信/钉钉/飞书/邮箱/MySQL/Redis/Notion 等 status:'planned'。
+       影响：概念级占位，无后端、开关禁用。
+
+===== Low（低，健壮性 / 统计类）=====
+
+[L1]  server/modules/memory.js:23 [Low] addMemory 不写 created_at，时间衰减恒为最小值。
+[L2]  server/ws-router.js:49-62 [Low] 消息缺 type/id 时 handlers[undefined] 报错、错误无法关联。
+[L3]  modules/observability.js:27-31 [Low] 工具成功判定仅匹配 ❌/⛔/error 开头，
+       「命令执行失败」被误记为成功，统计失真。
+[L4]  modules/artifact-render.js:123,170 [Low-Med] blob URL 5s 后 revokeObjectURL，长时间后 iframe 可能空白。
+[L5]  modules/ui-interactions.js:256 [Low] handleDroppedFile 对 getElementById('input') 未判空即 .value。
+[L6]  modules/office-auto.js:120-122 [Low] 头部宣称 CalDAV 日程，实际仅本地 JSON 日历。
+[L7]  modules/theme.js:48 [Med/Low] toggle() 仅两色硬编码，自定义背景图片被重置为纯色。
+
+----------------------------------------------------------------
+四、功能不足 / 缺口总表（对比 KIMI / QODERWORK）
+----------------------------------------------------------------
+
+[F1]  IM 接入        缺口：微信/钉钉/飞书/Telegram 全缺（connectors.js planned）。
+                      对比 QODERWORK 内置连接器广度 —— 落后。
+[F2]  邮箱收发        缺口：仅 SMTP 发信，收信占位；无邮件触发 Agent。
+                      对比主流 Agent 邮件闭环 —— 落后。
+[F3]  信息聚合        缺口：无 RSS/Atom/多源订阅面板；无聚合 feed。
+                      对比 KIMI 资讯聚合 —— 落后。
+[F4]  浏览器自动化    缺口：Playwright 未装，JS 渲染抓取/截图不可用。
+                      对比 KIMI/QODERWORK 内置浏览器 —— 落后。
+[F5]  网页监控        缺口：仅 stock/keyword 近似，无指定 URL 内容变更监控。
+                      对比通用监控能力 —— 落后。
+[F6]  自我进化闭环    缺口：仅 per-task 反思 + 技能推荐，缺自动改 prompt/策略闭环。
+                      对比「自进化」类 Agent —— 落后。
+[F7]  云端多设备同步  缺口：sync-client 依赖本地 8080，无真实云后端。
+                      对比云端产品 —— 落后。
+[F8]  长上下文        缺口：context-manager 预算仅 6000，无 200k 级分块/检索式长文档。
+                      对比 KIMI 长上下文 —— 落后。
+[F9]  深度研究迭代    缺口：deep-research 线性单轮，无「检索不足→补充检索」反思闭环。
+                      对比 KIMI 深度研究 —— 落后。
+[F10] 代码理解/多文件编辑  缺口：code_expert 仅为一次 callAPI；无 AST/符号索引、diff 应用、重构验证。
+                      对比 QODERWORK 代码能力 —— 落后明显。
+[F11] 后端 HA/扩展    缺口：单进程 in-memory、无队列、无水平扩展。
+                      对比 KIMI 云端多实例 —— 落后。
+[F12] 跨平台自洽      缺口：路径写死 E:，多平台构建产物实际不可用。
+                      对比桌面产品分发标准 —— 落后。
+
+----------------------------------------------------------------
+五、最该优先修复的 Top 清单
+----------------------------------------------------------------
+
+崩溃/安全级（先止血）：
+  1. B1 + B3 —— 命令执行白名单绕过 + 文件白名单硬编码 E:/（安全与数据丢失风险）。
+  2. B2     —— API Key 明文落盘（凭据泄露）。
+  3. B7     —— workflow 条件跳转死循环（重试风暴，可卡死进程）。
+  4. B5     —— 状态机上下文无截断（长任务必崩）。
+  5. B4/B6  —— 状态机硬编码 ollama + max_tokens 硬编码（云端模型选择失效、小模型 400）。
+
+高影响功能级：
+  6. B8 + M14 + M15 + M19 —— 盯盘监控/预警链路整体失效（名称解析 bug、预警未接通、日历调休）。
+  7. B9 + M20/M21/M22    —— 主题冲突与定时器/监听泄漏（体验与性能）。
+  8. M16/M17             —— Playwright 与 iconv-lite 依赖缺失（抓取/行情解码失效）。
+
+----------------------------------------------------------------
+六、与 KIMI / QODERWORK 对比总结
+----------------------------------------------------------------
+
+维度                 本产品                   KIMI                   QODERWORK
+──────────────────  ──────────────────────  ─────────────────────  ─────────────────────
+架构/扩展            双后端割裂、单进程无HA   云端多实例/负载均衡      云端编排+沙箱隔离
+长上下文             预算 6000，无分块         自研大模型+长上下文       代码大模型
+深度研究             线性单轮无反思闭环        多轮检索+深度调研          —
+代码能力             单次 callAPI，无 diff      —                       AST/多文件/diff/重构
+连接器广度           IM/邮箱/数据全 planned    资讯/生态接入             IM/邮箱/数据连接器丰富
+浏览器自动化         Playwright 未装失效       内置                    内置
+本地知识检索         BM25+向量+RRF（强）      一般                    一般
+桌面一体化           任务栏/圆角/面板（强）     Web/App                  IDE 内联
+安全模型             contextIsolation（到位）  云端                    云端+沙箱
+跨平台自洽           路径写死 E:（不自洽）      无分发问题              无分发问题
+
+结论：
+  - 优势项（应保持放大）：本地知识混合检索、桌面一体化体验、安全模型、技能自生成。
+  - 最大短板：① 后端架构自洽性（双后端/单点/路径写死）；② 智能体核心鲁棒性
+    （上下文截断/max_tokens/状态机硬编码/死循环）；③ 功能模块广度（IM/邮箱/聚合/监控全缺）；
+    ④ 依赖与跨平台自洽（Playwright/iconv/路径）。
+  - 从「全技术栈可用性」与「功能模块广度」综合看，本产品距 KIMI（通用助手）在长上下文/
+    深度研究/云端 HA 差距大；距 QODERWORK（编码助手）在代码多文件编辑/连接器广度/沙箱隔离
+    差距大。补齐 B1~B9 与 F1~F12 中的高优项，即可在「本地+桌面+安全」定位上形成差异化反超。
+
+----------------------------------------------------------------
+备注：本文档为只读分析产物，所有改动建议在独立分支实施，
+      并跑通现有 30+ 项测试（tests/ 下）后再合并。
+----------------------------------------------------------------

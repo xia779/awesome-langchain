@@ -1,6 +1,6 @@
 # AI Agent Pro
 
-基于 Electron 的本地多模型 AI 智能体桌面助手，支持 83 个功能模块、多模型聚合、MCP 协议扩展、LangGraph 状态机和三层安全防护。
+基于 Electron 的本地多模型 AI 智能体桌面助手，支持 125 个功能模块、多模型聚合、MCP 协议扩展、LangGraph 状态机和三层安全防护。
 
 ## 功能特性
 
@@ -60,7 +60,7 @@
 ├── core-v10.js         # Kahn 拓扑排序模块加载器
 ├── main.js             # Electron 主进程
 ├── index.html          # 渲染进程 UI
-├── modules/            # 83 个功能模块（自动发现 + 拓扑排序加载）
+├── modules/            # 125 个功能模块（自动发现 + 拓扑排序加载）
 │   ├── api.js          # 多服务路由 + 消息发送
 │   ├── agent-loop.js   # Agent 智能体循环 + 状态机集成
 │   ├── agent-workflow.js    # LangGraph 状态机
@@ -72,8 +72,8 @@
 │   ├── chat-handler.js      # 普通聊天处理
 │   ├── session.js           # 会话管理（树形层级）
 │   ├── theme.js             # 主题系统（防抖 + 选择性渲染）
-│   └── ...                  # 其余 70+ 模块
-├── tests/              # 12 个测试套件，189 个测试用例
+│   └── ...                  # 其余 110+ 模块
+├── tests/              # 44 个测试套件，440+ 测试用例
 └── .github/workflows/  # GitHub Actions CI
 ```
 
@@ -114,13 +114,17 @@ npm run dist:linux
 
 ## 测试
 
-189 个测试覆盖核心模块和新功能，全部使用 Node.js 内置测试框架，无需安装额外依赖：
+440+ 个测试覆盖核心模块和新功能，全部使用 Node.js 内置测试框架，无需安装额外依赖：
 
 ```bash
 npm test
 ```
 
-测试套件：guardrails (23) · agent-workflow (19) · agent-handoff (12) · mcp-resources (17) · streaming-tools (14) · agent-loop (18) · html-utils (25) · theme (20) · guardrails-integration (17) · memory (10) · plugins (8) · routing (6)
+测试套件（44 个）：guardrails · agent-workflow · agent-handoff · mcp-resources · streaming-tools · agent-loop · html-utils · theme · memory · plugins · routing · search-timeliness · trading-calendar · market-* · canvas-* · mailer · rss-engine · self-evolution · web-monitor · local-inference · multimodal-extract 等
+
+## 安全模型
+
+渲染进程启用 `contextIsolation: true` + `nodeIntegration: false`，所有 Node 能力经 `preload.js` 的 contextBridge 桥接（契约见 `BRIDGE_CONTRACT.md`）；API Key 使用 safeStorage（DPAPI/Keychain）加密存储。
 
 ## CI/CD
 

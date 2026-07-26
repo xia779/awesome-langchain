@@ -23,20 +23,10 @@ function parseArgs() {
   return cfg;
 }
 
-// ===== 安全层（与服务端 guardrails 保持一致）=====
-var DANGEROUS_COMMANDS = [
-  'rm -rf /', 'rm -rf /*', 'format', 'fdisk', 'mkfs',
-  'dd if=', ':(){', 'fork bomb',
-  'shutdown', 'reboot', 'halt', 'poweroff', 'init 0', 'init 6',
-  'net stop', 'taskkill /f /im', 'del /s /q',
-  'reg delete', 'bcdedit', 'cipher /w',
-  'powershell.*invoke-expression',
-  'chmod 777 /', 'chown -R',
-];
+// ===== 安全层（🔧 P1-1: 规则收敛到 shared/guardrails-rules.js 单一事实源，与主进程/独立 server 一致）=====
+var RULES = require('./shared/guardrails-rules');
 
-var PROTECTED_DIRS = ['c:/windows', 'c:/program files', 'c:/programdata'];
-
-// 路径白名单：节点只服务这些目录下的文件操作
+// 路径白名单：节点只服务这些目录下的文件操作（node-agent 专属，非共享规则）
 function getAllowedDirs() {
   var dirs = ['E:/'];
   try { dirs.push(os.homedir().replace(/\\/g, '/')); } catch (e) {}
@@ -54,33 +44,14 @@ function isPathAllowed(filePath) {
   return false;
 }
 
+// 🔧 P1-1: 受保护路径判定委托共享规则
 function isProtectedPath(filePath) {
-  var fpLower = String(filePath).toLowerCase().replace(/\\/g, '/');
-  for (var i = 0; i < PROTECTED_DIRS.length; i++) {
-    if (fpLower.indexOf(PROTECTED_DIRS[i]) !== -1) return true;
-  }
-  return false;
+  return RULES.isProtectedPath(filePath);
 }
 
+// 🔧 P1-1: 危险命令段扫描委托共享规则（含 `git log && rm -rf x` 偷渡防护）
 function checkCommand(command) {
-  var cmdLower = String(command).toLowerCase().replace(/\\/g, '/');
-  for (var i = 0; i < DANGEROUS_COMMANDS.length; i++) {
-    var pattern = DANGEROUS_COMMANDS[i].toLowerCase();
-    if (pattern.indexOf('.*') !== -1) {
-      // 简单通配模式（如 curl.*|.*sh）
-      var parts = pattern.split('.*');
-      var idx = 0, ok = true;
-      for (var p = 0; p < parts.length; p++) {
-        var found = cmdLower.indexOf(parts[p], idx);
-        if (found === -1) { ok = false; break; }
-        idx = found + parts[p].length;
-      }
-      if (ok) return { safe: false, reason: '[Guardrails] 阻止危险命令: ' + DANGEROUS_COMMANDS[i] };
-    } else if (cmdLower.indexOf(pattern) !== -1) {
-      return { safe: false, reason: '[Guardrails] 阻止危险命令: ' + DANGEROUS_COMMANDS[i] };
-    }
-  }
-  return { safe: true };
+  return RULES.scanCommand(command);
 }
 
 // ===== 工具执行器（输出格式与服务端 tools.js 一致）=====

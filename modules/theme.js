@@ -20,6 +20,15 @@ function _isThemeRelatedChange(changedConfig) {
   return false;
 }
 
+// 根据主题模式推导默认聊天区背景（不再硬编码深色，解决浅色下聊天区仍黑底）
+function _defaultChatBg() {
+  var mode = (Core && Core.config && Core.config.themeMode) || 'dark';
+  if (mode === 'light' || (typeof document !== 'undefined' && document.body.classList.contains('light-theme'))) {
+    return '#f5f5f5';
+  }
+  return '#0d0d0d';
+}
+
 function applyTheme() {
   const c = Core.config;
   if (c.appName) {
@@ -36,7 +45,7 @@ function applyTheme() {
     container.style.backgroundSize = 'cover';
     container.style.backgroundPosition = 'center';
   } else {
-    container.style.background = '#0d0d0d';
+    container.style.background = _defaultChatBg();
     container.style.backgroundImage = 'none';
   }
   Core.emit('themeApplied', c);

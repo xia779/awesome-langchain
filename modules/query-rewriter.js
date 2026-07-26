@@ -67,8 +67,14 @@ async function rewriteWithLLM(query, historySnippet) {
     }
 
     var data = await Core.api.callAPI(userPrompt, systemPrompt, 0.1, model, provider, null, { disableTools: true });
-    if (data && data.content) {
-      var rewritten = data.content.trim().replace(/^["']|["']$/g, '');
+    // 🔧 M7: callAPI 返回 { message: { content } }，兼容直接 content / OpenAI choices 形状
+    var rawContent = (data && data.message && data.message.content) ||
+      (data && data.content) || '';
+    if (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) {
+      rawContent = data.choices[0].message.content;
+    }
+    if (rawContent) {
+      var rewritten = String(rawContent).trim().replace(/^["']|["']$/g, '');
       if (rewritten.length >= 2 && rewritten.length <= 200) {
         return rewritten;
       }

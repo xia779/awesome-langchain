@@ -177,6 +177,13 @@ function _fireNotification(w) {
     }
   } catch (e) { console.warn('⚠️ [watcher] 操作失败:', e.message || e); }
 
+  // 🔧 P0-4: 持久化预警记录，供盯盘面板 getAlerts 展示（之前仅弹桌面通知、未入库，导致面板永远为空）
+  try {
+    if (Core.marketDb && typeof Core.marketDb.logAlert === 'function') {
+      Core.marketDb.logAlert(w.id || w.ruleId || w.target, w.target, body, ['desktop']);
+    }
+  } catch (e) { console.warn('⚠️ [watcher] 预警入库失败:', e.message || e); }
+
   // 应用内通知
   if (Core.notifications && Core.notifications.pushWarning) {
     Core.notifications.pushWarning(title, body);

@@ -64,7 +64,7 @@ async function executeHandoff(targetAgentId, task, context) {
       prompt = '背景信息:\n' + context.substring(0, 1000) + '\n\n任务:\n' + task;
     }
 
-    var data = await Core.api.callAPI(prompt, specialist.systemPrompt, 0.7, null, 'ollama');
+    var data = await Core.api.callAPI(prompt, specialist.systemPrompt, 0.7, null, null);
     var reply = (data.message && data.message.content) || data.response || '';
 
     record.success = true;

@@ -1,5 +1,5 @@
 // modules/trading-calendar.js - A股交易日历
-// 规则：周六/周日闭市（调休上班日照旧闭市）+ 法定节假日闭市。
+// 规则：周六/周日闭市，但调休补班日（周末上班）照常开市 + 法定节假日闭市。
 // 节假日数据按年维护（来源：国务院办公厅放假安排），每年 12 月提醒更新次年表。
 var Core = null;
 
@@ -26,11 +26,28 @@ function getHolidays(year) {
   return HOLIDAYS[String(year)] || [];
 }
 
+// 🔧 M15: 调休补班日（周末上班）——按年维护，亦可在 config.tradingMakeupDays 覆盖。
+// 维护说明：按国务院办公厅当年放假安排，把"周末补班"的日期列入对应年份。
+var MAKEUP_WORKDAYS = {
+  '2026': [
+    // '2026-02-15',  // 示例：周日补班（请按当年国务院安排核对后填写，避免错误开市）
+  ],
+};
+
+function getMakeupDays(year) {
+  var custom = Core && Core.config && Core.config.tradingMakeupDays;
+  if (custom && Array.isArray(custom[String(year)])) return custom[String(year)];
+  return MAKEUP_WORKDAYS[String(year)] || [];
+}
+
 function isTradingDay(d) {
   d = d || new Date();
+  var ds = dateStr(d);
+  // 🔧 M15: 调休补班日——周末但照常开市
+  if (getMakeupDays(d.getFullYear()).indexOf(ds) >= 0) return true;
   var day = d.getDay();
-  if (day === 0 || day === 6) return false;               // 周末一律闭市（含调休工作日）
-  return getHolidays(d.getFullYear()).indexOf(dateStr(d)) < 0;
+  if (day === 0 || day === 6) return false;               // 周末闭市
+  return getHolidays(d.getFullYear()).indexOf(ds) < 0;
 }
 
 function isTradingTime(d) {

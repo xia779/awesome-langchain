@@ -37,6 +37,73 @@ function _searchBackendBase() {
   return 'http://127.0.0.1:8080';
 }
 
+// ===== P1-4: 搜索结果 TTL 缓存（降低脆弱后端压力 + 后端不可用时返回近期缓存兜底）=====
+var _SEARCH_CACHE_TTL = 10 * 60 * 1000;   // 10 分钟内直接复用，避免重复打后端
+var _SEARCH_CACHE_STALE = 60 * 60 * 1000; // 后端不可用时，1 小时内的缓存仍可兜底
+var _searchCache = new Map();
+
+function _cacheKey(engine, query) { return engine + '|' + query; }
+
+function _getCached(engine, query) {
+  var hit = _searchCache.get(_cacheKey(engine, query));
+  if (!hit) return null;
+  var age = Date.now() - hit.ts;
+  if (age < _SEARCH_CACHE_TTL) return { text: hit.text, stale: false };
+  if (age < _SEARCH_CACHE_STALE && !_backendSearchHealthy) return { text: hit.text, stale: true };
+  return null;
+}
+
+function _setCache(engine, query, text) {
+  // 不缓存空结果 / 错误文案 / 提示语
+  if (!text || text.length < 20) return;
+  if (text.includes('未找到有效') || text.includes('搜索失败') || text.includes('请配置') || text.includes('请填写') || text.includes('暂不可用')) return;
+  _searchCache.set(_cacheKey(engine, query), { ts: Date.now(), text: text });
+  // 简单容量保护：超过 200 条时淘汰最旧一条
+  if (_searchCache.size > 200) {
+    var firstKey = _searchCache.keys().next().value;
+    _searchCache.delete(firstKey);
+  }
+}
+
+// ===== ⏰ 时效性增强：时效敏感查询的日期感知 + 短 TTL 缓存 =====
+// 命中时效关键词且未自带明确日期的查询：① 自动追加当前日期，引导引擎返回最新结果；
+// ② 缓存 TTL 收紧（2 分钟新鲜 / 10 分钟兜底），避免「今天的股价」命中昨天的缓存。
+var _TIME_SENSITIVE_RE = /(今天|今日|现在|当前|最新|最近|近期|刚刚|新闻|快讯|头条|行情|股价|股票|大盘|涨跌|汇率|金价|油价|天气|气温|比分|赛程|本周|这周|本月|今年|明天|昨日|昨天|today|tonight|latest|recent|breaking|news|price|stock|weather|score)/i;
+var _EXPLICIT_DATE_RE = /(20\d{2}\s*年|\d{1,2}\s*月\s*\d{1,2}\s*[日号]|20\d{2}[-\/.]\d{1,2})/;
+var _TS_CACHE_TTL = 2 * 60 * 1000;    // 时效敏感：2 分钟新鲜缓存
+var _TS_CACHE_STALE = 10 * 60 * 1000; // 时效敏感：后端不可用时最多兜底 10 分钟
+
+function _isTimeSensitive(query) {
+  return !!query && _TIME_SENSITIVE_RE.test(query) && !_EXPLICIT_DATE_RE.test(query);
+}
+
+// 为时效敏感查询追加当前日期上下文（不改变用户原始语义，仅引导搜索引擎时效排序）
+function _augmentTimeSensitiveQuery(query) {
+  if (!_isTimeSensitive(query)) return query;
+  var now = new Date();
+  var dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
+  return query + ' ' + dateStr;
+}
+
+function _getCachedFresh(query) {
+  // 时效敏感查询使用短 TTL，其余查询使用默认 TTL
+  var sensitive = _isTimeSensitive(query);
+  return {
+    ttl: sensitive ? _TS_CACHE_TTL : _SEARCH_CACHE_TTL,
+    stale: sensitive ? _TS_CACHE_STALE : _SEARCH_CACHE_STALE
+  };
+}
+
+function _getCachedTimed(engine, query) {
+  var hit = _searchCache.get(_cacheKey(engine, query));
+  if (!hit) return null;
+  var win = _getCachedFresh(query);
+  var age = Date.now() - hit.ts;
+  if (age < win.ttl) return { text: hit.text, stale: false };
+  if (age < win.stale && !_backendSearchHealthy) return { text: hit.text, stale: true };
+  return null;
+}
+
 // ===== 获取当前搜索引擎（自动降级：付费引擎无 Key 时回退 DuckDuckGo/Bing）=====
 function getEffectiveEngine() {
   var engine = Core.config.searchEngine || 'bing';
@@ -71,10 +138,20 @@ async function _searchViaIPC(query, engine) {
 
 async function webSearch(query) {
   const engine = getEffectiveEngine();
+  // ⏰ 时效性增强：时效敏感查询自动追加当前日期（缓存 key 也随之按天滚动失效）
+  query = _augmentTimeSensitiveQuery(query);
+
+  // P1-4: 命中新鲜缓存直接返回，降低脆弱后端压力；后端不可用时返回近期缓存兜底
+  // ⏰ 时效敏感查询使用收紧的 TTL（2 分钟新鲜 / 10 分钟兜底）
+  var _cached = _getCachedTimed(engine, query);
+  if (_cached) {
+    console.log((_cached.stale ? '♻️ 搜索服务不可达，返回近期缓存' : '⚡ 命中搜索缓存') + ' (' + engine + ')');
+    return _cached.stale ? _cached.text + '\n\n（注：本地搜索服务暂不可达，以上为近期缓存结果）' : _cached.text;
+  }
 
   // 🚀 Wave 2: 优先 IPC 直连（Electron 环境下无需 HTTP 代理）
   var ipcResult = await _searchViaIPC(query, engine);
-  if (ipcResult) return ipcResult;
+  if (ipcResult) { _setCache(engine, query, ipcResult); return ipcResult; }
   // IPC 无结果时，对免费引擎尝试付费引擎 IPC 降级
   if (!ipcResult && (engine === 'bing' || engine === 'duckduckgo' || engine === 'searxng')) {
     if (Core.config.bochaApiKey) {
@@ -128,6 +205,7 @@ async function webSearch(query) {
         return `关于"${query}"未找到有效的搜索结果。`;
       }
       console.log(`✅ 搜索成功 (${engine}): ${data.results.length} 字符`);
+      _setCache(engine, query, data.results);
       return data.results;
     } else {
       return `关于"${query}"未找到有效的搜索结果。`;
@@ -152,6 +230,8 @@ async function webSearch(query) {
 // ===== 结构化搜索：返回 {text, items:[{title,snippet,url}]} =====
 async function webSearchWithMeta(query) {
   var engine = getEffectiveEngine();
+  // ⏰ 时效性增强：时效敏感查询自动追加当前日期
+  query = _augmentTimeSensitiveQuery(query);
   try {
     var items = [];
     switch (engine) {
@@ -182,7 +262,16 @@ async function webSearchWithMeta(query) {
       console.log('🔄 博查结构化搜索无结果，降级 Tavily');
       try { items = await searchTavilyStructured(query); } catch (e2) { /* ignore */ }
     }
-    var validItems = items.filter(function(r) { return r.title; });
+    // 🔧 检索正确性：按 URL（无 URL 时按标题）去重，避免同一来源重复注入上下文污染回答
+    var seenKeys = {};
+    var validItems = items.filter(function(r) {
+      if (!r.title) return false;
+      var key = r.url ? String(r.url).replace(/[#?].*$/, '').replace(/\/+$/, '').toLowerCase()
+                      : 't:' + String(r.title).trim().toLowerCase();
+      if (seenKeys[key]) return false;
+      seenKeys[key] = true;
+      return true;
+    });
     var text = validItems.map(function(r) {
       return r.title + '\n' + r.snippet + (r.url ? '\n' + r.url : '');
     }).join('\n\n');
@@ -420,6 +509,7 @@ async function webSearchDirect(query, engine) {
         results = await searchBochaDirect(query);
         break;
     }
+    if (results && results.length > 20 && !results.includes('未找到有效')) _setCache(engine, query, results);
     return results || `关于"${query}"未找到有效的搜索结果。`;
   } catch (err) {
     return `联网搜索失败：${err.message}`;
@@ -567,6 +657,9 @@ function toggleWebSearch() {
 module.exports = {
   name: 'search',
   dependencies: [],
+  // 测试钩子（纯函数，不依赖 Core）
+  _isTimeSensitive: _isTimeSensitive,
+  _augmentTimeSensitiveQuery: _augmentTimeSensitiveQuery,
   init(_Core) {
     Core = _Core;
     

@@ -595,6 +595,30 @@ function getSyncStatus() {
   };
 }
 
+// ===== P2-8 增强：可配置远端 + 连通性探测 =====
+
+// 设置远端同步服务器（内存生效；持久化交由设置面板）
+function _setRemote(url) {
+  if (!Core.config) Core.config = {};
+  if (!Core.config.sync) Core.config.sync = {};
+  Core.config.sync.serverUrl = url;
+  return url;
+}
+
+// 探测远端可达性（宽容：2xx/3xx/4xx 均视为“可达”，仅网络错误/5xx 视为不可达）
+async function _checkRemote(url) {
+  var probe = url || getSyncConfig().serverUrl;
+  var fn = (typeof fetch !== 'undefined') ? fetch : null;
+  if (!fn) return { ok: false, error: '运行环境不支持 fetch' };
+  var t0 = Date.now();
+  try {
+    var res = await fn(probe, { method: 'GET', signal: AbortSignal.timeout(8000) });
+    return { ok: (res.status < 500), status: res.status, ms: Date.now() - t0, url: probe };
+  } catch (e) {
+    return { ok: false, error: e.message, ms: Date.now() - t0, url: probe };
+  }
+}
+
 // ===== 模块导出 =====
 module.exports = {
   name: 'sync-client',
@@ -620,7 +644,9 @@ module.exports = {
       startAuto: startAutoSync,
       stopAuto: stopAutoSync,
       status: getSyncStatus,
-      getConfig: getSyncConfig
+      getConfig: getSyncConfig,
+      setRemote: _setRemote,
+      checkRemote: _checkRemote
     };
 
     // Phase 5: 注册 /sync 命令
@@ -647,7 +673,20 @@ module.exports = {
             return r.success ? '✅ 同步完成: ' + JSON.stringify(r.pushed || r.applied || r) : '❌ 同步失败: ' + r.error;
           });
         }
-        return '用法: /sync [status|push|pull|both]';
+        if (sub === 'remote') {
+          var ru = (args || '').trim().split(/\s+/)[1];
+          if (!ru) return '用法: /sync remote <url>（设置远端同步服务器，内存生效）';
+          _setRemote(ru);
+          return '✅ 已设置同步服务器: ' + ru + '\n用 /sync check 验证连通性（持久化请在设置面板保存）。';
+        }
+        if (sub === 'check') {
+          return _checkRemote().then(function(r) {
+            var u = r.url || getSyncConfig().serverUrl;
+            return r.ok ? ('✅ 远端可达: ' + u + ' (HTTP ' + r.status + ', ' + r.ms + 'ms)')
+                        : ('⚠️ 远端不可达: ' + u + ' — ' + (r.error || ('HTTP ' + r.status)));
+          });
+        }
+        return '用法: /sync [status|push|pull|both|remote <url>|check]';
       });
     }
 

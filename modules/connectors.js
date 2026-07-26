@@ -16,7 +16,9 @@ var CONNECTOR_REGISTRY = [
   { id: 'wechat', name: '微信', desc: '消息收发与文件传输', icon: 'chat', category: 'communication', type: 'external', status: 'planned' },
   { id: 'dingtalk', name: '钉钉', desc: '企业消息与日程管理', icon: 'mark_chat_unread', category: 'communication', type: 'external', status: 'planned' },
   { id: 'feishu', name: '飞书', desc: '文档、表格与多维表格', icon: 'quickreply', category: 'communication', type: 'external', status: 'planned' },
-  { id: 'email', name: '电子邮件', desc: '收发邮件（IMAP/SMTP）', icon: 'mail', category: 'communication', type: 'external', status: 'planned' },
+  // 🔧 以下三项由 im-notify.js / mailer.js 提供真实后端（webhook / SMTP），从 planned 提升为 active
+  { id: 'im-notify', name: 'IM 通知推送', desc: 'Telegram / Discord / Slack / Bark / 通用 Webhook 通知（im-notify 模块）', icon: 'send', category: 'communication', type: 'external', status: 'active' },
+  { id: 'email', name: '电子邮件', desc: 'SMTP 发信可用（mailer 模块）；IMAP 收信规划中', icon: 'mail', category: 'communication', type: 'external', status: 'active' },
 
   // —— 开发工具 ——
   { id: 'github', name: 'GitHub', desc: '仓库、Issue 与 PR 管理', icon: 'code', category: 'development', type: 'external', status: 'active' },

@@ -64,10 +64,17 @@ let canvasReady = false;
 let server = null;
 let actualPort = null; // 实际监听的端口（8080 被占用时自动递增）
 
-// ===== 数据路径（动态获取）=====
-const DATA_ROOT = process.env.AI_AGENT_DATA_ROOT || 
-                  (fs.existsSync('E:\\my-ai-data') ? 'E:\\my-ai-data' : 
-                   path.join(app.getPath('userData'), 'ai-data'));
+// ===== 数据路径（动态获取，跨平台安全）=====
+const IS_WIN = process.platform === 'win32';
+function resolveDataRoot() {
+  // 1) 显式环境变量优先（便于自定义/便携部署）
+  if (process.env.AI_AGENT_DATA_ROOT) return process.env.AI_AGENT_DATA_ROOT;
+  // 2) Windows 兼容：若用户已在使用 E:\my-ai-data 则保留，避免数据迁移
+  if (IS_WIN && fs.existsSync('E:\\my-ai-data')) return 'E:\\my-ai-data';
+  // 3) 跨平台默认：放在用户数据目录内（macOS/Linux 也能正常工作）
+  return path.join(app.getPath('userData'), 'ai-data');
+}
+const DATA_ROOT = resolveDataRoot();
 
 // 确保数据目录存在
 if (!fs.existsSync(DATA_ROOT)) {

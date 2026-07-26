@@ -26,7 +26,7 @@ async function generateMorningBriefing(options) {
     // 1. 大盘行情
     if (Core.stockQuote && Core.stockQuote.fetchQuotes) {
       try {
-        var quotes = await Core.stockQuote.fetchQuotes('上证指数,深证成指,创业板指');
+        var quotes = await Core.stockQuote.fetchQuotes(['上证指数', '深证成指', '创业板指']);
         if (quotes && quotes.length > 0) {
           var marketLines = quotes.map(function(q) {
             var arrow = (q.changePercent || 0) >= 0 ? '📈' : '📉';

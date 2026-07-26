@@ -1156,7 +1156,7 @@ async function rewriteQuery(query, conversationContext) {
 // ===== 带引用的搜索（Phase 3-1 核心：混合 RRF + 相关度阈值 + 引用格式）=====
 async function searchWithCitations(query, topK, options) {
   options = options || {};
-  var minScore = options.minScore || 0.01; // RRF 最低分阈值
+  var minScore = options.minScore || 0.05; // RRF 最低分阈值（M12：0.01 过低，易引入噪声上下文）
   topK = topK || 5;
 
   // 查询改写（指代消解 + 扩展）
@@ -1206,7 +1206,12 @@ async function searchWithCitations(query, topK, options) {
   }
 
   // 过滤低分 + 截取 topK
-  finalResults = finalResults.filter(function(r) { return (r.rrfScore || r.score) >= minScore; });
+  // 🔧 M12: RRF 融合分数尺度极小（约 0.01–0.02），minScore 仅对向量/BM25 路径（r.score）生效，
+  //         避免直接抬高 minScore 误杀 RRF 结果；默认阈值已提升至 0.05 抑制向量/BM25 噪声。
+  finalResults = finalResults.filter(function(r) {
+    if (r.rrfScore != null) return true;            // RRF 结果已按 rank 筛选，保留
+    return (r.score || 0) >= minScore;
+  });
   finalResults = finalResults.slice(0, topK);
 
   // 构建引用文本

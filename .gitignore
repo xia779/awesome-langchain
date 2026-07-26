@@ -60,3 +60,4 @@ knowledge_base_*.txt
 
 # 生成产物（AI漫画输出目录）
 public/aimanga/
+.trash-cleanup-*/

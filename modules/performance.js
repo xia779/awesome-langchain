@@ -100,6 +100,7 @@ function init(_Core) {
       if (_gcTimer) { clearInterval(_gcTimer); _gcTimer = null; }
       if (_memCleanupTimer) { clearInterval(_memCleanupTimer); _memCleanupTimer = null; }
       if (_perfTimer) { clearInterval(_perfTimer); _perfTimer = null; }
+      if (_recovery && _recovery.draftTimer) { clearInterval(_recovery.draftTimer); _recovery.draftTimer = null; }
     },
     CONFIG: PERF_CONFIG,
   };
@@ -352,30 +353,38 @@ function createMessageElement(msg, index) {
 //  3. 崩溃恢复（草稿自动保存 + 生成中断恢复）
 // ================================================================
 function setupCrashRecovery() {
-  // 3a. 草稿自动保存（每 3 秒检查输入框变化）
+  // 3a. 草稿自动保存（每 3 秒检查输入框变化）——重入时先清旧定时器，避免叠加泄漏
+  if (_recovery.draftTimer) { clearInterval(_recovery.draftTimer); _recovery.draftTimer = null; }
   _recovery.draftTimer = setInterval(function() {
     saveDraft();
   }, PERF_CONFIG.draftSaveInterval);
 
-  // 3b. 页面关闭/崩溃前刷新所有挂起的保存
-  window.addEventListener('beforeunload', function() {
-    flushDraft();
-    flushPendingSaves();
-    saveGenerationState();
-  });
-
-  // 3c. 可见性变化时保存（切换窗口、最小化）
-  document.addEventListener('visibilitychange', function() {
-    if (document.hidden) {
+  // 3b. 页面关闭/崩溃前刷新所有挂起的保存（监听只绑定一次，防止重复 init 叠加）
+  if (!_recovery._listenersBound) {
+    window.addEventListener('beforeunload', function() {
       flushDraft();
       flushPendingSaves();
-    }
-  });
+      saveGenerationState();
+    });
+
+    // 3c. 可见性变化时保存（切换窗口、最小化）
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) {
+        flushDraft();
+        flushPendingSaves();
+      }
+    });
+
+    _recovery._listenersBound = true;
+  }
 
   // 3d. 启动时检查崩溃恢复数据
-  setTimeout(function() {
-    checkCrashRecovery();
-  }, 3000);
+  if (!_recovery._bootChecked) {
+    setTimeout(function() {
+      checkCrashRecovery();
+    }, 3000);
+    _recovery._bootChecked = true;
+  }
 
   console.log('\u26a1 \u5d29\u6e83\u6062\u590d\u673a\u5236\u5df2\u542f\u7528');
 }

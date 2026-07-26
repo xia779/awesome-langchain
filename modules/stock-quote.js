@@ -98,22 +98,43 @@ function getMarketStatus(now) {
 }
 
 // ===== 拉取行情（支持多标的，一次请求）=====
+// 🔧 M14: Promise 化（兼容 proactive/watcher 的 await 调用），同时保留旧回调契约（market-data.js）。
+// 入参支持数组或逗号分隔字符串，统一归一化为数组。
 function fetchQuotes(symbols, cb) {
-  var url = 'http://qt.gtimg.cn/q=' + symbols.join(',');
-  var req = http.get(url, { timeout: 15000 }, function(res) {
-    var chunks = [];
-    res.on('data', function(c) { chunks.push(c); });
-    res.on('end', function() {
-      try {
-        var text = decodeGBK(Buffer.concat(chunks));
-        var quotes = parseQuotes(text);
-        if (quotes.length === 0) { cb(new Error('数据源返回为空')); return; }
-        cb(null, quotes);
-      } catch (e) { cb(e); }
+  var list = Array.isArray(symbols)
+    ? symbols
+    : String(symbols == null ? '' : symbols).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  if (list.length === 0) {
+    var e0 = new Error('fetchQuotes: 未提供有效标的');
+    if (typeof cb === 'function') cb(e0);
+    return Promise.reject(e0);
+  }
+  var url = 'http://qt.gtimg.cn/q=' + list.join(',');
+  return new Promise(function (resolve, reject) {
+    var req = http.get(url, { timeout: 15000 }, function (res) {
+      var chunks = [];
+      res.on('data', function (c) { chunks.push(c); });
+      res.on('end', function () {
+        try {
+          var text = decodeGBK(Buffer.concat(chunks));
+          var quotes = parseQuotes(text);
+          if (quotes.length === 0) {
+            var e = new Error('数据源返回为空');
+            if (typeof cb === 'function') cb(e);
+            reject(e);
+            return;
+          }
+          if (typeof cb === 'function') cb(null, quotes);
+          resolve(quotes);
+        } catch (e) {
+          if (typeof cb === 'function') cb(e);
+          reject(e);
+        }
+      });
     });
+    req.on('error', function (e) { if (typeof cb === 'function') cb(e); reject(e); });
+    req.on('timeout', function () { req.destroy(); var e = new Error('请求超时(15s)'); if (typeof cb === 'function') cb(e); reject(e); });
   });
-  req.on('error', function(e) { cb(e); });
-  req.on('timeout', function() { req.destroy(); cb(new Error('请求超时(15s)')); });
 }
 
 // ===== 解析腾讯行情文本（字段以 ~ 分隔）=====

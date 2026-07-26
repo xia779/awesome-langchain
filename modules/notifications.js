@@ -7,6 +7,7 @@ var _maxNotifications = 100;
 var _unreadCount = 0;
 var _panelVisible = false;
 var _listeners = [];
+var _bgTaskPollTimer = null;  // 🔧 M20: 后台任务轮询定时器引用，便于清理
 
 var TYPES = {
   SYSTEM: 'system', TASK: 'task', ERROR: 'error',
@@ -19,7 +20,7 @@ function init(_Core) {
   Core.notifications = {
     push, pushSystem, pushTask, pushError, pushSuccess, pushWarning,
     getAll, getUnread, getUnreadCount, markRead, markAllRead, clear,
-    togglePanel, TYPES, onNotification,
+    togglePanel, TYPES, onNotification, stopEventHook,
   };
 
   if (Core.custom && Core.custom.registerCommand) {
@@ -33,6 +34,10 @@ function init(_Core) {
   createNotificationPanel();
   addBellButton();
   hookIntoEvents();
+  // 🔧 M20: 页面卸载时清理后台轮询定时器，避免泄漏
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', function () { stopEventHook(); });
+  }
 
   loadNotifications();
   console.log('✅ 统一通知中心已加载');
@@ -221,7 +226,8 @@ function clear() { _notifications = []; _unreadCount = 0; updateBellBadge(); ren
 
 // ===== 事件钩子 =====
 function hookIntoEvents() {
-  var _bgTaskPollTimer = setInterval(function() {
+  if (_bgTaskPollTimer) clearInterval(_bgTaskPollTimer);  // 🔧 M20: 重入时先清理旧定时器，避免泄漏
+  _bgTaskPollTimer = setInterval(function() {
     if (Core.api && Core.api.getBackgroundTasks) {
       var tasks = Core.api.getBackgroundTasks();
       tasks.forEach(function(t) {
@@ -230,6 +236,10 @@ function hookIntoEvents() {
       });
     }
   }, 5000);
+}
+
+function stopEventHook() {
+  if (_bgTaskPollTimer) { clearInterval(_bgTaskPollTimer); _bgTaskPollTimer = null; }
 }
 
 function onNotification(fn) { if (typeof fn === 'function') _listeners.push(fn); }
@@ -286,4 +296,4 @@ function formatTimeAgo(ts) {
   return Math.floor(diff / 86400000) + ' 天前';
 }
 
-module.exports = { init };
+module.exports = { init, stopEventHook };
