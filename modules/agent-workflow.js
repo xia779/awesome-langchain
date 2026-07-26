@@ -100,7 +100,7 @@ async function handleThink(ctx) {
       var memCtx = await Core.memoryEnhance.getEnhancedContext(ctx.task);
       if (memCtx) agentPrompt += '\n\n' + memCtx;
     }
-    var data = await Core.api.callAPI(prompt, agentPrompt, 0.7, null, 'ollama');
+    var data = await Core.api.callAPI(prompt, agentPrompt, 0.7, null, null);
     reply = (data.message && data.message.content) || data.response || '';
   } catch (err) {
     ctx._lastError = err;
@@ -208,6 +208,14 @@ async function handleObserve(ctx) {
   var action = ctx._toolAction;
   var toolResultStr = (toolResult == null) ? '' : (typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult));
 
+  // 🔒 S2: 间接 Prompt Injection 防御 — 扫描工具输出中的注入载荷
+  if (toolResultStr && Core.guardrails && Core.guardrails.checkToolResult) {
+    var _toolScan = Core.guardrails.checkToolResult(action.action, toolResultStr);
+    if (!_toolScan.safe && _toolScan.sanitized) {
+      toolResultStr = _toolScan.sanitized;
+    }
+  }
+
   // 错误检测（前缀判定，复用 agent-loop 的 detectToolError，避免对返回内容做关键词全文匹配导致误判）
   var isToolError = (Core.agentLoop && Core.agentLoop.detectToolError)
     ? Core.agentLoop.detectToolError(toolResultStr)
@@ -258,7 +266,7 @@ async function handleComplete(ctx) {
       console.log('[StateMachine self-eval] ' + evalResult.reason + ', retrying');
       try {
         var retryPrompt = 'task: ' + ctx.task + '\n\nhistory: ' + (ctx.context || '(none)') + '\n\n[system-eval] your previous answer failed: ' + evalResult.reason + '. give a high-quality final answer using the complete action.';
-        var retryData = await Core.api.callAPI(retryPrompt, Core.agentLoop.AGENT_SYSTEM_PROMPT || '', 0.7, null, 'ollama');
+        var retryData = await Core.api.callAPI(retryPrompt, Core.agentLoop.AGENT_SYSTEM_PROMPT || '', 0.7, null, null);
         var retryReply = (retryData.message && retryData.message.content) || retryData.response || '';
         var retryAction = Core.agentLoop.extractJSONFromText(retryReply);
         if (retryAction && retryAction.action === 'complete') {
@@ -285,7 +293,7 @@ async function handleError(ctx) {
   // 利用 error-recovery 模块获取重试建议
   var advice = null;
   if (Core.recovery && Core.recovery.getRetryAdvice) {
-    advice = Core.recovery.getRetryAdvice(err, 'ollama');
+    advice = Core.recovery.getRetryAdvice(err, (Core.getCurrentService && Core.getCurrentService()) || Core.currentService || 'ollama');
   }
 
   var canRetry = ctx.step < ctx.maxSteps && !ctx.cancelled;

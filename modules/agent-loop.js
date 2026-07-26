@@ -778,6 +778,14 @@ async function sendToAgent(task, isDeepThink) {
     // 🔧 类型安全：确保 toolResult 是字符串
     var toolResultStr = (toolResult == null) ? '' : (typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult));
 
+    // 🔒 S2: 间接 Prompt Injection 防御 — 扫描工具输出中的注入载荷
+    if (toolResultStr && Core.guardrails && Core.guardrails.checkToolResult) {
+      var _toolScan = Core.guardrails.checkToolResult(action.action, toolResultStr);
+      if (!_toolScan.safe && _toolScan.sanitized) {
+        toolResultStr = _toolScan.sanitized;
+      }
+    }
+
     // 🔧 自动纠错：检测工具失败并注入重试引导
     // 用 detectToolError 前缀判定，避免对返回内容做关键词全文匹配导致误判
     var resultForContext = toolResultStr;

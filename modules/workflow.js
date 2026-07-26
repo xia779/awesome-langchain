@@ -1157,8 +1157,8 @@ function init(_Core) {
     console.log('✅ workflow.js: beforeSend hook 已注册');
   }
 
-  // 暴露 API
-  Core.workflow = {
+  // 暴露 API（🔒 T1 fix: 增量合并，不覆盖 agent-workflow.js 注入的 stateMachine）
+  Core.workflow = Object.assign(Core.workflow || {}, {
     // 模板
     templates: {
       list: listTemplates,
@@ -1192,7 +1192,7 @@ function init(_Core) {
       installBuiltin: installBuiltinWorkflow,
       builtinTemplates: BUILTIN_WORKFLOWS
     }
-  };
+  });
 
 }
 
