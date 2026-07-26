@@ -581,9 +581,18 @@ async function callAPIStream(prompt, systemMsg, temperature, model, provider, on
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(streamPayload)
   };
-  if (signal) fetchOpts.signal = signal;
+  // 🔧 T2: 连接超时 30s（与用户取消信号合并）
+  var _connTimeout = setTimeout(function() {}, 0); // placeholder
+  var _connAbort = new AbortController();
+  _connTimeout = setTimeout(function() { _connAbort.abort(); }, 30000);
+  if (signal) {
+    if (signal.aborted) _connAbort.abort();
+    else signal.addEventListener('abort', function() { _connAbort.abort(); }, { once: true });
+  }
+  fetchOpts.signal = _connAbort.signal;
 
   const resp = await fetch('http://127.0.0.1:11434/api/chat', fetchOpts);
+  clearTimeout(_connTimeout);
   if (!resp.ok) {
     const errText = await resp.text();
     throw new Error(`API 请求失败 (${resp.status}): ${errText}`);
@@ -597,11 +606,27 @@ async function callAPIStream(prompt, systemMsg, temperature, model, provider, on
   var _streamToolCalls = null;
   var _streamToolDepth = (arguments[7] && arguments[7]._toolDepth) || 0;
 
+  // 🔧 T2: 分块读取超时 120s（防止网络断开后 reader.read() 永久挂起）
+  var _CHUNK_TIMEOUT = 120000;
+  function _readWithTimeout() {
+    return Promise.race([
+      reader.read(),
+      new Promise(function(_, reject) {
+        setTimeout(function() { reject(new Error('STREAM_CHUNK_TIMEOUT')); }, _CHUNK_TIMEOUT);
+      })
+    ]);
+  }
+
   while (true) {
     let chunkData;
     try {
-      chunkData = await reader.read();
+      chunkData = await _readWithTimeout();
     } catch (readErr) {
+      if (readErr.message === 'STREAM_CHUNK_TIMEOUT') {
+        console.warn('⚠️ [api] 流式读取超时(120s)，返回已生成内容');
+        try { reader.cancel(); } catch (e) {}
+        break;
+      }
       if (signal && signal.aborted) {
         console.log('⏹ 流式读取被中断，返回已生成内容');
         return fullText;
@@ -690,8 +715,18 @@ async function _callAPIStreamWithMessages(messages, fullModel, temperature, onCh
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   };
-  if (signal) fetchOpts.signal = signal;
+  // 🔧 T2: 连接超时 30s（与用户取消信号合并）
+  var _connTimeout2 = setTimeout(function() {}, 0);
+  var _connAbort2 = new AbortController();
+  _connTimeout2 = setTimeout(function() { _connAbort2.abort(); }, 30000);
+  if (signal) {
+    if (signal.aborted) _connAbort2.abort();
+    else signal.addEventListener('abort', function() { _connAbort2.abort(); }, { once: true });
+  }
+  fetchOpts.signal = _connAbort2.signal;
+
   var resp = await fetch('http://127.0.0.1:11434/api/chat', fetchOpts);
+  clearTimeout(_connTimeout2);
   if (!resp.ok) throw new Error('API 请求失败 (' + resp.status + ')');
   if (!resp.body) throw new Error('无响应体');
   var reader = resp.body.getReader();
@@ -699,9 +734,26 @@ async function _callAPIStreamWithMessages(messages, fullModel, temperature, onCh
   var text = '';
   var _toolCalls = null;
   var _depth = (depthOpts && depthOpts._toolDepth) || 0;
+
+  // 🔧 T2: 分块读取超时 120s
+  var _CHUNK_TIMEOUT2 = 120000;
+  function _readWithTimeout2() {
+    return Promise.race([
+      reader.read(),
+      new Promise(function(_, reject) {
+        setTimeout(function() { reject(new Error('STREAM_CHUNK_TIMEOUT')); }, _CHUNK_TIMEOUT2);
+      })
+    ]);
+  }
+
   while (true) {
     var cd;
-    try { cd = await reader.read(); } catch (e) {
+    try { cd = await _readWithTimeout2(); } catch (e) {
+      if (e.message === 'STREAM_CHUNK_TIMEOUT') {
+        console.warn('⚠️ [api] 流式读取超时(120s)，返回已生成内容');
+        try { reader.cancel(); } catch (ce) {}
+        break;
+      }
       if (signal && signal.aborted) return text;
       throw e;
     }

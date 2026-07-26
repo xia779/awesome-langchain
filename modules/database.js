@@ -163,7 +163,22 @@ function createJsonDbInterface() {
     jsonSet(userId + ':' + key, typeof value === 'string' ? value : JSON.stringify(value));
   }
   
-  // session/favorites 等由 session.js 直接管理 JSON，这里只做兼容
+  // 🔒 D1 fix: 实现 JSON 回退的会话/消息/收藏/插件配置持久化
+  // SQLite 不可用时，数据写入 DATA_ROOT 下的 JSON 文件，避免静默丢失。
+  function _jsonPath(name) {
+    return path.join(Core.DATA_ROOT || path.join(__dirname, '..', 'data'), name);
+  }
+  function _readJsonFile(name, fallback) {
+    try {
+      const fp = _jsonPath(name);
+      if (fs.existsSync(fp)) return JSON.parse(fs.readFileSync(fp, 'utf8'));
+    } catch (e) { console.warn('⚠️ [database] JSON回退读取失败:', name, e.message); }
+    return fallback;
+  }
+  function _writeJsonFile(name, data) {
+    safeWriteJson(_jsonPath(name), data);
+  }
+
   return {
     get: jsonGet, set: jsonSet, getAll: jsonGetAll, delete: jsonDelete,
     query: () => [], run: () => ({}),
@@ -172,10 +187,40 @@ function createJsonDbInterface() {
     migrateFromJSON: () => false,
     getUserConfig: jsonGetUserConfig,
     setUserConfig: jsonSetUserConfig,
-    getSessions: () => ({}), saveSession: () => {}, deleteSession: () => {},
-    getSessionMessages: () => [], addMessage: () => {}, clearSessionMessages: () => {},
-    getFavorites: () => [], addFavorite: () => {}, deleteFavorite: () => {},
-    getPluginConfig: () => ({}), setPluginConfig: () => {},
+    // 会话持久化
+    getSessions: () => _readJsonFile('sessions.json', {}),
+    saveSession: (id, data) => {
+      const all = _readJsonFile('sessions.json', {});
+      all[id] = data;
+      _writeJsonFile('sessions.json', all);
+    },
+    deleteSession: (id) => {
+      const all = _readJsonFile('sessions.json', {});
+      delete all[id];
+      _writeJsonFile('sessions.json', all);
+    },
+    // 消息持久化
+    getSessionMessages: (id) => _readJsonFile('sessions/' + id + '.json', []),
+    addMessage: (id, msg) => {
+      const msgs = _readJsonFile('sessions/' + id + '.json', []);
+      msgs.push(msg);
+      _writeJsonFile('sessions/' + id + '.json', msgs);
+    },
+    clearSessionMessages: (id) => { _writeJsonFile('sessions/' + id + '.json', []); },
+    // 收藏持久化
+    getFavorites: () => _readJsonFile('favorites.json', []),
+    addFavorite: (item) => {
+      const favs = _readJsonFile('favorites.json', []);
+      favs.push(item);
+      _writeJsonFile('favorites.json', favs);
+    },
+    deleteFavorite: (id) => {
+      const favs = _readJsonFile('favorites.json', []);
+      _writeJsonFile('favorites.json', favs.filter(f => (f.id || f._id) !== id));
+    },
+    // 插件配置持久化
+    getPluginConfig: (name) => _readJsonFile('plugins/' + name + '.json', {}),
+    setPluginConfig: (name, config) => { _writeJsonFile('plugins/' + name + '.json', config); },
     _backend: 'json',
   };
 }
