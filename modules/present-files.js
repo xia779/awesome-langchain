@@ -96,7 +96,8 @@ function createFileCard(filepath) {
   try {
     stat = fs.statSync(filepath);
     sizeStr = formatFileSize(stat.size);
-    modifiedStr = stat.mtime.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    var mtime = stat.mtime instanceof Date ? stat.mtime : new Date(stat.mtimeMs || stat.mtime);
+    modifiedStr = mtime.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
   } catch (e) { console.warn('⚠️ [present-files] 操作失败:', e.message || e); }
 
   // 卡片容器

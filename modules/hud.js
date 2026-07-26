@@ -15,8 +15,8 @@
 //           Core.on/emit/custom 均按需守卫，mock Core 无这些方法时静默跳过。
 let Core = null;
 
-var bridge = (typeof window !== 'undefined' && window.nodeBridge && window.nodeBridge.ipc)
-  ? window.nodeBridge.ipc : null;
+var bridge = (typeof window !== 'undefined' && window.nodeBridge && window.nodeBridge.electronAPI && window.nodeBridge.electronAPI.ipc)
+  ? window.nodeBridge.electronAPI.ipc : null;
 
 var _state = 'idle';
 var _visible = false;
